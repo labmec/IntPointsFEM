@@ -1,7 +1,7 @@
 #include "TPZMatGriffith.h"
 
 #include "pzbndcond.h"
-#include "pzmaterial.h"
+//#include "pzmaterial.h"
 #include "pzelasmat.h"
 
 TPZMatGriffith::TPZMatGriffith(int id) : TPZElasticityMaterial(id)

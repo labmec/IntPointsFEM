@@ -9,7 +9,7 @@
 #ifndef TPZMatGriffith_h
 #define TPZMatGriffith_h
 
-#include "pzmaterial.h"
+//#include "pzmaterial.h"
 #include "pzelasmat.h"
 
 /**
