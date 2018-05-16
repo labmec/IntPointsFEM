@@ -2,9 +2,6 @@ cmake_minimum_required (VERSION 2.8.0)
 
 project (IntegrationPointsExperiment)
 
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 # Location to search files or libraries
 set(SEARCH_DIRS ENV PATH /usr/local/opt/ /usr/include /usr/local/include /usr/lib /usr/lib64 /usr/local/lib /usr/local/pzlib/include /usr/local/pzlib/lib .. )
 
