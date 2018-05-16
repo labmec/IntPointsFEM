@@ -461,7 +461,7 @@ void sol_teste(TPZCompMesh * cmesh){
         TPZGeoEl * gel1 = cmesh->Element(iel1)->Reference();
         if(!gel1 ||  gel1->Dimension() != dim_mesh) continue;
         
-        TPZManVector<int> nodeindices;
+        TPZManVector<int64_t> nodeindices;
         gel1->GetNodeIndices(nodeindices); // Armazena os nós do elemento finito
         
         // ** Início da verificação de qual coord é repetida:
