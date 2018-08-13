@@ -21,6 +21,10 @@
 
 #include "TPZSolveMatrix.h"
 
+#ifdef USING_TBB
+#include "tbb/parallel_for_each.h"
+#endif
+
 TPZGeoMesh * geometry_2D(int nelem_x, int nelem_y, REAL len, int ndivide);
 TPZCompMesh * cmesh_2D(TPZGeoMesh * gmesh, int nelem_x, int nelem_y, int pOrder);
 void sol_teste(TPZCompMesh * cmesh);
@@ -280,6 +284,7 @@ void sol_teste(TPZCompMesh * cmesh){
     TPZManVector<TPZManVector<int64_t>> indexes_el(nelem);
     TPZManVector<TPZFMatrix<REAL>> AVec(nelem);
     TPZManVector<TPZFMatrix<REAL>> AdVec(nelem);
+    TPZStack<REAL> weight;
     
     int64_t npts_tot = 0;
     int64_t nf_tot = 0;
@@ -310,12 +315,15 @@ void sol_teste(TPZCompMesh * cmesh){
         // Montando a matriz dos phis e dphis
         AVec[cont_elem].Redim(npts, nf);
         AdVec[cont_elem].Redim(npts*dim_mesh, nf);
+//        weight[cont_elem].resize(npts);
         for(int i_npts=0; i_npts<npts; i_npts++){
             TPZManVector<REAL> qsi(dim_mesh,1);
             REAL w;
             int_rule->Point(i_npts, qsi, w);
             
             cel_inter->ComputeRequiredData(data, qsi);
+            weight.Push(w*std::abs(data.detjac));
+//            weight[cont_elem][i_npts] = w*std::abs(data.detjac);
             TPZFMatrix<REAL> &phi = data.phi;
             TPZFMatrix<REAL> &dphix = data.dphix;
             
@@ -352,7 +360,7 @@ void sol_teste(TPZCompMesh * cmesh){
     // De 0 a dim*nf_tot/2 -> índices relativos aos graus de liberdade x
     // De dim*nf_tot/2 a dim*nf_tot -> índices relativos aos graus de liberdade y
     // A ordem dos índices é a ordem dos elementos no AdVec.
-    TPZManVector<int64_t> indexes(nf_tot*dim_mesh, 0);
+    TPZManVector<MKL_INT> indexes(nf_tot*dim_mesh, 0);
     int64_t pos = 0;
     for (int64_t iel = 0; iel<nelem; iel++) {
         int64_t n_ind_el = (indexes_el[iel]).size();
@@ -373,17 +381,28 @@ void sol_teste(TPZCompMesh * cmesh){
     // col 2: Epsilon y
     // col 3: Epsilon xy
     TPZFMatrix<REAL> result;
-    SolMat->Solve(coef_sol, result);
+    SolMat->Multiply(coef_sol, result);
     
     // Cálculo do sigma
     REAL E = 200000000.;
     REAL nu =0.30;
     TPZFMatrix<REAL> sigma(npts_tot, 3, 0.);
+#ifdef USING_TBB
+    using namespace tbb;
+    parallel_for(size_t(0),size_t(npts_tot),size_t(1),[&](size_t ipts)
+                      {
+                          sigma(ipts,0) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts,0)+nu*result(2*ipts+1,1)); // Sigma x
+                          sigma(ipts,1) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts+1,1)+nu*result(2*ipts,0)); // Sigma y
+                          sigma(ipts,2) = weight[ipts]*2*E/(2.*(1.+nu))*(result(2*ipts,1)+result(2*ipts+1,0))*0.5; // Sigma xy
+                      }
+                      );
+#else
     for (int64_t ipts=0; ipts<npts_tot; ipts++) {
-        sigma(ipts,0) = E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts,0)+nu*result(2*ipts+1,1)); // Sigma x
-        sigma(ipts,1) = E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts+1,1)+nu*result(2*ipts,0)); // Sigma y
-        sigma(ipts,2) = 2*E/(2.*(1.+nu))*(result(2*ipts,1)+result(2*ipts+1,0))*0.5; // Sigma xy
+        sigma(ipts,0) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts,0)+nu*result(2*ipts+1,1)); // Sigma x
+        sigma(ipts,1) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts+1,1)+nu*result(2*ipts,0)); // Sigma y
+        sigma(ipts,2) = weight[ipts]*2.*E/(2.*(1.+nu))*(result(2*ipts,1)+result(2*ipts+1,0))*0.5; // Sigma xy
     }
+#endif
     
     // -----------------------------------------------------------------------
     // CÁLCULO DAS FORÇAS NODAIS
@@ -392,8 +411,8 @@ void sol_teste(TPZCompMesh * cmesh){
     TPZManVector<int64_t> elem_vec_ids(nelem);
     
     // Vetor formado pela matriz de forças por elemento
-    TPZManVector<TPZFMatrix<REAL>> nodal_forces_el(nelem);
-    
+    TPZVec<TPZFMatrix<REAL>> nodal_forces_el(nelem);
+
     for (int64_t iel=0; iel<nelem_c; iel++) {
         
         // Verificações
@@ -407,45 +426,36 @@ void sol_teste(TPZCompMesh * cmesh){
         if (!cel_inter) DebugStop();
         TPZIntPoints * int_rule = &(cel_inter->GetIntegrationRule());
         
-        for (int64_t ipts=0; ipts<int_rule->NPoints(); ipts++) {
-            
-            // Cálculo do detjac e peso para multiplicar pelos sigmas
-            TPZManVector<REAL> qsi(dim_mesh,1);
-            REAL w;
-            int_rule->Point(ipts, qsi, w);
-            
-            TPZFMatrix<REAL> jac;
-            TPZFMatrix<REAL> axes;
-            REAL detjac;
-            TPZFMatrix<REAL> jacinv;
-            gel->Jacobian(qsi, jac, axes, detjac, jacinv);
-            
-            sigma(ipts+cont_cols,0) *= w*detjac;
-            sigma(ipts+cont_cols,1) *= w*detjac;
-            sigma(ipts+cont_cols,2) *= w*detjac;
-        }
-        AdVec[cont_elem].Transpose();
+//        AdVec[cont_elem].Transpose();
         
         // Forças nodais na direção x
         nodal_forces_el[cont_elem].Redim(cel_inter->NShapeF(), 2);
+        int64_t rows = AdVec[cont_elem].Cols();
+        TPZFMatrix<STATE> nodal_forcex(rows,1,&nodal_forces_el[cont_elem](0,0), rows);
         TPZFMatrix<REAL> fv(2*int_rule->NPoints(),1,0.);
         for (int64_t ipts=0; ipts<int_rule->NPoints(); ipts++) {
             fv(2*ipts,0) = sigma(ipts+cont_cols,0); // Sigma x
             fv(2*ipts+1,0) = sigma(ipts+cont_cols,2); // Sigma xy
         }
-        nodal_forces_el[cont_elem].AddSub(0, 0, AdVec[cont_elem].operator*(fv));
+        bool transpose = true;
+        
+        AdVec[cont_elem].MultAdd(fv, nodal_forcex, nodal_forcex,1.,1.,transpose);
+//        nodal_forces_el[cont_elem].AddSub(0, 0, AdVec[cont_elem].operator*(fv));
         
         // Forças nodais na direção y
         for (int64_t ipts=0; ipts<int_rule->NPoints(); ipts++) {
             fv(2*ipts,0) = sigma(ipts+cont_cols,2); // Sigma xy
             fv(2*ipts+1,0) = sigma(ipts+cont_cols,1); // Sigma y
         }
-        nodal_forces_el[cont_elem].AddSub(0, 1, AdVec[cont_elem].operator*(fv));
+        TPZFMatrix<STATE> nodal_forcey(rows,1,&nodal_forces_el[cont_elem](0,1), rows);
+        AdVec[cont_elem].MultAdd(fv, nodal_forcex, nodal_forcex,1.,1.,transpose);
+//        nodal_forces_el[cont_elem].AddSub(0, 1, AdVec[cont_elem].operator*(fv));
         
         cont_cols+=int_rule->NPoints();
         cont_elem++;
     }
     
+    // Segunda versao utilizando cores
     // -----------------------------------------------------------------------
     // INÍCIO DA ASSEMBLAGEM
     int64_t nnodes_tot = cmesh->Reference()->NNodes();

@@ -7,84 +7,163 @@
 #include <mkl.h>
 #endif
 
-TPZSolveMatrix::TPZSolveMatrix()
+#ifdef USING_TBB
+#include "tbb/parallel_for_each.h"
+#endif
+
+
+TPZSolveMatrix::TPZSolveMatrix() : TPZMatrix<STATE>(), fElementMatrices(), fIndexes()
 {
-    fRows = -1;
-    fCols = -1;
-    fElementMatrices = 1;
-    fIndexes = 1;
 }
 
 TPZSolveMatrix::~TPZSolveMatrix(){
     
 }
 
-void TPZSolveMatrix::Solve(TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result)
+void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result, int opt) const
 {
+    if(opt != 0) DebugStop();
     int64_t nelem = fElementMatrices.size();
-    int64_t cont = 0;
     
-    MKL_INT n_globalsol_eachdirection = fIndexes.size()/2;
-    MKL_INT *indexes_x = (MKL_INT*)calloc(n_globalsol_eachdirection, sizeof(MKL_INT));
-    MKL_INT *indexes_y = (MKL_INT*)calloc(n_globalsol_eachdirection, sizeof(MKL_INT));
+    MKL_INT n_globalsol = fIndexes.size();
     
-    for (int64_t i=0; i<n_globalsol_eachdirection; i++){
-        indexes_x[i] = fIndexes[i];
-        indexes_y[i] = fIndexes[n_globalsol_eachdirection+i];
+    if (result.Rows() != n_globalsol) {
+        DebugStop();
     }
+    MKL_INT n_globalsol_eachdirection = fIndexes.size()/2;
     
-    REAL *global_solution_x = (REAL*)calloc(n_globalsol_eachdirection, sizeof(REAL));
-    REAL *global_solution_y = (REAL*)calloc(n_globalsol_eachdirection, sizeof(REAL));
+    TPZVec<REAL> expand_solution(n_globalsol_eachdirection);
     
-    cblas_dgthr(n_globalsol_eachdirection, global_solution, global_solution_x, indexes_x);
-    cblas_dgthr(n_globalsol_eachdirection, global_solution, global_solution_y, indexes_y);
+    /// gather operation
+    cblas_dgthr(n_globalsol, global_solution, &expand_solution[0], &fIndexes[0]);
     
-    result.Redim(2*fRows, 2);
     
-    int64_t position_in_resultmatrix = 0;
     
+#ifdef USING_TBB
+    using namespace tbb;
+    parallel_for(size_t(0),size_t(nelem),size_t(1),[&](size_t iel)
+                 {
+                     int64_t nrows_element = fElementMatrices[iel].Rows();
+                     int64_t ncols_element = fElementMatrices[iel].Cols();
+                     int64_t cont;
+                     
+                     cont = fColFirstIndex[iel];
+                     MKL_INT position_in_resultmatrix = fRowFirstIndex[iel];
+                     TPZFMatrix<REAL> element_solution_x(ncols_element,1,&expand_solution[cont],ncols_element);
+                     TPZFMatrix<REAL> element_solution_y(ncols_element,1,&expand_solution[cont+fColFirstIndex[nelem]],ncols_element);
+                     
+                     TPZFMatrix<REAL> solx(nrows_element,1,&result(position_in_resultmatrix,1),nrows_element);
+                     TPZFMatrix<REAL> soly(nrows_element,1,&result(position_in_resultmatrix+fCol/2),nrows_element);
+                     
+                     fElementMatrices[iel].Multiply(element_solution_x,solx);
+                     fElementMatrices[iel].Multiply(element_solution_y,soly);
+
+                 }
+                 );
+#else
     for (int64_t iel=0; iel<nelem; iel++) {
         int64_t nrows_element = fElementMatrices[iel].Rows();
         int64_t ncols_element = fElementMatrices[iel].Cols();
+        int64_t cont;
+
+        cont = fColFirstIndex[iel];
+        MKL_INT position_in_resultmatrix = fRowFirstIndex[iel];
+        TPZFMatrix<REAL> element_solution_x(ncols_element,1,&expand_solution[cont],ncols_element);
+        TPZFMatrix<REAL> element_solution_y(ncols_element,1,&expand_solution[cont+fColFirstIndex[nelem]],ncols_element);
         
-        TPZFMatrix<REAL> element_solution_x(ncols_element,1,0.);
-        TPZFMatrix<REAL> element_solution_y(ncols_element,1,0.);
+        TPZFMatrix<REAL> solx(nrows_element,1,&result(position_in_resultmatrix,1),nrows_element);
+        TPZFMatrix<REAL> soly(nrows_element,1,&result(position_in_resultmatrix+fCol/2),nrows_element);
         
-        for (int64_t j_ncols_element = 0; j_ncols_element<ncols_element; j_ncols_element++) {
-            element_solution_x(j_ncols_element,0) = global_solution_x[cont];
-            element_solution_y(j_ncols_element,0) = global_solution_y[cont];
-            cont++;
-        }
-        
-        TPZFMatrix<REAL> sol(nrows_element,2);
-        TPZFMatrix<REAL> solx(nrows_element,2);
-        TPZFMatrix<REAL> soly(nrows_element,2);
-        
-        solx = fElementMatrices[iel].operator*(element_solution_x);
-        soly = fElementMatrices[iel].operator*(element_solution_y);
-        for (int64_t jrows=0; jrows<nrows_element; jrows++) {
-            sol(jrows,0) = solx(jrows,0);
-            sol(jrows,1) = soly(jrows,0);
-        }
-        
-        result.AddSub(position_in_resultmatrix, 0, sol);
-        position_in_resultmatrix += sol.Rows();
-        
+        fElementMatrices[iel].Multiply(element_solution_x,solx);
+        fElementMatrices[iel].Multiply(element_solution_y,soly);
     }
-    
+#endif
 } 
 
 void TPZSolveMatrix::OrderGlobalSolution (TPZFMatrix<STATE> &global_solution, TPZFMatrix<REAL> &global_solution_x, TPZFMatrix<REAL> &global_solution_y){
     
     int64_t len_indexes = fIndexes.size();
+    int64_t halflen = len_indexes/2;
     
-    for (int64_t j_ind=0; j_ind<(len_indexes/2); j_ind++) {
+    for (int64_t j_ind=0; j_ind<halflen; j_ind++) {
         
         int64_t id = fIndexes[j_ind];
         global_solution_x(j_ind,0) = global_solution(id,0);
         
-        id = fIndexes[(len_indexes/2)+j_ind];
+        id = fIndexes[halflen+j_ind];
         global_solution_y(j_ind,0) = global_solution(id,0);
+    }
+}
+
+/// compute the first index of each element
+void TPZSolveMatrix::ComputeElementFirstIndex()
+{
+    int64_t nelem = fElementMatrices.size();
+    fRowSize.resize(nelem);
+    fColSize.resize(nelem);
+    fRowFirstIndex.resize(nelem+1);
+    fColFirstIndex.resize(nelem+1);
+    fMatrixPosition.resize(nelem+1);
+    fColFirstIndex[0] = 0;
+    fRowFirstIndex[0] = 0;
+    fMatrixPosition[0] = 0;
+
+    for (MKL_INT i=0; i< fElementMatrices.size(); i++) {
+        int row = fElementMatrices[i].Rows();
+        int col = fElementMatrices[i].Cols();
+        fColFirstIndex[i+1]= fColFirstIndex[i]+col;
+        fRowFirstIndex[i+1]= fRowFirstIndex[i]+row;
+        fMatrixPosition[i+1] = fMatrixPosition[i]+row*col;
+        fRowSize[i] = row;
+        fColSize[i] = col;
+    }
+}
+
+/** @brief Multiply with the transpose matrix */
+void TPZSolveMatrix::MultiplyTranspose(const TPZFMatrix<STATE>  &intpoint_solution, TPZFMatrix<STATE> &resid) const
+{
+    // -----------------------------------------------------------------------
+    // CÁLCULO DAS FORÇAS NODAIS
+    int64_t cont_cols=0;
+    int64_t nelem = fColSize.size();
+    TPZVec<int64_t> elem_vec_ids(nelem);
+    
+    // Vetor formado pela matriz de forças por elemento
+    TPZFMatrix<REAL> nodal_forces_el(fRow,1);
+    
+    
+    for (int64_t iel=0; iel<nelem; iel++) {
+        
+        int iel_rows = fRowSize[iel];
+        cont_cols = fColFirstIndex[iel];
+        // Forças nodais na direção x
+        int64_t rows = fElementMatrices[iel].Cols();
+        TPZFMatrix<STATE> nodal_forcex(rows,1,&nodal_forces_el(fRowFirstIndex[iel],0), rows);
+        TPZFMatrix<REAL> fv(2*iel_rows,1,0.);
+        for (int64_t ipts=0; ipts<iel_rows; ipts++) {
+            fv(2*ipts,0) = intpoint_solution.GetVal(2*ipts+cont_cols,0); // Sigma x
+            fv(2*ipts+1,0) = intpoint_solution.GetVal(2*ipts+cont_cols+1,0); // Sigma xy
+        }
+        bool transpose = true;
+        
+        fElementMatrices[iel].MultAdd(fv, nodal_forcex, nodal_forcex,1.,1.,transpose);
+        //        nodal_forces_el[cont_elem].AddSub(0, 0, AdVec[cont_elem].operator*(fv));
+        
+        // Forças nodais na direção y
+        for (int64_t ipts=0; ipts<iel_rows; ipts++) {
+            fv(2*ipts,0) = intpoint_solution.GetVal(2*ipts+cont_cols+fRow/2,0); // Sigma xy
+            fv(2*ipts+1,0) = intpoint_solution.GetVal(2*ipts+cont_cols+fRow/2,0); // Sigma y
+        }
+        TPZFMatrix<STATE> nodal_forcey(rows,1,&nodal_forces_el(fRowFirstIndex[iel]+fRow/2,0), rows);
+        fElementMatrices[iel].MultAdd(fv, nodal_forcey, nodal_forcey,1.,1.,transpose);
+        //        nodal_forces_el[cont_elem].AddSub(0, 1, AdVec[cont_elem].operator*(fv));
+        
+    }
+    // -----------------------------------------------------------------------
+    // ASSEMBLAGEM "TRADICIONAL"
+    TPZManVector<REAL> nodal_forces_global(fRow, 0.);
+    for (int64_t ir=0; ir<fRow; ir++) {
+        resid(fIndexes[ir],0) += nodal_forces_el(ir,0);
     }
 }
 
