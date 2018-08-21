@@ -79,8 +79,6 @@ void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatr
         fElementMatrices[iel].Multiply(element_solution_x,solx);
         fElementMatrices[iel].Multiply(element_solution_y,soly);
     }
-
-    result.Print(std::cout);
 #endif
 }
 

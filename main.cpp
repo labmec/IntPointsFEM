@@ -390,16 +390,17 @@ void sol_teste(TPZCompMesh *cmesh) {
     using namespace tbb;
     parallel_for(size_t(0),size_t(npts_tot),size_t(1),[&](size_t ipts)
                       {
-                          sigma(ipts,0) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts,0)+nu*result(2*ipts+1,1)); // Sigma x
-                          sigma(ipts,1) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts+1,1)+nu*result(2*ipts,0)); // Sigma y
-                          sigma(ipts,2) = weight[ipts]*2*E/(2.*(1.+nu))*(result(2*ipts,1)+result(2*ipts+1,0))*0.5; // Sigma xy
+                            sigma(ipts,0) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts,0)+nu*result(2*ipts+2*npts_tot+1,0)); // Sigma x
+                            sigma(ipts,1) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts+2*npts_tot+1,0)+nu*result(2*ipts,0)); // Sigma y
+                            sigma(ipts,2) = weight[ipts]*2.*E/(2.*(1.+nu))*(result(2*ipts+1,0)+result(2*ipts+2*npts_tot,0))*0.5; // Sigma xy
                       }
                       );
 #else
     for (int64_t ipts=0; ipts<npts_tot; ipts++) {
-        sigma(ipts,0) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts,0)+nu*result(2*ipts+1,1)); // Sigma x
-        sigma(ipts,1) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts+1,1)+nu*result(2*ipts,0)); // Sigma y
-        sigma(ipts,2) = weight[ipts]*2.*E/(2.*(1.+nu))*(result(2*ipts,1)+result(2*ipts+1,0))*0.5; // Sigma xy
+        sigma(ipts,0) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts,0)+nu*result(2*ipts+2*npts_tot+1,0)); // Sigma x
+        sigma(ipts,1) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts+2*npts_tot+1,0)+nu*result(2*ipts,0)); // Sigma y
+        sigma(ipts,2) = weight[ipts]*2.*E/(2.*(1.+nu))*(result(2*ipts+1,0)+result(2*ipts+2*npts_tot,0))*0.5; // Sigma xy
+
     }
 #endif
 
