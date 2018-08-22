@@ -27,7 +27,6 @@ void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatr
 
     MKL_INT n_globalsol = fIndexes.size();
 
-
    result.Resize(2*n_globalsol,1);
 
     if (result.Rows() != 2*n_globalsol) {
@@ -128,11 +127,10 @@ void TPZSolveMatrix::MultiplyTranspose(const TPZFMatrix<STATE>  &intpoint_soluti
     // CÁLCULO DAS FORÇAS NODAIS
     int64_t cont_cols=0;
     int64_t nelem = fColSize.size();
-    TPZVec<int64_t> elem_vec_ids(nelem);
 
     // Vetor formado pela matriz de forças por elemento
     int npts_tot = fRow;
-    TPZFMatrix<REAL> nodal_forces_el(2*fRow,1);
+    TPZFMatrix<REAL> nodal_forces_el(2*fRow,1,0.);
 
 
     for (int64_t iel=0; iel<nelem; iel++) {

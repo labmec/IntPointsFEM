@@ -40,7 +40,7 @@ int main(){
     REAL len = 2;
 
     // COMPUTATIONAL MESH ORDER
-    int pOrder = 1;
+    int pOrder = 2;
 
     // SUBDIVISIONS OF THE ELEMENTS
     int ndivide = 0;
@@ -316,7 +316,6 @@ void sol_teste(TPZCompMesh *cmesh) {
         // Montando a matriz dos phis e dphis
         AVec[cont_elem].Redim(npts, nf);
         AdVec[cont_elem].Redim(npts * dim_mesh, nf);
-//        weight[cont_elem].resize(npts);
         for (int i_npts = 0; i_npts < npts; i_npts++) {
             TPZManVector<REAL> qsi(dim_mesh, 1);
             REAL w;
@@ -326,7 +325,6 @@ void sol_teste(TPZCompMesh *cmesh) {
 
             cel_inter->ComputeRequiredData(data, qsi);
             weight.Push(w * std::abs(data.detjac));
-//            weight[cont_elem][i_npts] = w*std::abs(data.detjac);
             TPZFMatrix<REAL> &phi = data.phi;
             TPZFMatrix<REAL> &dphix = data.dphix;
 
@@ -398,11 +396,10 @@ void sol_teste(TPZCompMesh *cmesh) {
 #else
 
     //OBS: weight ja esta multiplicado por detjac!!
-    for (int64_t ipts=0; ipts<npts_tot; ipts++) {
+    for (int64_t ipts=0; ipts< npts_tot; ipts++) {
         sigma(ipts,0) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts,0)+nu*result(2*ipts+2*npts_tot+1,0)); // Sigma x
         sigma(ipts+npts_tot,0) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts+2*npts_tot+1,0)+nu*result(2*ipts,0)); // Sigma y
         sigma(ipts+2*npts_tot,0) = weight[ipts]*2.*E/(2.*(1.+nu))*(result(2*ipts+1,0)+result(2*ipts+2*npts_tot,0))*0.5; // Sigma xy
-
     }
 #endif
 
@@ -410,6 +407,9 @@ void sol_teste(TPZCompMesh *cmesh) {
     int neq= cmesh->NEquations();
     TPZFMatrix<REAL> resid(neq, 1, 0.);
     SolMat->MultiplyTranspose(sigma, resid);
+    resid.Print(std::cout);
+
+
 
 
 //    // Segunda versao utilizando cores
