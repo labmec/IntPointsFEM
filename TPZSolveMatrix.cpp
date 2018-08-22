@@ -131,42 +131,40 @@ void TPZSolveMatrix::MultiplyTranspose(const TPZFMatrix<STATE>  &intpoint_soluti
     TPZVec<int64_t> elem_vec_ids(nelem);
 
     // Vetor formado pela matriz de forças por elemento
-    TPZFMatrix<REAL> nodal_forces_el(fRow,1);
+    int npts_tot = fRow;
+    TPZFMatrix<REAL> nodal_forces_el(2*fRow,1);
 
 
     for (int64_t iel=0; iel<nelem; iel++) {
+        bool transpose = true;
 
         int iel_rows = fRowSize[iel];
         cont_cols = fColFirstIndex[iel];
-        // Forças nodais na direção x
         int64_t rows = fElementMatrices[iel].Cols();
-        TPZFMatrix<STATE> nodal_forcex(rows,1,&nodal_forces_el(fRowFirstIndex[iel],0), rows);
-        TPZFMatrix<REAL> fv(2*iel_rows,1,0.);
-        for (int64_t ipts=0; ipts<iel_rows; ipts++) {
-            fv(2*ipts,0) = intpoint_solution.GetVal(2*ipts+cont_cols,0); // Sigma x
-            fv(2*ipts+1,0) = intpoint_solution.GetVal(2*ipts+cont_cols+1,0); // Sigma xy
-        }
-        bool transpose = true;
+        TPZFMatrix<REAL> fv(iel_rows,1,0.);
 
+        // Forças nodais na direção x
+        for (int64_t ipts=0; ipts<iel_rows/2; ipts++) {
+            fv(2*ipts,0) = intpoint_solution.GetVal(ipts+cont_cols,0); // Sigma x
+            fv(2*ipts+1,0) = intpoint_solution.GetVal(ipts+cont_cols+2*npts_tot,0); // Sigma xy
+        }
+        TPZFMatrix<STATE> nodal_forcex(rows,1,&nodal_forces_el(fRowFirstIndex[iel]/2,0), rows);
         fElementMatrices[iel].MultAdd(fv, nodal_forcex, nodal_forcex,1.,1.,transpose);
-        //        nodal_forces_el[cont_elem].AddSub(0, 0, AdVec[cont_elem].operator*(fv));
 
         // Forças nodais na direção y
-        for (int64_t ipts=0; ipts<iel_rows; ipts++) {
-            fv(2*ipts,0) = intpoint_solution.GetVal(2*ipts+cont_cols+fRow/2,0); // Sigma xy
-            fv(2*ipts+1,0) = intpoint_solution.GetVal(2*ipts+cont_cols+fRow/2,0); // Sigma y
+        for (int64_t ipts=0; ipts<iel_rows/2; ipts++) {
+            fv(2*ipts,0) = intpoint_solution.GetVal(ipts+cont_cols+2*npts_tot,0); // Sigma xy
+            fv(2*ipts+1,0) = intpoint_solution.GetVal(ipts+cont_cols+npts_tot,0); // Sigma y
         }
-        TPZFMatrix<STATE> nodal_forcey(rows,1,&nodal_forces_el(fRowFirstIndex[iel]+fRow/2,0), rows);
+        TPZFMatrix<STATE> nodal_forcey(rows,1,&nodal_forces_el(fRowFirstIndex[iel]/2+fRow,0), rows);
         fElementMatrices[iel].MultAdd(fv, nodal_forcey, nodal_forcey,1.,1.,transpose);
-        //        nodal_forces_el[cont_elem].AddSub(0, 1, AdVec[cont_elem].operator*(fv));
 
     }
+
     // -----------------------------------------------------------------------
     // ASSEMBLAGEM "TRADICIONAL"
     TPZManVector<REAL> nodal_forces_global(fRow, 0.);
-    for (int64_t ir=0; ir<fRow; ir++) {
+    for (int64_t ir=0; ir<2*fRow; ir++) {
         resid(fIndexes[ir],0) += nodal_forces_el(ir,0);
     }
 }
-
-

@@ -385,241 +385,198 @@ void sol_teste(TPZCompMesh *cmesh) {
     // Cálculo do sigma
     REAL E = 200000000.;
     REAL nu =0.30;
-    TPZFMatrix<REAL> sigma(npts_tot, 3, 0.);
+    TPZFMatrix<REAL> sigma(npts_tot*3, 1, 0.);
 #ifdef USING_TBB
     using namespace tbb;
     parallel_for(size_t(0),size_t(npts_tot),size_t(1),[&](size_t ipts)
                       {
                             sigma(ipts,0) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts,0)+nu*result(2*ipts+2*npts_tot+1,0)); // Sigma x
-                            sigma(ipts,1) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts+2*npts_tot+1,0)+nu*result(2*ipts,0)); // Sigma y
-                            sigma(ipts,2) = weight[ipts]*2.*E/(2.*(1.+nu))*(result(2*ipts+1,0)+result(2*ipts+2*npts_tot,0))*0.5; // Sigma xy
+                            sigma(ipts+npts_tot,0) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts+2*npts_tot+1,0)+nu*result(2*ipts,0)); // Sigma y
+                            sigma(ipts+2*npts_tot,0) = weight[ipts]*2.*E/(2.*(1.+nu))*(result(2*ipts+1,0)+result(2*ipts+2*npts_tot,0))*0.5; // Sigma xy
                       }
                       );
 #else
+
+    //OBS: weight ja esta multiplicado por detjac!!
     for (int64_t ipts=0; ipts<npts_tot; ipts++) {
         sigma(ipts,0) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts,0)+nu*result(2*ipts+2*npts_tot+1,0)); // Sigma x
-        sigma(ipts,1) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts+2*npts_tot+1,0)+nu*result(2*ipts,0)); // Sigma y
-        sigma(ipts,2) = weight[ipts]*2.*E/(2.*(1.+nu))*(result(2*ipts+1,0)+result(2*ipts+2*npts_tot,0))*0.5; // Sigma xy
+        sigma(ipts+npts_tot,0) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts+2*npts_tot+1,0)+nu*result(2*ipts,0)); // Sigma y
+        sigma(ipts+2*npts_tot,0) = weight[ipts]*2.*E/(2.*(1.+nu))*(result(2*ipts+1,0)+result(2*ipts+2*npts_tot,0))*0.5; // Sigma xy
 
     }
 #endif
 
-    // -----------------------------------------------------------------------
-    // CÁLCULO DAS FORÇAS NODAIS
-    int64_t cont_cols=0;
-    cont_elem=0;
-    TPZManVector<int64_t> elem_vec_ids(nelem);
+    //CALCULO DO RESIDUO
+    int neq= cmesh->NEquations();
+    TPZFMatrix<REAL> resid(neq, 1, 0.);
+    SolMat->MultiplyTranspose(sigma, resid);
 
-    // Vetor formado pela matriz de forças por elemento
-    TPZVec<TPZFMatrix<REAL>> nodal_forces_el(nelem);
 
-    for (int64_t iel=0; iel<nelem_c; iel++) {
-
-        // Verificações
-        TPZCompEl * cel = cmesh->Element(iel);
-        if(!cel) continue;
-        TPZGeoEl * gel = cel->Reference();
-        if(!gel || gel->Dimension() != dim_mesh) continue;
-
-        // Def da regra de integração
-        TPZInterpolatedElement * cel_inter = dynamic_cast<TPZInterpolatedElement * >(cel);
-        if (!cel_inter) DebugStop();
-        TPZIntPoints * int_rule = &(cel_inter->GetIntegrationRule());
-
-//        AdVec[cont_elem].Transpose();
-
-        // Forças nodais na direção x
-        nodal_forces_el[cont_elem].Redim(cel_inter->NShapeF(), 2);
-        int64_t rows = AdVec[cont_elem].Cols();
-        TPZFMatrix<STATE> nodal_forcex(rows,1,&nodal_forces_el[cont_elem](0,0), rows);
-        TPZFMatrix<REAL> fv(2*int_rule->NPoints(),1,0.);
-        for (int64_t ipts=0; ipts<int_rule->NPoints(); ipts++) {
-            fv(2*ipts,0) = sigma(ipts+cont_cols,0); // Sigma x
-            fv(2*ipts+1,0) = sigma(ipts+cont_cols,2); // Sigma xy
-        }
-        bool transpose = true;
-
-        AdVec[cont_elem].MultAdd(fv, nodal_forcex, nodal_forcex,1.,1.,transpose);
-//        nodal_forces_el[cont_elem].AddSub(0, 0, AdVec[cont_elem].operator*(fv));
-
-        // Forças nodais na direção y
-        for (int64_t ipts=0; ipts<int_rule->NPoints(); ipts++) {
-            fv(2*ipts,0) = sigma(ipts+cont_cols,2); // Sigma xy
-            fv(2*ipts+1,0) = sigma(ipts+cont_cols,1); // Sigma y
-        }
-        TPZFMatrix<STATE> nodal_forcey(rows,1,&nodal_forces_el[cont_elem](0,1), rows);
-        AdVec[cont_elem].MultAdd(fv, nodal_forcex, nodal_forcex,1.,1.,transpose);
-//        nodal_forces_el[cont_elem].AddSub(0, 1, AdVec[cont_elem].operator*(fv));
-
-        cont_cols+=int_rule->NPoints();
-        cont_elem++;
-    }
-
-    // Segunda versao utilizando cores
-    // -----------------------------------------------------------------------
-    // INÍCIO DA ASSEMBLAGEM
-    int64_t nnodes_tot = cmesh->Reference()->NNodes();
-    TPZManVector<REAL> nnodes_vec(nnodes_tot,0.);
-
-    cont_elem = 0;
-
-    TPZManVector<int> nelem_cor(nelem,-1); // vetor de cores
-    TPZManVector<int64_t> elem_neighbour(8,0.); // definindo que um elem pode ter no maximo 8 elem vizinhos
-
-    for (int64_t iel1=0; iel1<nelem_c; iel1++) {
-        if(!cmesh->Element(iel1)) continue;
-        TPZGeoEl * gel1 = cmesh->Element(iel1)->Reference();
-        if(!gel1 ||  gel1->Dimension() != dim_mesh) continue;
-
-        TPZManVector<int64_t> nodeindices;
-        gel1->GetNodeIndices(nodeindices); // Armazena os nós do elemento finito
-
-        // ** Início da verificação de qual coord é repetida:
-        TPZGeoEl * gel2;
-
-        // contadores
-        int64_t cont_elem_cor = 0;
-        int64_t cont_elem_neighbour = 0;
-
-        // inicializa com nnodes_vec nulo, e preenche com 1 os nós repetidos
-        nnodes_vec.Fill(0);
-        for (int64_t iel2=0; iel2<nelem_c; iel2++) {
-            if(!cmesh->Element(iel2)) continue;
-            gel2 = cmesh->Element(iel2)->Reference();
-            if(!gel2 ||  gel2->Dimension() != dim_mesh) continue;
-
-            for (int64_t inode=0; inode<gel2->NNodes(); inode++) {
-                if(std::find (nodeindices.begin(), nodeindices.end(), gel2->NodeIndex(inode)) != nodeindices.end()){
-                    nnodes_vec[gel2->NodeIndex(inode)] = 1; // preenchendo nnodes_vec
-                    elem_neighbour[cont_elem_neighbour] = cont_elem_cor; // preenche o vetor de elementos vizinhos ao elemento de análise
-                    cont_elem_neighbour++;
-                }
-            }
-            cont_elem_cor++;
-        }
-        // ** fim da verificação
-
-        // Preenche a cor
-        for (int64_t inodes_tot=0; inodes_tot<nnodes_tot; inodes_tot++) {
-            cont_elem_cor = cont_elem;
-            if (nnodes_vec[inodes_tot] == 1){
-                for (int64_t iel2=iel1; iel2<nelem_c; iel2++) {
-                    if(!cmesh->Element(iel2)) continue;
-                    gel2 = cmesh->Element(iel2)->Reference();
-                    if(!gel2 ||  gel2->Dimension() != dim_mesh) continue;
-
-                    gel2->GetNodeIndices(nodeindices);
-                    if (std::find(nodeindices.begin(), nodeindices.end(), inodes_tot) != nodeindices.end()){
-                        nelem_cor[cont_elem_cor] = 1+nelem_cor[cont_elem];
-                    }
-                }
-            }
-
-            // Verifica se pode ser uma cor menor
-            for (int64_t icor=0; icor<nelem_cor[cont_elem_cor]; icor++) {
-                if (std::find(elem_neighbour.begin(), elem_neighbour.end(), icor) == elem_neighbour.end())
-                    nelem_cor[cont_elem_cor] = icor;
-                if (cont_elem==0)
-                    nelem_cor[cont_elem_cor] = 0;
-            }
-            cont_elem_cor++;
-        }
-        cont_elem++;
-    }
-
-    // -----------------------------------------------------------------------
-    // ASSEMBLAGEM POR COR
-    int64_t ncoef = coef_sol.Rows();
-    TPZManVector<REAL> nodal_forces_global2(ncoef,0.);
-    int ncor = *std::max_element(nelem_cor.begin(), nelem_cor.end());
-
-    TPZManVector<int64_t> assemble_cores(nf_tot*2, 0.);
-    TPZManVector<int64_t> nf_por_cor(ncor+1, 0.);
-    pos = 0;
-
-    // VETOR CORES E NEQ
-    for (int icor=0; icor<ncor+1; icor++) {
-        auto it = std::find (nelem_cor.begin(), nelem_cor.end(), icor);
-        while (std::find (it, nelem_cor.end(), icor) != nelem_cor.end()) {
-            it = std::find (it, nelem_cor.end(), icor);
-            int poscor = std::distance(nelem_cor.begin(), it);
-            for (int iassemblecor = 0; iassemblecor<indexes_el[poscor].size(); iassemblecor++)
-                assemble_cores[iassemblecor+pos] = indexes_el[poscor][iassemblecor];
-            it++;
-            pos += indexes_el[poscor].size();
-            nf_por_cor[icor] += indexes_el[poscor].size()/2;
-        }
-    }
-
-    // SE TERMINAR EM NÚMERO IMPAR DE CORES
-    int64_t nf_cor = 0;
-    if ( (ncor+1)%2 != 0) {
-
-        auto it = std::find (nelem_cor.begin(), nelem_cor.end(), ncor);
-        while (std::find (it, nelem_cor.end(), ncor) != nelem_cor.end()) {
-
-            it = std::find (it, nelem_cor.end(), ncor);
-
-            int iel = std::distance(nelem_cor.begin(), it);
-            int64_t nf_el = indexes_el[iel].size()/2;
-            nf_cor += nf_el;
-
-            for (int64_t inf_el = 0; inf_el<nf_el*2; inf_el++) {
-                int64_t id = assemble_cores[nf_tot - nf_cor + inf_el];
-                if (id%2 == 0)
-                    nodal_forces_global2[id] += nodal_forces_el[iel](inf_el/2,0);
-                else
-                    nodal_forces_global2[id] += nodal_forces_el[iel](inf_el/2,1);
-            }
-            it++;
-        }
-    }
-
-    REAL ncor_to_assemble = (ncor+1)/2;
-    while(ncor_to_assemble >= 0.5){
-        for (int64_t cor = 2*ncor_to_assemble-1; cor>=int(ncor_to_assemble); cor--) {
-
-            nf_cor += nf_por_cor[cor];
-            auto it = std::find (nelem_cor.begin(), nelem_cor.end(), cor);
-            int64_t nf_el = 0;
-
-            while (std::find (it, nelem_cor.end(), cor) != nelem_cor.end()) {
-                it = std::find (it, nelem_cor.end(), cor);
-                int iel = std::distance(nelem_cor.begin(), it);
-
-                for (int64_t inf_el = 0; inf_el<indexes_el[iel].size(); inf_el++) {
-                    int64_t id = assemble_cores[nf_tot*2 - nf_cor*2 + nf_el*2 + inf_el];
-                    if (id%2 == 0)
-                        nodal_forces_global2[id] += nodal_forces_el[iel](inf_el/2,0);
-                    else
-                        nodal_forces_global2[id] += nodal_forces_el[iel](inf_el/2,1);
-                }
-                it++;
-                nf_el += indexes_el[iel].size()/2;
-            }
-        }
-        ncor_to_assemble = ncor_to_assemble/2;
-    }
-
-    // -----------------------------------------------------------------------
-    // ASSEMBLAGEM "TRADICIONAL"
-    TPZManVector<REAL> nodal_forces_global(ncoef, 0.);
-    for (int64_t iel=0; iel<nelem; iel++) {
-        int64_t nf_el = nodal_forces_el[iel].Rows();
-
-        for (int64_t inf=0; inf<nf_el; inf++) {
-            int64_t id = indexes_el[iel][2*inf];
-            nodal_forces_global[id] += nodal_forces_el[iel](inf,0);
-
-            id = indexes_el[iel][2*inf+1];
-            nodal_forces_global[id] += nodal_forces_el[iel](inf,1);
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // COMPARANDO OS DOIS TIPOS DE ASSEMBLAGEM
-    for (int64_t i=0; i<nodal_forces_global2.size(); i++) {
-        std::cout << nodal_forces_global2[i]-nodal_forces_global[i] << std::endl;
-    }
+//    // Segunda versao utilizando cores
+//    // -----------------------------------------------------------------------
+//    // INÍCIO DA ASSEMBLAGEM
+//    int64_t nnodes_tot = cmesh->Reference()->NNodes();
+//    TPZManVector<REAL> nnodes_vec(nnodes_tot,0.);
+//
+//    cont_elem = 0;
+//
+//    TPZManVector<int> nelem_cor(nelem,-1); // vetor de cores
+//    TPZManVector<int64_t> elem_neighbour(8,0.); // definindo que um elem pode ter no maximo 8 elem vizinhos
+//
+//    for (int64_t iel1=0; iel1<nelem_c; iel1++) {
+//        if(!cmesh->Element(iel1)) continue;
+//        TPZGeoEl * gel1 = cmesh->Element(iel1)->Reference();
+//        if(!gel1 ||  gel1->Dimension() != dim_mesh) continue;
+//
+//        TPZManVector<int64_t> nodeindices;
+//        gel1->GetNodeIndices(nodeindices); // Armazena os nós do elemento finito
+//
+//        // ** Início da verificação de qual coord é repetida:
+//        TPZGeoEl * gel2;
+//
+//        // contadores
+//        int64_t cont_elem_cor = 0;
+//        int64_t cont_elem_neighbour = 0;
+//
+//        // inicializa com nnodes_vec nulo, e preenche com 1 os nós repetidos
+//        nnodes_vec.Fill(0);
+//        for (int64_t iel2=0; iel2<nelem_c; iel2++) {
+//            if(!cmesh->Element(iel2)) continue;
+//            gel2 = cmesh->Element(iel2)->Reference();
+//            if(!gel2 ||  gel2->Dimension() != dim_mesh) continue;
+//
+//            for (int64_t inode=0; inode<gel2->NNodes(); inode++) {
+//                if(std::find (nodeindices.begin(), nodeindices.end(), gel2->NodeIndex(inode)) != nodeindices.end()){
+//                    nnodes_vec[gel2->NodeIndex(inode)] = 1; // preenchendo nnodes_vec
+//                    elem_neighbour[cont_elem_neighbour] = cont_elem_cor; // preenche o vetor de elementos vizinhos ao elemento de análise
+//                    cont_elem_neighbour++;
+//                }
+//            }
+//            cont_elem_cor++;
+//        }
+//        // ** fim da verificação
+//
+//        // Preenche a cor
+//        for (int64_t inodes_tot=0; inodes_tot<nnodes_tot; inodes_tot++) {
+//            cont_elem_cor = cont_elem;
+//            if (nnodes_vec[inodes_tot] == 1){
+//                for (int64_t iel2=iel1; iel2<nelem_c; iel2++) {
+//                    if(!cmesh->Element(iel2)) continue;
+//                    gel2 = cmesh->Element(iel2)->Reference();
+//                    if(!gel2 ||  gel2->Dimension() != dim_mesh) continue;
+//
+//                    gel2->GetNodeIndices(nodeindices);
+//                    if (std::find(nodeindices.begin(), nodeindices.end(), inodes_tot) != nodeindices.end()){
+//                        nelem_cor[cont_elem_cor] = 1+nelem_cor[cont_elem];
+//                    }
+//                }
+//            }
+//
+//            // Verifica se pode ser uma cor menor
+//            for (int64_t icor=0; icor<nelem_cor[cont_elem_cor]; icor++) {
+//                if (std::find(elem_neighbour.begin(), elem_neighbour.end(), icor) == elem_neighbour.end())
+//                    nelem_cor[cont_elem_cor] = icor;
+//                if (cont_elem==0)
+//                    nelem_cor[cont_elem_cor] = 0;
+//            }
+//            cont_elem_cor++;
+//        }
+//        cont_elem++;
+//    }
+//
+//    // -----------------------------------------------------------------------
+//    // ASSEMBLAGEM POR COR
+//    int64_t ncoef = coef_sol.Rows();
+//    TPZManVector<REAL> nodal_forces_global2(ncoef,0.);
+//    int ncor = *std::max_element(nelem_cor.begin(), nelem_cor.end());
+//
+//    TPZManVector<int64_t> assemble_cores(nf_tot*2, 0.);
+//    TPZManVector<int64_t> nf_por_cor(ncor+1, 0.);
+//    pos = 0;
+//
+//    // VETOR CORES E NEQ
+//    for (int icor=0; icor<ncor+1; icor++) {
+//        auto it = std::find (nelem_cor.begin(), nelem_cor.end(), icor);
+//        while (std::find (it, nelem_cor.end(), icor) != nelem_cor.end()) {
+//            it = std::find (it, nelem_cor.end(), icor);
+//            int poscor = std::distance(nelem_cor.begin(), it);
+//            for (int iassemblecor = 0; iassemblecor<indexes_el[poscor].size(); iassemblecor++)
+//                assemble_cores[iassemblecor+pos] = indexes_el[poscor][iassemblecor];
+//            it++;
+//            pos += indexes_el[poscor].size();
+//            nf_por_cor[icor] += indexes_el[poscor].size()/2;
+//        }
+//    }
+//
+//    // SE TERMINAR EM NÚMERO IMPAR DE CORES
+//    int64_t nf_cor = 0;
+//    if ( (ncor+1)%2 != 0) {
+//
+//        auto it = std::find (nelem_cor.begin(), nelem_cor.end(), ncor);
+//        while (std::find (it, nelem_cor.end(), ncor) != nelem_cor.end()) {
+//
+//            it = std::find (it, nelem_cor.end(), ncor);
+//
+//            int iel = std::distance(nelem_cor.begin(), it);
+//            int64_t nf_el = indexes_el[iel].size()/2;
+//            nf_cor += nf_el;
+//
+//            for (int64_t inf_el = 0; inf_el<nf_el*2; inf_el++) {
+//                int64_t id = assemble_cores[nf_tot - nf_cor + inf_el];
+//                if (id%2 == 0)
+//                    nodal_forces_global2[id] += nodal_forces_el[iel](inf_el/2,0);
+//                else
+//                    nodal_forces_global2[id] += nodal_forces_el[iel](inf_el/2,1);
+//            }
+//            it++;
+//        }
+//    }
+//
+//    REAL ncor_to_assemble = (ncor+1)/2;
+//    while(ncor_to_assemble >= 0.5){
+//        for (int64_t cor = 2*ncor_to_assemble-1; cor>=int(ncor_to_assemble); cor--) {
+//
+//            nf_cor += nf_por_cor[cor];
+//            auto it = std::find (nelem_cor.begin(), nelem_cor.end(), cor);
+//            int64_t nf_el = 0;
+//
+//            while (std::find (it, nelem_cor.end(), cor) != nelem_cor.end()) {
+//                it = std::find (it, nelem_cor.end(), cor);
+//                int iel = std::distance(nelem_cor.begin(), it);
+//
+//                for (int64_t inf_el = 0; inf_el<indexes_el[iel].size(); inf_el++) {
+//                    int64_t id = assemble_cores[nf_tot*2 - nf_cor*2 + nf_el*2 + inf_el];
+//                    if (id%2 == 0)
+//                        nodal_forces_global2[id] += nodal_forces_el[iel](inf_el/2,0);
+//                    else
+//                        nodal_forces_global2[id] += nodal_forces_el[iel](inf_el/2,1);
+//                }
+//                it++;
+//                nf_el += indexes_el[iel].size()/2;
+//            }
+//        }
+//        ncor_to_assemble = ncor_to_assemble/2;
+//    }
+//
+//    // -----------------------------------------------------------------------
+//    // ASSEMBLAGEM "TRADICIONAL"
+//    TPZManVector<REAL> nodal_forces_global(ncoef, 0.);
+//    for (int64_t iel=0; iel<nelem; iel++) {
+//        int64_t nf_el = nodal_forces_el[iel].Rows();
+//
+//        for (int64_t inf=0; inf<nf_el; inf++) {
+//            int64_t id = indexes_el[iel][2*inf];
+//            nodal_forces_global[id] += nodal_forces_el[iel](inf,0);
+//
+//            id = indexes_el[iel][2*inf+1];
+//            nodal_forces_global[id] += nodal_forces_el[iel](inf,1);
+//        }
+//    }
+//
+//    // -----------------------------------------------------------------------
+//    // COMPARANDO OS DOIS TIPOS DE ASSEMBLAGEM
+//    for (int64_t i=0; i<nodal_forces_global2.size(); i++) {
+//        std::cout << nodal_forces_global2[i]-nodal_forces_global[i] << std::endl;
+//    }
 
 }
