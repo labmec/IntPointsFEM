@@ -384,9 +384,6 @@ void sol_teste(TPZCompMesh *cmesh) {
     SolMat->TraditionalAssemble(nodal_forces_vec,nodal_forces_global1); //traditional assemble
     SolMat->ColoredAssemble(cmesh, nodal_forces_vec,nodal_forces_global2); //colored assemble
 
-    nodal_forces_global1.Print(std::cout);
-    nodal_forces_global2.Print(std::cout);
-
     //Compare assemble methods
     for (int j = 0; j < nodal_forces_global1.Rows(); ++j) {
         std::cout << nodal_forces_global2[j]-nodal_forces_global1[j] << std::endl;

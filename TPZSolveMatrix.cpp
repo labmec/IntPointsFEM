@@ -10,6 +10,7 @@
 
 #ifdef USING_TBB
 #include "tbb/parallel_for_each.h"
+using namespace tbb;
 #endif
 
 
@@ -41,7 +42,6 @@ void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatr
     cblas_dgthr(n_globalsol, global_solution, &expand_solution[0], &fIndexes[0]);
 
 #ifdef USING_TBB
-    using namespace tbb;
     parallel_for(size_t(0),size_t(nelem),size_t(1),[&](size_t iel)
                  {
                      int64_t nrows_element = fElementMatrices[iel].Rows();
@@ -91,7 +91,6 @@ void TPZSolveMatrix::ComputeSigma( TPZStack<REAL> &weight, TPZFMatrix<REAL> &res
     sigma.Zero();
 
 #ifdef USING_TBB
-    using namespace tbb;
     parallel_for(size_t(0),size_t(npts_tot),size_t(1),[&](size_t ipts)
                       {
                             sigma(ipts,0) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts,0)+nu*result(2*ipts+2*npts_tot+1,0)); // Sigma x
@@ -190,9 +189,17 @@ void TPZSolveMatrix::MultiplyTranspose(const TPZFMatrix<STATE>  &intpoint_soluti
 
 void TPZSolveMatrix::TraditionalAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const
 {
+#ifdef USING_TBB
+    parallel_for(size_t(0),size_t(2*fRow),size_t(1),[&](size_t ir)
+                 {
+                     nodal_forces_global(fIndexes[ir], 0) += nodal_forces_vec(ir, 0);
+                 }
+    );
+#else
     for (int64_t ir=0; ir<2*fRow; ir++) {
         nodal_forces_global(fIndexes[ir], 0) += nodal_forces_vec(ir, 0);
     }
+#endif 
 }
 
 void TPZSolveMatrix::ColoredAssemble(TPZCompMesh * cmesh, TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const

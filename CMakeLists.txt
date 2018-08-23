@@ -91,6 +91,7 @@ endif(USING_MKL)
 #enabling TBB library
 option(USING_TBB "Whether the TBB library will be linked in" OFF)
 if(USING_TBB)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSING_TBB")
     if(WIN32)
         set(TBB_ROOT "C:/Program Files (x86)/IntelSWTools/TBB")
         find_path(TBB_INCLUDE tbb.h HINTS ${TBB_ROOT}/tbb2018_20180618oss/include/tbb NO_DEFAULT_PATH)
