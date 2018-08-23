@@ -9,6 +9,7 @@
 #include "pzmatrix.h"
 #include "pzfmatrix.h"
 #include <mkl.h>
+#include "pzinterpolationspace.h"
 
 //#ifdef USING_MKL
 //#include "mkl.h"
@@ -79,7 +80,13 @@ public:
     /** @brief Solve procedure */
     void Multiply(const TPZFMatrix<STATE>  &global_solution, TPZFMatrix<STATE> &result, int transpose = 0) const;
 
-    void MultiplyTranspose(const TPZFMatrix<STATE>  &intpoint_solution, TPZFMatrix<STATE> &resid) const;
+    void ComputeSigma(TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<REAL> &sigma);
+
+    void MultiplyTranspose(const TPZFMatrix<STATE>  &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec) const;
+
+    void TraditionalAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const;
+
+    void ColoredAssemble(TPZCompMesh * cmesh, TPZManVector<TPZManVector<int64_t>> indexes_el, TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const;
 
 private:
     /** @brief Order the coef vectors
