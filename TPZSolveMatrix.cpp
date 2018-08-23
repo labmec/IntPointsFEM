@@ -155,7 +155,7 @@ void TPZSolveMatrix::MultiplyTranspose(const TPZFMatrix<STATE>  &intpoint_soluti
     // -----------------------------------------------------------------------
     // CÁLCULO DAS FORÇAS NODAIS
     int64_t cont_cols=0;
-    int64_t nelem = fColSize.size();
+    int64_t nelem = fElementMatrices.size();
 
     // Vetor formado pela matriz de forças por elemento
     int npts_tot = fRow;
@@ -195,15 +195,14 @@ void TPZSolveMatrix::TraditionalAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, T
     }
 }
 
-void TPZSolveMatrix::ColoredAssemble(TPZCompMesh * cmesh, TPZManVector<TPZManVector<int64_t>> indexes_el, TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const{
-    // -----------------------------------------------------------------------
-    // INÍCIO DA ASSEMBLAGEM
+void TPZSolveMatrix::ColoredAssemble(TPZCompMesh * cmesh, TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const
+{
     int64_t nnodes_tot = cmesh->Reference()->NNodes();
     TPZManVector<REAL> nnodes_vec(nnodes_tot,0.);
 
     int64_t nelem_c = cmesh->NElements();
     int dim_mesh = cmesh->Reference()->Dimension();
-    int nelem = indexes_el.size();
+    int64_t nelem = fElementMatrices.size();
 
     int cont_elem = 0;
 
@@ -280,17 +279,29 @@ void TPZSolveMatrix::ColoredAssemble(TPZCompMesh * cmesh, TPZManVector<TPZManVec
     TPZManVector<int64_t> nf_por_cor(ncor+1, 0.);
     int pos = 0;
 
+
     // VETOR CORES E NEQ
     for (int icor=0; icor<ncor+1; icor++) {
         auto it = std::find (nelem_cor.begin(), nelem_cor.end(), icor);
         while (std::find (it, nelem_cor.end(), icor) != nelem_cor.end()) {
             it = std::find (it, nelem_cor.end(), icor);
             int poscor = std::distance(nelem_cor.begin(), it);
-            for (int iassemblecor = 0; iassemblecor<indexes_el[poscor].size(); iassemblecor++)
-                assemble_cores[iassemblecor+pos] = indexes_el[poscor][iassemblecor];
+            int cont1=0;
+            int cont2=0;
+            for (int iassemblecor = 0; iassemblecor<fRowSize[poscor]; iassemblecor++){
+                if ((iassemblecor%2)==0) {
+                    assemble_cores[iassemblecor+pos] = fIndexes[poscor*fRowSize[poscor]/2+cont1];
+                    cont1++;
+                }
+                else {
+                    assemble_cores[iassemblecor+pos] = fIndexes[poscor*fRowSize[poscor]/2+fRow+cont2];
+                    cont2++;
+                }
+
+            }
             it++;
-            pos += indexes_el[poscor].size();
-            nf_por_cor[icor] += indexes_el[poscor].size()/2;
+            pos += fRowSize[poscor];
+            nf_por_cor[icor] += fRowSize[poscor]/2;
         }
     }
 
@@ -304,7 +315,7 @@ void TPZSolveMatrix::ColoredAssemble(TPZCompMesh * cmesh, TPZManVector<TPZManVec
             it = std::find (it, nelem_cor.end(), ncor);
 
             int iel = std::distance(nelem_cor.begin(), it);
-            int64_t nf_el = indexes_el[iel].size()/2;
+            int64_t nf_el = fRowSize[iel]/2;
             nf_cor += nf_el;
 
             for (int64_t inf_el = 0; inf_el<nf_el*2; inf_el++) {
@@ -330,7 +341,7 @@ void TPZSolveMatrix::ColoredAssemble(TPZCompMesh * cmesh, TPZManVector<TPZManVec
                 it = std::find (it, nelem_cor.end(), cor);
                 int iel = std::distance(nelem_cor.begin(), it);
 
-                for (int64_t inf_el = 0; inf_el<indexes_el[iel].size(); inf_el++) {
+                for (int64_t inf_el = 0; inf_el<fRowSize[iel]; inf_el++) {
                     int64_t id = assemble_cores[nf_tot*2 - nf_cor*2 + nf_el*2 + inf_el];
                     if (id%2 == 0) {
                         nodal_forces_global(id, 0) += nodal_forces_vec(iel * fRowSize[iel] / 2 + inf_el / 2, 0);
@@ -340,7 +351,7 @@ void TPZSolveMatrix::ColoredAssemble(TPZCompMesh * cmesh, TPZManVector<TPZManVec
                     }
                 }
                 it++;
-                nf_el += indexes_el[iel].size()/2;
+                nf_el += fRowSize[iel]/2;
             }
         }
         ncor_to_assemble = ncor_to_assemble/2;

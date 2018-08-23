@@ -86,7 +86,7 @@ public:
 
     void TraditionalAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const;
 
-    void ColoredAssemble(TPZCompMesh * cmesh, TPZManVector<TPZManVector<int64_t>> indexes_el, TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const;
+    void ColoredAssemble(TPZCompMesh * cmesh, TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const;
 
 private:
     /** @brief Order the coef vectors
