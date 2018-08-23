@@ -33,8 +33,8 @@ int main(){
     
     // ------------------------ DATA INPUT ------------------------------
     // NUMBER OF ELEMENTS IN X AND Y DIRECTIONS
-    int nelem_x = 2;
-    int nelem_y = 2;
+    int nelem_x = 4;
+    int nelem_y = 4;
     
     // DOMAIN LENGTH
     REAL len = 2;
@@ -412,77 +412,77 @@ void sol_teste(TPZCompMesh *cmesh) {
 
 
 
-//    // Segunda versao utilizando cores
-//    // -----------------------------------------------------------------------
-//    // INÍCIO DA ASSEMBLAGEM
-//    int64_t nnodes_tot = cmesh->Reference()->NNodes();
-//    TPZManVector<REAL> nnodes_vec(nnodes_tot,0.);
-//
-//    cont_elem = 0;
-//
-//    TPZManVector<int> nelem_cor(nelem,-1); // vetor de cores
-//    TPZManVector<int64_t> elem_neighbour(8,0.); // definindo que um elem pode ter no maximo 8 elem vizinhos
-//
-//    for (int64_t iel1=0; iel1<nelem_c; iel1++) {
-//        if(!cmesh->Element(iel1)) continue;
-//        TPZGeoEl * gel1 = cmesh->Element(iel1)->Reference();
-//        if(!gel1 ||  gel1->Dimension() != dim_mesh) continue;
-//
-//        TPZManVector<int64_t> nodeindices;
-//        gel1->GetNodeIndices(nodeindices); // Armazena os nós do elemento finito
-//
-//        // ** Início da verificação de qual coord é repetida:
-//        TPZGeoEl * gel2;
-//
-//        // contadores
-//        int64_t cont_elem_cor = 0;
-//        int64_t cont_elem_neighbour = 0;
-//
-//        // inicializa com nnodes_vec nulo, e preenche com 1 os nós repetidos
-//        nnodes_vec.Fill(0);
-//        for (int64_t iel2=0; iel2<nelem_c; iel2++) {
-//            if(!cmesh->Element(iel2)) continue;
-//            gel2 = cmesh->Element(iel2)->Reference();
-//            if(!gel2 ||  gel2->Dimension() != dim_mesh) continue;
-//
-//            for (int64_t inode=0; inode<gel2->NNodes(); inode++) {
-//                if(std::find (nodeindices.begin(), nodeindices.end(), gel2->NodeIndex(inode)) != nodeindices.end()){
-//                    nnodes_vec[gel2->NodeIndex(inode)] = 1; // preenchendo nnodes_vec
-//                    elem_neighbour[cont_elem_neighbour] = cont_elem_cor; // preenche o vetor de elementos vizinhos ao elemento de análise
-//                    cont_elem_neighbour++;
-//                }
-//            }
-//            cont_elem_cor++;
-//        }
-//        // ** fim da verificação
-//
-//        // Preenche a cor
-//        for (int64_t inodes_tot=0; inodes_tot<nnodes_tot; inodes_tot++) {
-//            cont_elem_cor = cont_elem;
-//            if (nnodes_vec[inodes_tot] == 1){
-//                for (int64_t iel2=iel1; iel2<nelem_c; iel2++) {
-//                    if(!cmesh->Element(iel2)) continue;
-//                    gel2 = cmesh->Element(iel2)->Reference();
-//                    if(!gel2 ||  gel2->Dimension() != dim_mesh) continue;
-//
-//                    gel2->GetNodeIndices(nodeindices);
-//                    if (std::find(nodeindices.begin(), nodeindices.end(), inodes_tot) != nodeindices.end()){
-//                        nelem_cor[cont_elem_cor] = 1+nelem_cor[cont_elem];
-//                    }
-//                }
-//            }
-//
-//            // Verifica se pode ser uma cor menor
-//            for (int64_t icor=0; icor<nelem_cor[cont_elem_cor]; icor++) {
-//                if (std::find(elem_neighbour.begin(), elem_neighbour.end(), icor) == elem_neighbour.end())
-//                    nelem_cor[cont_elem_cor] = icor;
-//                if (cont_elem==0)
-//                    nelem_cor[cont_elem_cor] = 0;
-//            }
-//            cont_elem_cor++;
-//        }
-//        cont_elem++;
-//    }
+    // Segunda versao utilizando cores
+    // -----------------------------------------------------------------------
+    // INÍCIO DA ASSEMBLAGEM
+    int64_t nnodes_tot = cmesh->Reference()->NNodes();
+    TPZManVector<REAL> nnodes_vec(nnodes_tot,0.);
+
+    cont_elem = 0;
+
+    TPZManVector<int> nelem_cor(nelem,-1); // vetor de cores
+    TPZManVector<int64_t> elem_neighbour(8,0.); // definindo que um elem pode ter no maximo 8 elem vizinhos
+
+    for (int64_t iel1=0; iel1<nelem_c; iel1++) {
+        if(!cmesh->Element(iel1)) continue;
+        TPZGeoEl * gel1 = cmesh->Element(iel1)->Reference();
+        if(!gel1 ||  gel1->Dimension() != dim_mesh) continue;
+
+        TPZManVector<int64_t> nodeindices;
+        gel1->GetNodeIndices(nodeindices); // Armazena os nós do elemento finito
+
+        // ** Início da verificação de qual coord é repetida:
+        TPZGeoEl * gel2;
+
+        // contadores
+        int64_t cont_elem_cor = 0;
+        int64_t cont_elem_neighbour = 0;
+
+        // inicializa com nnodes_vec nulo, e preenche com 1 os nós repetidos
+        nnodes_vec.Fill(0);
+        for (int64_t iel2=0; iel2<nelem_c; iel2++) {
+            if(!cmesh->Element(iel2)) continue;
+            gel2 = cmesh->Element(iel2)->Reference();
+            if(!gel2 ||  gel2->Dimension() != dim_mesh) continue;
+
+            for (int64_t inode=0; inode<gel2->NNodes(); inode++) {
+                if(std::find (nodeindices.begin(), nodeindices.end(), gel2->NodeIndex(inode)) != nodeindices.end()){
+                    nnodes_vec[gel2->NodeIndex(inode)] = 1; // preenchendo nnodes_vec
+                    elem_neighbour[cont_elem_neighbour] = nelem_cor[cont_elem_cor];; // preenche o vetor de elementos vizinhos ao elemento de análise
+                    cont_elem_neighbour++;
+                }
+            }
+            cont_elem_cor++;
+        }
+        // ** fim da verificação
+
+        // Preenche a cor
+        for (int64_t inodes_tot=0; inodes_tot<nnodes_tot; inodes_tot++) {
+            cont_elem_cor = cont_elem;
+            if (nnodes_vec[inodes_tot] == 1){
+                for (int64_t iel2=iel1; iel2<nelem_c; iel2++) {
+                    if(!cmesh->Element(iel2)) continue;
+                    gel2 = cmesh->Element(iel2)->Reference();
+                    if(!gel2 ||  gel2->Dimension() != dim_mesh) continue;
+
+                    gel2->GetNodeIndices(nodeindices);
+                    if (std::find(nodeindices.begin(), nodeindices.end(), inodes_tot) != nodeindices.end()){
+                        nelem_cor[cont_elem_cor] = 1+nelem_cor[cont_elem];
+                    }
+                }
+            }
+
+            // Verifica se pode ser uma cor menor
+            for (int64_t icor=0; icor<nelem_cor[cont_elem_cor]; icor++) {
+                if (std::find(elem_neighbour.begin(), elem_neighbour.end(), icor) == elem_neighbour.end())
+                    nelem_cor[cont_elem_cor] = icor;
+                if (cont_elem==0)
+                    nelem_cor[cont_elem_cor] = 0;
+            }
+            cont_elem_cor++;
+        }
+        cont_elem++;
+    }
 //
 //    // -----------------------------------------------------------------------
 //    // ASSEMBLAGEM POR COR
