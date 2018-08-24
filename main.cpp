@@ -369,7 +369,8 @@ void sol_teste(TPZCompMesh *cmesh) {
     // SIGMA CALCULATION
     TPZFMatrix<REAL> sigma;
 
-    SolMat->ComputeSigma(weight,result,sigma); //sigma = [sigmax_0, ..., sigmax_nelem-1, sigmay_0, ..., sigmay_nelem-1, sigmaxy_0, ..., sigmaxy_nelem-1]
+    SolMat->ComputeSigma(weight,result,sigma); //sigma = [sigmax_0, sigmaxy_0, ..., sigmax_nelem-1, sigmaxy_nelem-1]
+                                                      // [sigmaxy_0, sigmay_0, ..., sigmaxy_nelem-1, sigmay_nelem-1]
     // -----------------------------------------------------------------------
     // COMPUTE NODAL FORCES
     int neq= cmesh->NEquations();

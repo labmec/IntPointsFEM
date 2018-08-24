@@ -87,23 +87,25 @@ void TPZSolveMatrix::ComputeSigma( TPZStack<REAL> &weight, TPZFMatrix<REAL> &res
     REAL E = 200000000.;
     REAL nu =0.30;
     int npts_tot = fRow;
-    sigma.Resize(3*npts_tot,1);
+    sigma.Resize(2*npts_tot,2);
     sigma.Zero();
 
 #ifdef USING_TBB
     parallel_for(size_t(0),size_t(npts_tot),size_t(1),[&](size_t ipts)
                       {
-                            sigma(ipts,0) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts,0)+nu*result(2*ipts+2*npts_tot+1,0)); // Sigma x
-                            sigma(ipts+npts_tot,0) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts+2*npts_tot+1,0)+nu*result(2*ipts,0)); // Sigma y
-                            sigma(ipts+2*npts_tot,0) = weight[ipts]*2.*E/(2.*(1.+nu))*(result(2*ipts+1,0)+result(2*ipts+2*npts_tot,0))*0.5; // Sigma xy
+                            sigma(2*ipts,0) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts,0)+nu*result(2*ipts+2*npts_tot+1,0)); // Sigma x
+                            sigma(2*ipts+1,0) = weight[ipts]*2.*E/(2.*(1.+nu))*(result(2*ipts+1,0)+result(2*ipts+2*npts_tot,0))*0.5; // Sigma xy
+                            sigma(2*ipts,1) = sigma(2*ipts+1,0); //Sigma xy
+                            sigma(2*ipts+1,1) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts+2*npts_tot+1,0)+nu*result(2*ipts,0)); // Sigma y
                       }
                       );
 #else
 
     for (int64_t ipts=0; ipts< npts_tot; ipts++) {
-        sigma(ipts,0) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts,0)+nu*result(2*ipts+2*npts_tot+1,0)); // Sigma x
-        sigma(ipts+npts_tot,0) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts+2*npts_tot+1,0)+nu*result(2*ipts,0)); // Sigma y
-        sigma(ipts+2*npts_tot,0) = weight[ipts]*2.*E/(2.*(1.+nu))*(result(2*ipts+1,0)+result(2*ipts+2*npts_tot,0))*0.5; // Sigma xy
+        sigma(2*ipts,0) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts,0)+nu*result(2*ipts+2*npts_tot+1,0)); // Sigma x
+        sigma(2*ipts+1,0) = weight[ipts]*2.*E/(2.*(1.+nu))*(result(2*ipts+1,0)+result(2*ipts+2*npts_tot,0))*0.5; // Sigma xy
+        sigma(2*ipts,1) = sigma(2*ipts+1,0); //Sigma xy
+        sigma(2*ipts+1,1) = weight[ipts]*E/((1.-2.*nu)*(1.+nu))*((1.-nu)*result(2*ipts+2*npts_tot+1,0)+nu*result(2*ipts,0)); // Sigma y
     }
 #endif
 
@@ -149,42 +151,48 @@ void TPZSolveMatrix::ComputeElementFirstIndex()
 }
 
 /** @brief Multiply with the transpose matrix */
-void TPZSolveMatrix::MultiplyTranspose(const TPZFMatrix<STATE>  &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec) const
-{
+void TPZSolveMatrix::MultiplyTranspose(TPZFMatrix<STATE>  &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec) {
     // -----------------------------------------------------------------------
     // CÁLCULO DAS FORÇAS NODAIS
-    int64_t cont_cols=0;
     int64_t nelem = fElementMatrices.size();
+    int64_t npts_tot = fRow;
+    bool transpose = true;
 
-    // Vetor formado pela matriz de forças por elemento
-    int npts_tot = fRow;
-//    TPZFMatrix<REAL> nodal_forces_vec(2*fRow,1,0.);
+#ifdef USING_TBB
+    parallel_for(size_t(0),size_t(nelem),size_t(1),[&](size_t iel)
+                      {
+                            int64_t rows = fRowSize[iel];
+                            int64_t cols = fColSize[iel];
+                            int64_t cont_rows = fRowFirstIndex[iel];
 
+                            // Forças nodais na direção y
+                            TPZFMatrix<REAL> fvx(rows,1, &intpoint_solution(cont_rows,0),rows);
+                            TPZFMatrix<STATE> nodal_forcex(cols, 1, &nodal_forces_vec(cont_rows / 2, 0), cols);
+                            fElementMatrices[iel].MultAdd(fvx, nodal_forcex, nodal_forcex, 1., 1., transpose);
 
-    for (int64_t iel=0; iel<nelem; iel++) {
-        bool transpose = true;
-
-        int iel_rows = fRowSize[iel];
-        cont_cols = fColFirstIndex[iel];
-        int64_t rows = fElementMatrices[iel].Cols();
-        TPZFMatrix<REAL> fv(iel_rows,1,0.);
-
-        // Forças nodais na direção x
-        for (int64_t ipts=0; ipts<iel_rows/2; ipts++) {
-            fv(2*ipts,0) = intpoint_solution.GetVal(ipts+cont_cols,0); // Sigma x
-            fv(2*ipts+1,0) = intpoint_solution.GetVal(ipts+cont_cols+2*npts_tot,0); // Sigma xy
-        }
-        TPZFMatrix<STATE> nodal_forcex(rows,1,&nodal_forces_vec(fRowFirstIndex[iel]/2,0), rows);
-        fElementMatrices[iel].MultAdd(fv, nodal_forcex, nodal_forcex,1.,1.,transpose);
+                            // Forças nodais na direção y
+                            TPZFMatrix<REAL> fvy(rows,1, &intpoint_solution(cont_rows,1),rows);
+                            TPZFMatrix<STATE> nodal_forcey(cols, 1, &nodal_forces_vec(cont_rows / 2, 0), cols);
+                            fElementMatrices[iel].MultAdd(fvy, nodal_forcey, nodal_forcey, 1., 1., transpose);
+                      }
+                      );
+#else
+    for (int64_t iel = 0; iel < nelem; iel++) {
+        int64_t rows = fRowSize[iel];
+        int64_t cols = fColSize[iel];
+        int64_t cont_rows = fRowFirstIndex[iel];
 
         // Forças nodais na direção y
-        for (int64_t ipts=0; ipts<iel_rows/2; ipts++) {
-            fv(2*ipts,0) = intpoint_solution.GetVal(ipts+cont_cols+2*npts_tot,0); // Sigma xy
-            fv(2*ipts+1,0) = intpoint_solution.GetVal(ipts+cont_cols+npts_tot,0); // Sigma y
-        }
-        TPZFMatrix<STATE> nodal_forcey(rows,1,&nodal_forces_vec(fRowFirstIndex[iel]/2+fRow,0), rows);
-        fElementMatrices[iel].MultAdd(fv, nodal_forcey, nodal_forcey,1.,1.,transpose);
+        TPZFMatrix<REAL> fvx(rows,1, &intpoint_solution(cont_rows,0),rows);
+        TPZFMatrix<STATE> nodal_forcex(cols, 1, &nodal_forces_vec(cont_rows / 2, 0), cols);
+        fElementMatrices[iel].MultAdd(fvx, nodal_forcex, nodal_forcex, 1., 1., transpose);
+
+        // Forças nodais na direção y
+        TPZFMatrix<REAL> fvy(rows,1, &intpoint_solution(cont_rows,1),rows);
+        TPZFMatrix<STATE> nodal_forcey(cols, 1, &nodal_forces_vec(cont_rows / 2, 0), cols);
+        fElementMatrices[iel].MultAdd(fvy, nodal_forcey, nodal_forcey, 1., 1., transpose);
     }
+#endif
 }
 
 void TPZSolveMatrix::TraditionalAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const
@@ -199,7 +207,7 @@ void TPZSolveMatrix::TraditionalAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, T
     for (int64_t ir=0; ir<2*fRow; ir++) {
         nodal_forces_global(fIndexes[ir], 0) += nodal_forces_vec(ir, 0);
     }
-#endif 
+#endif
 }
 
 void TPZSolveMatrix::ColoredAssemble(TPZCompMesh * cmesh, TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const
