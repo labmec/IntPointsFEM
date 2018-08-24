@@ -40,7 +40,7 @@ int main(){
     REAL len = 2;
 
     // COMPUTATIONAL MESH ORDER
-    int pOrder = 2;
+    int pOrder = 1;
 
     // SUBDIVISIONS OF THE ELEMENTS
     int ndivide = 0;
@@ -384,6 +384,7 @@ void sol_teste(TPZCompMesh *cmesh) {
 
     SolMat->TraditionalAssemble(nodal_forces_vec,nodal_forces_global1); //traditional assemble
     SolMat->ColoredAssemble(cmesh, nodal_forces_vec,nodal_forces_global2); //colored assemble
+    nodal_forces_global1.Print(std::cout);
 
     //Compare assemble methods
     for (int j = 0; j < nodal_forces_global1.Rows(); ++j) {
