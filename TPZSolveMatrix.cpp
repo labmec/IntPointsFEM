@@ -166,18 +166,15 @@ void TPZSolveMatrix::MultiplyTranspose(TPZFMatrix<STATE>  &intpoint_solution, TP
                             int64_t cont_rows = fRowFirstIndex[iel];
                             int64_t cont_cols = fColFirstIndex[iel];
 
-                            TPZFMatrix<REAL> dAT = fElementMatrices[iel];
-                            dAT.Transpose();
-
-                            // Forças nodais na direção y
+                            // Forças nodais na direção x
                             TPZFMatrix<REAL> fvx(rows,1, &intpoint_solution(cont_rows,0),rows);
                             TPZFMatrix<STATE> nodal_forcex(cols, 1, &nodal_forces_vec(cont_cols, 0), cols);
-                            nodal_forcex = dAT.operator*(fvx);
+                            fElementMatrices[iel].MultAdd(fvx,nodal_forcex,nodal_forcex,1,0,1);
 
                             // Forças nodais na direção y
                             TPZFMatrix<REAL> fvy(rows,1, &intpoint_solution(cont_rows,1),rows);
                             TPZFMatrix<STATE> nodal_forcey(cols, 1, &nodal_forces_vec(cont_cols + npts_tot, 0), cols);
-                            nodal_forcey = dAT.operator*(fvy);
+                            fElementMatrices[iel].MultAdd(fvy,nodal_forcey,nodal_forcey,1,0,1);
                       }
                       );
 #else
@@ -187,18 +184,15 @@ void TPZSolveMatrix::MultiplyTranspose(TPZFMatrix<STATE>  &intpoint_solution, TP
         int64_t cont_rows = fRowFirstIndex[iel];
         int64_t cont_cols = fColFirstIndex[iel];
 
-        TPZFMatrix<REAL> dAT = fElementMatrices[iel];
-        dAT.Transpose();
-
-        // Forças nodais na direção y
+        // Forças nodais na direção x
         TPZFMatrix<REAL> fvx(rows,1, &intpoint_solution(cont_rows,0),rows);
         TPZFMatrix<STATE> nodal_forcex(cols, 1, &nodal_forces_vec(cont_cols, 0), cols);
-        nodal_forcex = dAT.operator*(fvx);
+        fElementMatrices[iel].MultAdd(fvx,nodal_forcex,nodal_forcex,1,0,1);
 
         // Forças nodais na direção y
         TPZFMatrix<REAL> fvy(rows,1, &intpoint_solution(cont_rows,1),rows);
         TPZFMatrix<STATE> nodal_forcey(cols, 1, &nodal_forces_vec(cont_cols + npts_tot, 0), cols);
-        nodal_forcey = dAT.operator*(fvy);
+        fElementMatrices[iel].MultAdd(fvy,nodal_forcey,nodal_forcey,1,0,1);
     }
 #endif
 }
