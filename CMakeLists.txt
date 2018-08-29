@@ -10,7 +10,7 @@ IF (WIN32)
 	# Prevents timespec redefinition problem with Visual Studio 2015
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHAVE_STRUCT_TIMESPEC")
 ELSE (WIN32)
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -std=c++11")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing")#this flag is for preventing errors when casting from double to float
 ENDIF()
 
@@ -130,11 +130,26 @@ if(USING_TBB)
 
 endif(USING_TBB)
 
-
 file(GLOB headers *.h)
 file(GLOB sources *.cpp)
 
-set(main_SRCS ${sources} ${headers})
+#enabling CUDA
+option(USING_CUDA OFF)
+if(USING_CUDA)
+	enable_language(CXX CUDA)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSING_CUDA")
+
+	find_package(CUDA REQUIRED)
+	set(CUDA_SEPARABLE_COMPILATION ON)
+	set(CUDA_PROPAGATE_HOST_FLAGS OFF)
+	set(CUDA_HOST_COMPILER gcc)
+	list(APPEND CUDA_NVCC_FLAGS " -std=c++11")
+	
+	file(GLOB cu *.cu)
+	set(main_SRCS ${sources} ${headers} ${cu})
+else()
+	set(main_SRCS ${sources} ${headers})
+endif(USING_CUDA)
 
 add_executable(IntegrationPointsExperiment ${main_SRCS})
 

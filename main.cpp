@@ -373,18 +373,17 @@ void sol_teste(TPZCompMesh *cmesh) {
                                                       // [sigmaxy_0, sigmay_0, ..., sigmaxy_nelem-1, sigmay_nelem-1]
     // -----------------------------------------------------------------------
     // COMPUTE NODAL FORCES
-    int neq= cmesh->NEquations();
-    TPZFMatrix<REAL> nodal_forces_vec(npts_tot*dim_mesh, 1, 0.);
+    TPZFMatrix<REAL> nodal_forces_vec;
 
     SolMat->MultiplyTranspose(sigma, nodal_forces_vec); //nodal_forces_vec = [fx_0, ..., fx_nelem-1, fy_0, ..., fy_nelem-1]
     // -----------------------------------------------------------------------
     //ASSEMBLE: RESIDUAL CALCULATION
+    int neq= cmesh->NEquations();
     TPZFMatrix<REAL> nodal_forces_global1(neq, 1, 0.);
     TPZFMatrix<REAL> nodal_forces_global2(neq, 1, 0.);
 
     SolMat->TraditionalAssemble(nodal_forces_vec,nodal_forces_global1); //traditional assemble
     SolMat->ColoredAssemble(cmesh, nodal_forces_vec,nodal_forces_global2); //colored assemble
-    nodal_forces_global1.Print(std::cout);
 
     //Compare assemble methods
     for (int j = 0; j < nodal_forces_global1.Rows(); ++j) {

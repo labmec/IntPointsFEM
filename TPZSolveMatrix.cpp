@@ -88,7 +88,6 @@ void TPZSolveMatrix::ComputeSigma( TPZStack<REAL> &weight, TPZFMatrix<REAL> &res
     REAL nu =0.30;
     int npts_tot = fRow;
     sigma.Resize(2*npts_tot,2);
-//    sigma.Resize(3*npts_tot,1);
     sigma.Zero();
 
 #ifdef USING_TBB
@@ -156,6 +155,7 @@ void TPZSolveMatrix::MultiplyTranspose(TPZFMatrix<STATE>  &intpoint_solution, TP
     int64_t nelem = fElementMatrices.size();
     int64_t npts_tot = fRow;
     bool transpose = true;
+    nodal_forces_vec.Resize(2*npts_tot,1);
     nodal_forces_vec.Zero();
 
 #ifdef USING_TBB
@@ -164,18 +164,19 @@ void TPZSolveMatrix::MultiplyTranspose(TPZFMatrix<STATE>  &intpoint_solution, TP
                             int64_t rows = fRowSize[iel];
                             int64_t cols = fColSize[iel];
                             int64_t cont_rows = fRowFirstIndex[iel];
+                            int64_t cont_cols = fColFirstIndex[iel];
 
                             TPZFMatrix<REAL> dAT = fElementMatrices[iel];
                             dAT.Transpose();
 
                             // Forças nodais na direção y
                             TPZFMatrix<REAL> fvx(rows,1, &intpoint_solution(cont_rows,0),rows);
-                            TPZFMatrix<STATE> nodal_forcex(cols, 1, &nodal_forces_vec(cont_rows / 2, 0), cols);
+                            TPZFMatrix<STATE> nodal_forcex(cols, 1, &nodal_forces_vec(cont_cols, 0), cols);
                             nodal_forcex = dAT.operator*(fvx);
 
                             // Forças nodais na direção y
                             TPZFMatrix<REAL> fvy(rows,1, &intpoint_solution(cont_rows,1),rows);
-                            TPZFMatrix<STATE> nodal_forcey(cols, 1, &nodal_forces_vec(cont_rows / 2 + npts_tot, 0), cols);
+                            TPZFMatrix<STATE> nodal_forcey(cols, 1, &nodal_forces_vec(cont_cols + npts_tot, 0), cols);
                             nodal_forcey = dAT.operator*(fvy);
                       }
                       );
@@ -184,18 +185,19 @@ void TPZSolveMatrix::MultiplyTranspose(TPZFMatrix<STATE>  &intpoint_solution, TP
         int64_t rows = fRowSize[iel];
         int64_t cols = fColSize[iel];
         int64_t cont_rows = fRowFirstIndex[iel];
+        int64_t cont_cols = fColFirstIndex[iel];
 
         TPZFMatrix<REAL> dAT = fElementMatrices[iel];
         dAT.Transpose();
 
         // Forças nodais na direção y
         TPZFMatrix<REAL> fvx(rows,1, &intpoint_solution(cont_rows,0),rows);
-        TPZFMatrix<STATE> nodal_forcex(cols, 1, &nodal_forces_vec(cont_rows / 2, 0), cols);
+        TPZFMatrix<STATE> nodal_forcex(cols, 1, &nodal_forces_vec(cont_cols, 0), cols);
         nodal_forcex = dAT.operator*(fvx);
 
         // Forças nodais na direção y
         TPZFMatrix<REAL> fvy(rows,1, &intpoint_solution(cont_rows,1),rows);
-        TPZFMatrix<STATE> nodal_forcey(cols, 1, &nodal_forces_vec(cont_rows / 2 + npts_tot, 0), cols);
+        TPZFMatrix<STATE> nodal_forcey(cols, 1, &nodal_forces_vec(cont_cols + npts_tot, 0), cols);
         nodal_forcey = dAT.operator*(fvy);
     }
 #endif
@@ -224,7 +226,6 @@ void TPZSolveMatrix::ColoredAssemble(TPZCompMesh * cmesh, TPZFMatrix<STATE>  &no
     int64_t nelem_c = cmesh->NElements();
     int dim_mesh = cmesh->Reference()->Dimension();
     int64_t nelem = fElementMatrices.size();
-
     int cont_elem = 0;
 
     TPZManVector<int> nelem_cor(nelem,-1); // vetor de cores
@@ -251,7 +252,6 @@ void TPZSolveMatrix::ColoredAssemble(TPZCompMesh * cmesh, TPZFMatrix<STATE>  &no
             if(!cmesh->Element(iel2)) continue;
             gel2 = cmesh->Element(iel2)->Reference();
             if(!gel2 ||  gel2->Dimension() != dim_mesh) continue;
-
             for (int64_t inode=0; inode<gel2->NNodes(); inode++) {
                 if(std::find (nodeindices.begin(), nodeindices.end(), gel2->NodeIndex(inode)) != nodeindices.end()){
                     nnodes_vec[gel2->NodeIndex(inode)] = 1; // preenchendo nnodes_vec
