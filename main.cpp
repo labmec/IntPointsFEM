@@ -29,11 +29,19 @@ TPZGeoMesh * geometry_2D(int nelem_x, int nelem_y, REAL len, int ndivide);
 TPZCompMesh * cmesh_2D(TPZGeoMesh * gmesh, int pOrder);
 void sol_teste(TPZCompMesh * cmesh);
 
+std::ofstream timing("timing.txt");
+
 int main(){
+    for (int i = 0; i < 5; i++) {
     //// ------------------------ DATA INPUT ------------------------------
     //// NUMBER OF ELEMENTS IN X AND Y DIRECTIONS
-    int nelem_x = 2;
-    int nelem_y = 2;
+    int nelem_x = pow(10,i);
+    int nelem_y = pow(10,i);
+
+    timing << "-------------------------------------------------" << std::endl;
+    timing << "NUMBER OF ELEMENTS: " << nelem_x << "x" << nelem_y << std::endl;
+    std::cout << "-------------------------------------------------" << std::endl;
+    std::cout << "NUMBER OF ELEMENTS: " << nelem_x << "x" << nelem_y << std::endl;
     
     //// DOMAIN LENGTH
     REAL len = 2;
@@ -50,8 +58,8 @@ int main(){
 
     //// Generating the geometry
     TPZGeoMesh *gmesh = geometry_2D(nelem_x, nelem_y, len, ndivide);
-    std::ofstream vtk_file_00(namefile + ".vtk");
-    TPZVTKGeoMesh::PrintGMeshVTK(gmesh, vtk_file_00);
+//    std::ofstream vtk_file_00(namefile + ".vtk");
+//    TPZVTKGeoMesh::PrintGMeshVTK(gmesh, vtk_file_00);
 
     //// Creating the computational mesh
     TPZCompMesh *cmesh = cmesh_2D(gmesh, pOrder);
@@ -80,7 +88,7 @@ int main(){
 
     //// Residual Calculation
     sol_teste(cmesh);
-
+    }
     return 0;
 }
 
@@ -396,6 +404,6 @@ void sol_teste(TPZCompMesh *cmesh) {
     //// TIMING END---------------------------------------------------------------------
     std::clock_t end = clock();
     REAL elapsed_secs = REAL(end - begin) / CLOCKS_PER_SEC;
-    std::cout << "Time elapsed: " << elapsed_secs << std::endl;
+    timing << "Time elapsed: " << elapsed_secs << std::endl;
     //// -------------------------------------------------------------------------------
 }
