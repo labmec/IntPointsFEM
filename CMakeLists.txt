@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 2.8.0)
+cmake_minimum_required (VERSION 3.11.0)
 
 project (IntegrationPointsExperiment)
 
@@ -138,13 +138,14 @@ option(USING_CUDA OFF)
 if(USING_CUDA)
 	enable_language(CXX CUDA)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSING_CUDA")
+	set(CMAKE_NVCC_FLAGS "${CMAKE_NVCC_FLAGS} -DUSING_CUDA")
 
 	find_package(CUDA REQUIRED)
 	set(CUDA_SEPARABLE_COMPILATION ON)
-	set(CUDA_PROPAGATE_HOST_FLAGS OFF)
+	set(CUDA_PROPAGATE_HOST_FLAGS ON)
 	set(CUDA_HOST_COMPILER gcc)
-	list(APPEND CUDA_NVCC_FLAGS " -std=c++11")
 	
+	list(APPEND CUDA_NVCC_FLAGS "-lcublas -std=c++11")
 	file(GLOB cu *.cu)
 	set(main_SRCS ${sources} ${headers} ${cu})
 else()
@@ -152,5 +153,5 @@ else()
 endif(USING_CUDA)
 
 add_executable(IntegrationPointsExperiment ${main_SRCS})
-
-target_link_libraries(IntegrationPointsExperiment pz ${PTHREAD_LIB})
+target_link_libraries(IntegrationPointsExperiment pz ${PTHREAD_LIB} ${CUDA_cusparse_LIBRARY} ${CUDA_cublas_LIBRARY}) 
+set_property(TARGET IntegrationPointsExperiment  PROPERTY CUDA_STANDARD 11)
