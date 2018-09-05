@@ -26,71 +26,60 @@
 #endif
 
 TPZGeoMesh * geometry_2D(int nelem_x, int nelem_y, REAL len, int ndivide);
-TPZCompMesh * cmesh_2D(TPZGeoMesh * gmesh, int nelem_x, int nelem_y, int pOrder);
+TPZCompMesh * cmesh_2D(TPZGeoMesh * gmesh, int pOrder);
 void sol_teste(TPZCompMesh * cmesh);
 
 int main(){
-    
-    // ------------------------ DATA INPUT ------------------------------
-    // NUMBER OF ELEMENTS IN X AND Y DIRECTIONS
+    //// ------------------------ DATA INPUT ------------------------------
+    //// NUMBER OF ELEMENTS IN X AND Y DIRECTIONS
     int nelem_x = 2;
     int nelem_y = 2;
     
-    // DOMAIN LENGTH
+    //// DOMAIN LENGTH
     REAL len = 2;
 
-    // COMPUTATIONAL MESH ORDER
+    //// COMPUTATIONAL MESH ORDER
     int pOrder = 1;
 
-    // SUBDIVISIONS OF THE ELEMENTS
+    //// SUBDIVISIONS OF THE ELEMENTS
     int ndivide = 0;
 
-    // ENTER THE FILE NAME
+    //// ENTER THE FILE NAME
     std::string namefile = "Elasticity_teste";
-    // -------------------------------------------------------------------
+    //// ------------------------------------------------------------------
 
-    // Generating the geometry
+    //// Generating the geometry
     TPZGeoMesh *gmesh = geometry_2D(nelem_x, nelem_y, len, ndivide);
     std::ofstream vtk_file_00(namefile + ".vtk");
     TPZVTKGeoMesh::PrintGMeshVTK(gmesh, vtk_file_00);
 
-    // Creating the computational mesh
-    TPZCompMesh *cmesh = cmesh_2D(gmesh, nelem_x, nelem_y, pOrder);
+    //// Creating the computational mesh
+    TPZCompMesh *cmesh = cmesh_2D(gmesh, pOrder);
 
-    // Defining the analysis
+    //// Defining the analysis
     bool optimizeBandwidth = true;
     TPZAnalysis an(cmesh, optimizeBandwidth);
     TPZSkylineStructMatrix strskyl(cmesh);
     an.SetStructuralMatrix(strskyl);
 
-    // Solve
+    //// Solve
     TPZStepSolver<STATE> *direct = new TPZStepSolver<STATE>;
     direct->SetDirect(ELDLt);
     an.SetSolver(*direct);
     delete direct;
-    direct = 0;
 
     an.Run();
 
-    TPZFMatrix<STATE> sol = cmesh->Solution();
+//    //// Post processing in Paraview
+//    TPZManVector<std::string> scalarnames(2), vecnames(1);
+//    scalarnames[0] = "SigmaX";
+//    scalarnames[1] = "SigmaY";
+//    vecnames[0] = "Displacement";
+//    an.DefineGraphMesh(2, scalarnames, vecnames, namefile + "ElasticitySolutions.vtk");
+//    an.PostProcess(1);
 
-    // Post processing in Paraview
-    TPZManVector<std::string> scalarnames(2), vecnames(1);
-    scalarnames[0] = "SigmaX";
-    scalarnames[1] = "SigmaY";
-    vecnames[0] = "Displacement";
-    an.DefineGraphMesh(2, scalarnames, vecnames, namefile + "ElasticitySolutions.vtk");
-    an.PostProcess(1);
-
-    // Residual Calculation
-    std::clock_t begin = clock();
-
+    //// Residual Calculation
     sol_teste(cmesh);
-
-    std::clock_t end = clock();
-
-    REAL elapsed_secs = REAL(end - begin) / CLOCKS_PER_SEC;
-    std::cout << "Time elapsed: " << elapsed_secs << std::endl;
 
     return 0;
 }
@@ -187,7 +176,7 @@ TPZGeoMesh *geometry_2D(int nelem_x, int nelem_y, REAL len, int ndivide) {
     return gmesh;
 }
 
-TPZCompMesh *cmesh_2D(TPZGeoMesh *gmesh, int nelem_x, int nelem_y, int pOrder) {
+TPZCompMesh *cmesh_2D(TPZGeoMesh *gmesh, int pOrder) {
 
     // Creating the computational mesh
     TPZCompMesh *cmesh = new TPZCompMesh(gmesh);
@@ -258,14 +247,11 @@ TPZCompMesh *cmesh_2D(TPZGeoMesh *gmesh, int nelem_x, int nelem_y, int pOrder) {
 void sol_teste(TPZCompMesh *cmesh) {
 
     int dim_mesh = (cmesh->Reference())->Dimension(); // Mesh dimension
-
     int64_t nelem = 0; // Number of geometric elements
     int64_t nelem_c = cmesh->NElements(); // Number of computational elements
 
-    int64_t cont_elem = 0;
-
-    // -----------------------------------------------------------------------
-    // NUMBER OF GEOMETRIC ELEMENTS
+    //// -------------------------------------------------------------------------------
+    //// NUMBER OF GEOMETRIC ELEMENTS
     for (int64_t i = 0; i < nelem_c; i++) {
         TPZCompEl *cel = cmesh->Element(i);
         if (!cel) continue;
@@ -273,120 +259,143 @@ void sol_teste(TPZCompMesh *cmesh) {
         if (!gel || gel->Dimension() != dim_mesh) continue;
         nelem++;
     }
-    // -----------------------------------------------------------------------
-    // PHI AND DPHI MATRICES AND INDEXES VECTOR
-    // Vector of matrices
-    TPZManVector<TPZManVector<int64_t>> indexes_el(nelem);
-    TPZManVector<TPZFMatrix<REAL>> AVec(nelem);
-    TPZManVector<TPZFMatrix<REAL>> AdVec(nelem);
-    TPZStack<REAL> weight;
+    //// -------------------------------------------------------------------------------
+
+    //// ROWSIZES AND COLSIZES VECTORS--------------------------------------------------
+    TPZVec<MKL_INT> rowsizes(nelem);
+    TPZVec<MKL_INT> colsizes(nelem);
 
     int64_t npts_tot = 0;
     int64_t nf_tot = 0;
 
-    for (int64_t iel = 0; iel < nelem_c; iel++) {
-        int64_t cont_coef = 0;
-
-        // Verifications
+    for (int64_t iel = 0; iel < nelem; ++iel) {
+        //Verification
         TPZCompEl *cel = cmesh->Element(iel);
         if (!cel) continue;
         TPZGeoEl *gel = cel->Reference();
-        if (!gel || gel->Dimension() != dim_mesh) continue;
+        if (!gel) continue;
 
-        // Integration rule
+        //Integration rule
         TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement * >(cel);
         if (!cel_inter) DebugStop();
         TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
 
         int64_t npts = int_rule->NPoints(); // number of integration points of the element
+        int64_t dim = cel_inter->Dimension(); //dimension of the element
         int64_t nf = cel_inter->NShapeF(); // number of shape functions of the element
+
+        rowsizes[iel] = dim*npts;
+        colsizes[iel] = nf;
+
+        npts_tot += npts;
+        nf_tot += nf;
+    }
+
+    TPZSolveMatrix * SolMat = new TPZSolveMatrix(dim_mesh*npts_tot, nf_tot, rowsizes, colsizes);
+    //// -------------------------------------------------------------------------------
+
+    //// DPHI MATRIX FOR EACH ELEMENT, WEIGHT AND INDEXES VECTORS-----------------------
+    TPZFMatrix<REAL> elmatrix;
+    TPZStack<REAL> weight;
+    TPZManVector<MKL_INT> indexes(dim_mesh*nf_tot);
+
+    int64_t cont1 = 0;
+    int64_t cont2 = 0;
+
+    for (int64_t iel = 0; iel < nelem; ++iel) {
+        //Verification
+        TPZCompEl *cel = cmesh->Element(iel);
+        if (!cel) continue;
+        TPZGeoEl *gel = cel->Reference();
+        if (!gel) continue;
+
+        //Integration rule
+        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement * >(cel);
+        if (!cel_inter) DebugStop();
+        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
+
+        int64_t npts = int_rule->NPoints(); // number of integration points of the element
+        int64_t dim = cel_inter->Dimension(); //dimension of the element
+        int64_t nf = cel_inter->NShapeF(); // number of shape functions of the element
+
 
         TPZMaterialData data;
         cel_inter->InitMaterialData(data);
 
-        AVec[cont_elem].Redim(npts, nf);
-        AdVec[cont_elem].Redim(npts * dim_mesh, nf);
-
-        for (int i_npts = 0; i_npts < npts; i_npts++) {
-            TPZManVector<REAL> qsi(dim_mesh, 1);
+        elmatrix.Resize(dim*npts,nf);
+        for (int64_t inpts = 0; inpts < npts; inpts++) {
+            TPZManVector<REAL> qsi(dim, 1);
             REAL w;
-            int_rule->Point(i_npts, qsi, w);
-
+            int_rule->Point(inpts, qsi, w);
             cel_inter->ComputeRequiredData(data, qsi);
             weight.Push(w * std::abs(data.detjac)); //weight = w * detjac
-            TPZFMatrix<REAL> &phi = data.phi;
-            TPZFMatrix<REAL> &dphix = data.dphix;
 
-            for (int i_nf = 0; i_nf < nf; i_nf++) {
-                AVec[cont_elem](i_npts, i_nf) = phi(i_nf, 0); //phi matrix: Avec[iel](npts,nf)
-                for (int i_dim = 0; i_dim < dim_mesh; i_dim++)
-                    AdVec[cont_elem](i_npts * dim_mesh + i_dim, i_nf) = dphix(i_dim, i_nf); //dphi matrix: Advec[iel](dim*npts,nf)
+            TPZFMatrix<REAL> &dphix = data.dphix;
+            for (int inf = 0; inf < nf; inf++) {
+                for (int idim = 0; idim < dim; idim++)
+                    elmatrix(inpts * dim + idim, inf) = dphix(idim, inf);
             }
         }
+        SolMat->SetElementMatrix(iel,elmatrix);
 
-        // Vector of indexes for each element
-        indexes_el[cont_elem].Resize(dim_mesh * nf);
-        int64_t ncon_i = cel->NConnects();
-
-        for (int64_t l = 0; l < ncon_i; l++) {
-            int64_t id = cel->ConnectIndex(l);
+        //Indexes vector
+        int64_t ncon = cel->NConnects();
+        for (int64_t icon = 0; icon < ncon; icon++) {
+            int64_t id = cel->ConnectIndex(icon);
             TPZConnect &df = cmesh->ConnectVec()[id];
-            int64_t con_id = df.SequenceNumber();
-            if (df.NElConnected() == 0 || con_id < 0 || cmesh->Block().Size(con_id) == 0) continue;
+            int64_t conid = df.SequenceNumber();
+            if (df.NElConnected() == 0 || conid < 0 || cmesh->Block().Size(conid) == 0) continue;
             else {
-                int64_t pos = cmesh->Block().Position(con_id);
-                int64_t nk = cmesh->Block().Size(con_id);
-                for (int64_t k = 0; k < nk; k++) {
-                    indexes_el[cont_elem][cont_coef] = pos + k;
-                    cont_coef++;
+                int64_t pos = cmesh->Block().Position(conid);
+                int64_t nsize = cmesh->Block().Size(conid);
+                for (int64_t isize = 0; isize < nsize; isize++) {
+                    if(isize%2==0){
+                        indexes[cont1] = pos + isize;
+                        cont1++;
+                    }
+                    else{
+                        indexes[cont2 + nf_tot] = pos + isize;
+                        cont2++;
+                    }
                 }
             }
         }
-        npts_tot += npts;
-        nf_tot += nf;
-        cont_elem++;
     }
+    SolMat->SetIndexes(indexes);
+    //// -------------------------------------------------------------------------------
 
-    // Global vector of indexes
-    TPZManVector<MKL_INT> indexes(nf_tot*dim_mesh, 0);
-    int64_t pos = 0;
-    for (int64_t iel = 0; iel<nelem; iel++) {
-        int64_t n_ind_el = (indexes_el[iel]).size();
-        for (int64_t jind=0; jind<(n_ind_el/2); jind++){
-            indexes[pos] = indexes_el[iel][dim_mesh*jind];
-            indexes[pos+nf_tot] = indexes_el[iel][dim_mesh*jind+1];
-            pos++;
-        }
-    }
-    // -----------------------------------------------------------------------
-    //SOLVE ADVEC*COEF_SOL
-    TPZSolveMatrix * SolMat = new TPZSolveMatrix(npts_tot, nf_tot, AdVec, indexes);
+    //// TIMING START-------------------------------------------------------------------
+    std::clock_t begin = clock();
+    //// -------------------------------------------------------------------------------
+
+    //// SOLVE ADVEC*COEF_SOL-----------------------------------------------------------
     TPZFMatrix<REAL> coef_sol = cmesh->Solution();
     TPZFMatrix<REAL> result;
+    SolMat->Multiply(coef_sol,result); //result = [du_0, ..., du_nelem-1, dv_0,..., dv_nelem-1]
+    //// -------------------------------------------------------------------------------
 
-    SolMat->Multiply(coef_sol, result); //result = [du_0, ..., du_nelem-1, dv_0,..., dv_nelem-1]
-    // -----------------------------------------------------------------------
-    // SIGMA CALCULATION
+    //// SIGMA CALCULATION
     TPZFMatrix<REAL> sigma;
 
-    SolMat->ComputeSigma(weight,result,sigma); //sigma = [sigmax_0, sigmaxy_0, ..., sigmax_nelem-1, sigmaxy_nelem-1]
-                                                      // [sigmaxy_0, sigmay_0, ..., sigmaxy_nelem-1, sigmay_nelem-1]
-    // -----------------------------------------------------------------------
-    // COMPUTE NODAL FORCES
+    SolMat->ComputeSigma(weight,result,sigma); //sigma = [sigmax_0, sigmaxy_0, ..., sigmax_nelem-1, sigmaxy_nelem-1, sigmaxy_0, sigmay_0, ..., sigmaxy_nelem-1, sigmay_nelem-1]
+    //// -------------------------------------------------------------------------------
+
+    //// COMPUTE NODAL FORCES-----------------------------------------------------------
     TPZFMatrix<REAL> nodal_forces_vec;
 
     SolMat->MultiplyTranspose(sigma, nodal_forces_vec); //nodal_forces_vec = [fx_0, ..., fx_nelem-1, fy_0, ..., fy_nelem-1]
-    // -----------------------------------------------------------------------
-    //ASSEMBLE: RESIDUAL CALCULATION
+    //// -------------------------------------------------------------------------------
+
+    //// ASSEMBLE: RESIDUAL CALCULATION-------------------------------------------------
     int neq= cmesh->NEquations();
     TPZFMatrix<REAL> nodal_forces_global1(neq, 1, 0.);
-    TPZFMatrix<REAL> nodal_forces_global2(neq, 1, 0.);
 
     SolMat->TraditionalAssemble(nodal_forces_vec,nodal_forces_global1); //traditional assemble
-    SolMat->ColoredAssemble(cmesh, nodal_forces_vec,nodal_forces_global2); //colored assemble
+    //// -------------------------------------------------------------------------------
 
-    //Compare assemble methods
-    for (int j = 0; j < nodal_forces_global1.Rows(); ++j) {
-        std::cout << nodal_forces_global2[j]-nodal_forces_global1[j] << std::endl;
-    }
+    //// TIMING END---------------------------------------------------------------------
+    std::clock_t end = clock();
+    REAL elapsed_secs = REAL(end - begin) / CLOCKS_PER_SEC;
+    std::cout << "Time elapsed: " << elapsed_secs << std::endl;
+    //// -------------------------------------------------------------------------------
 }

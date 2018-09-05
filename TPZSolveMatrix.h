@@ -11,9 +11,9 @@
 #include <mkl.h>
 #include "pzinterpolationspace.h"
 
-//#ifdef USING_MKL
-//#include "mkl.h"
-//#endif
+#ifdef USING_MKL
+#include "mkl.h"
+#endif
 
 class  TPZSolveMatrix : public TPZMatrix<STATE> {
 
@@ -28,18 +28,18 @@ public:
      * @param ind_x [in] is the inxedes vector associated to the solution x
      * @param ind_y [in] is the inxedes vector associated to the solution y
      */
-    TPZSolveMatrix(int64_t rows, int64_t cols, const TPZManVector<TPZFMatrix<REAL>> &ElementMatrices, const TPZVec<MKL_INT> &indexes)
+    TPZSolveMatrix(int64_t rows, int64_t cols, TPZVec<MKL_INT> rowsizes, TPZVec<MKL_INT> colsizes) : TPZMatrix(rows,cols)
     {
-        SetParameters(rows, cols, ElementMatrices, indexes);
+        SetParameters(rowsizes, colsizes);
     }
 
     /** @brief Default destructor */
     ~TPZSolveMatrix();
 
     TPZSolveMatrix(const TPZSolveMatrix &copy) : TPZMatrix<STATE>(copy),
-        fElementMatrices(copy.fElementMatrices), fIndexes(copy.fIndexes),
-        fMatrixPosition(copy.fMatrixPosition),fColSize(copy.fColSize), fRowSize(copy.fRowSize),
-        fColFirstIndex(copy.fColFirstIndex), fRowFirstIndex(copy.fRowFirstIndex)
+        fStorage(copy.fStorage),fIndexes(copy.fIndexes),
+        fColSizes(copy.fColSizes), fRowSizes(copy.fRowSizes),
+        fMatrixPosition(copy.fMatrixPosition),fRowFirstIndex(copy.fRowFirstIndex),fColFirstIndex(copy.fColFirstIndex)
     {
 
     }
@@ -47,13 +47,14 @@ public:
     TPZSolveMatrix &operator=(const TPZSolveMatrix &copy)
     {
         TPZMatrix::operator=(copy);
-        fElementMatrices = copy.fElementMatrices;
+        fStorage = copy.fStorage;
         fIndexes = copy.fIndexes;
+        fColSizes = copy.fColSizes;
+        fRowSizes = copy.fRowSizes;
         fMatrixPosition = copy.fMatrixPosition;
-        fColSize = copy.fColSize;
-        fRowSize = copy.fRowSize;
-        fColFirstIndex = copy.fColFirstIndex;
         fRowFirstIndex = copy.fRowFirstIndex;
+        fColFirstIndex = copy.fColFirstIndex;
+
         return *this;
     }
 
@@ -67,17 +68,46 @@ public:
      * @param ind_x [in] is the inxedes vector associated to the solution x
      * @param ind_y [in] is the inxedes vector associated to the solution y
      */
-    void SetParameters(int64_t rows, int64_t cols, const TPZVec<TPZFMatrix<REAL>> &ElementMatrices, const TPZVec<MKL_INT> &indexes)
+    void SetParameters(TPZVec<MKL_INT> rowsize, TPZVec<MKL_INT> colsize)
     {
-        TPZMatrix<STATE>::Resize(rows, cols);
-        fRow = rows;
-        fCol = cols;
-        fElementMatrices = ElementMatrices;
-        fIndexes = indexes;
-        ComputeElementFirstIndex();
+        int64_t nelem = rowsize.size();
+
+        fRowSizes.resize(nelem);
+        fColSizes.resize(nelem);
+        fMatrixPosition.resize(nelem+1);
+        fRowFirstIndex.resize(nelem+1);
+        fColFirstIndex.resize(nelem+1);
+
+        fRowSizes = rowsize;
+        fColSizes = colsize;
+
+        fMatrixPosition[0] = 0;
+        fRowFirstIndex[0] = 0;
+        fColFirstIndex[0] = 0;
+
+        for (int64_t iel = 0; iel < nelem; ++iel) {
+            fMatrixPosition[iel+1] = fMatrixPosition[iel] + fRowSizes[iel]*fColSizes[iel];
+            fRowFirstIndex[iel+1]= fRowFirstIndex[iel]+fRowSizes[iel];
+            fColFirstIndex[iel+1]= fColFirstIndex[iel]+fColSizes[iel];
+        }
+        fStorage.resize(fMatrixPosition[nelem]);
     };
 
+    /// return the element matrix
+    void SetElementMatrix(int iel, TPZFMatrix<REAL> &elmat){
+        TPZFMatrix<REAL> elmatloc(fRowSizes[iel],fColSizes[iel],&fStorage[fMatrixPosition[iel]],fRowSizes[iel]*fColSizes[iel]);
+        elmatloc = elmat;
+    }
+
+    /// set indexes vector
+    void SetIndexes(TPZVec<MKL_INT> indexes){
+        int64_t indsize = indexes.size();
+        fIndexes.resize(indsize);
+        fIndexes = indexes;
+    }
+
     /** @brief Solve procedure */
+
     void Multiply(const TPZFMatrix<STATE>  &global_solution, TPZFMatrix<STATE> &result, int transpose = 0) const;
 
     void ComputeSigma(TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<REAL> &sigma);
@@ -88,54 +118,29 @@ public:
 
     void ColoredAssemble(TPZCompMesh * cmesh, TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const;
 
-private:
-    /** @brief Order the coef vectors
-
-     * @param A [in] is the input matrix
-     * @param coef [in] is the coeffient's matrix
-     * @param ind_x [in] is the inxedes vector associated to the solution x
-     * @param ind_y [in] is the inxedes vector associated to the solution y
-     */
-    void OrderGlobalSolution (TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &global_solution_x, TPZFMatrix<STATE> &global_solution_y);
-
-    /// compute the first index of each element
-    void ComputeElementFirstIndex();
-
-    /** @brief Multiply with the transpose matrix */
-
-
-
-
 protected:
 
-//    /** @brief number of rows */
-//    int64_t fRows;
-//
-//    /** @brief number of columns */
-//    int64_t fCols;
+    /// vector containing the matrix coeficients
+    TPZVec<REAL> fStorage;
 
-    /** @brief Matrix */
-    TPZManVector<TPZFMatrix<REAL>> fElementMatrices;
+    /// number of rows of each block matrix
+    TPZVec<MKL_INT> fRowSizes;
 
-    /** @brief Indexes vector in x direction and the y direction */
+    /// number of columns of each block matrix
+    TPZVec<MKL_INT> fColSizes;
+
+    /// indexes vector in x direction and the y direction
     TPZManVector<MKL_INT> fIndexes;
 
     /// position of the matrix of the elements
     TPZVec<int64_t> fMatrixPosition;
 
-    /// number of columns of each block matrix
-    // the size of the vector is the number of blocks
-    TPZVec<MKL_INT> fColSize;
-
-    /// number of rows of each block matrix
-    // the size of the vector is the number of blocks
-    TPZVec<MKL_INT> fRowSize;
+    /// position of the result vector
+    TPZVec<MKL_INT> fRowFirstIndex;
 
     /// position in the fIndex vector of each element
     TPZVec<MKL_INT> fColFirstIndex;
 
-    /// position of the result vector
-    TPZVec<MKL_INT> fRowFirstIndex;
 
 };
 
