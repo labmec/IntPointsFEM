@@ -29,20 +29,34 @@ TPZGeoMesh * geometry_2D(int nelem_x, int nelem_y, REAL len, int ndivide);
 TPZCompMesh * cmesh_2D(TPZGeoMesh * gmesh, int pOrder);
 void sol_teste(TPZCompMesh * cmesh);
 
+#ifdef USING_TBB
+std::ofstream timing("timingtbb.txt");
+#elif USING_CUDA
+std::ofstream timing("timingcuda.txt");
+#else
 std::ofstream timing("timing.txt");
+#endif
 
 int main(){
-    for (int i = 0; i < 5; i++) {
-    //// ------------------------ DATA INPUT ------------------------------
-    //// NUMBER OF ELEMENTS IN X AND Y DIRECTIONS
-    int nelem_x = pow(10,i);
-    int nelem_y = pow(10,i);
+#ifdef USING_TBB
+    timing << "--------------------USING TBB--------------------"<< std::endl;
+    std::cout << "--------------------USING TBB--------------------" << std::endl;
+#elif USING_CUDA
+    timing << "--------------------USING CUDA-------------------"  << std::endl;
+    std::cout << "--------------------USING CUDA-------------------" << std::endl;
+#endif
 
-    timing << "-------------------------------------------------" << std::endl;
-    timing << "NUMBER OF ELEMENTS: " << nelem_x << "x" << nelem_y << std::endl;
-    std::cout << "-------------------------------------------------" << std::endl;
-    std::cout << "NUMBER OF ELEMENTS: " << nelem_x << "x" << nelem_y << std::endl;
-    
+    for (int i = 0; i < 4; i++) {
+        //// ------------------------ DATA INPUT ------------------------------
+        //// NUMBER OF ELEMENTS IN X AND Y DIRECTIONS
+        int nelem_x = pow(10,i);
+        int nelem_y = pow(10,i);
+
+        timing << "-------------------------------------------------" << std::endl;
+        timing << "MESH SIZE: " << nelem_x << "x" << nelem_y << std::endl;
+        std::cout << "-------------------------------------------------" << std::endl;
+        std::cout << "MESH SIZE: " << nelem_x << "x" << nelem_y << std::endl;
+
     //// DOMAIN LENGTH
     REAL len = 2;
 
@@ -75,8 +89,13 @@ int main(){
     direct->SetDirect(ELDLt);
     an.SetSolver(*direct);
     delete direct;
-
     an.Run();
+
+    std::clock_t begin = clock();
+    an.AssembleResidual();
+    std::clock_t end = clock();
+    REAL elapsed_secs = REAL(end - begin) / CLOCKS_PER_SEC;
+    timing << "Time elapsed (AssembleResidual): " << elapsed_secs << " s" << std::endl;
 
 //    //// Post processing in Paraview
 //    TPZManVector<std::string> scalarnames(2), vecnames(1);
@@ -404,6 +423,6 @@ void sol_teste(TPZCompMesh *cmesh) {
     //// TIMING END---------------------------------------------------------------------
     std::clock_t end = clock();
     REAL elapsed_secs = REAL(end - begin) / CLOCKS_PER_SEC;
-    timing << "Time elapsed: " << elapsed_secs << std::endl;
+    timing << "Time elapsed (integ points): " << elapsed_secs << " s" << std::endl;
     //// -------------------------------------------------------------------------------
 }
