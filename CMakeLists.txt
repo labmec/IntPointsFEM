@@ -27,7 +27,6 @@ ENDIF (WIN32)
 
 include_directories(${PZ_INCLUDE_DIRS})
 
-
 #enabling pthread library
 find_path(PTHREAD_INCLUDE NAMES PThread.h pthread.h PATHS ${SEARCH_DIRS} ${PROJECT_SOURCE_DIR}/../externallibs/pthread ${PROJECT_SOURCE_DIR}/../externallibs/pthread/include ${PROJECT_SOURCE_DIR}/../pthread )
 find_library(PTHREAD_LIB NAMES libpthread.dylib pthread.lib pthreadVC2.lib libPThread.so libPThread.a libpthread.so libpthread.a PATHS ${SEARCH_DIRS} ${PROJECT_SOURCE_DIR}/../externallibs/pthread/lib  ${PROJECT_SOURCE_DIR}/../pthread/lib)
@@ -108,11 +107,13 @@ if(USING_TBB)
             link_libraries(${TBB_LIB})
         endif()
     else()
-        find_file(TBB_HEADER_FILE tbb.h HINTS /usr/local/TBB/tbb2018_20180618oss/include/tbb/ NO_DEFAULT_PATH)
-
+	#find_file(TBB_HEADER_FILE tbb.h HINTS /usr/local/TBB/tbb2018_20180618oss/include/tbb/ NO_DEFAULT_PATH)
+	#--path do include do tbb no cluster       
+	find_file(TBB_HEADER_FILE tbb.h /softwares/intel/tbb/include/tbb NO_DEFAULT_PATH)
+	#-----------------------------------
         if(NOT TBB_HEADER_FILE MATCHES "tbb.h")
             set (TBB_HEADER_FILE "" CACHE PATH "Path to 'tbb.h' file")
-            message( FATAL_ERROR "TBB_HEADER_FILE must contain a valid path to 'tbb.h' file!")
+            message(FATAL_ERROR "TBB_HEADER_FILE must contain a valid path to 'tbb.h' file!")
         else()
             get_filename_component(TBB_ROOT_DIR ${TBB_HEADER_FILE} DIRECTORY)
             get_filename_component(TBB_INCLUDE ${TBB_ROOT_DIR} DIRECTORY)
@@ -120,8 +121,11 @@ if(USING_TBB)
             if(APPLE)
                 set(TBB_LIB ${TBB_ROOT_DIR}/lib/libtbb.dylib)
             else() # Linux
-                set(TBB_LIB ${TBB_ROOT_DIR}/lib/intel64/gcc4.7/libtbb.so)
-            endif()
+                #set(TBB_LIB ${TBB_ROOT_DIR}/lib/intel64/gcc4.7/libtbb.so)
+		        #--path da lib do tbb no cluster
+            	set(TBB_LIB ${TBB_ROOT_DIR}/lib/intel64_lin/gcc4.4/libtbb.so)
+	    	    #-------------------------------
+	    endif()
 
             include_directories(${TBB_INCLUDE})
             link_libraries(${TBB_LIB})
@@ -144,9 +148,11 @@ if(USING_CUDA)
 	set(CUDA_SEPARABLE_COMPILATION ON)
 	set(CUDA_PROPAGATE_HOST_FLAGS ON)
 	set(CUDA_HOST_COMPILER gcc)
+	set(CMAKE_CUDA_FLAGS_DEBUG "-w")
 	
 	list(APPEND CUDA_NVCC_FLAGS "-lcublas -std=c++11")
 	file(GLOB cu *.cu)
+    list(REMOVE_ITEM sources ${CMAKE_CURRENT_SOURCE_DIR}/TPZSolveMatrix.cpp)
 	set(main_SRCS ${sources} ${headers} ${cu})
 else()
 	set(main_SRCS ${sources} ${headers})
