@@ -394,9 +394,11 @@ void sol_teste(TPZCompMesh *cmesh) {
     //// TIMING START-------------------------------------------------------------------
     std::clock_t begin = clock();
     //// -------------------------------------------------------------------------------
-
-    //// SOLVE ADVEC*COEF_SOL-----------------------------------------------------------
     TPZFMatrix<REAL> coef_sol = cmesh->Solution();
+#ifdef USING_CUDA
+      SolMat->SolveWithCUDA(coef_sol);
+#else
+    //// SOLVE ADVEC*COEF_SOL-----------------------------------------------------------
     TPZFMatrix<REAL> result;
     SolMat->Multiply(coef_sol,result); //result = [du_0, ..., du_nelem-1, dv_0,..., dv_nelem-1]
     //// -------------------------------------------------------------------------------
@@ -419,7 +421,7 @@ void sol_teste(TPZCompMesh *cmesh) {
 
     SolMat->TraditionalAssemble(nodal_forces_vec,nodal_forces_global1); //traditional assemble
     //// -------------------------------------------------------------------------------
-
+#endif
     //// TIMING END---------------------------------------------------------------------
     std::clock_t end = clock();
     REAL elapsed_secs = REAL(end - begin) / CLOCKS_PER_SEC;

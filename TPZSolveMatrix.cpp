@@ -13,23 +13,6 @@
 using namespace tbb;
 #endif
 
-#ifdef __CUDACC__
-#include<cuda.h>
-#include <cublas_v2.h>
-#endif
-
-///CUDA KERNEL
-#ifdef __CUDACC__
-__global__
-void test(int n, TPZVec<REAL> *storage, TPZVec<int> *rowsizes, TPZVec<int> *colsizes, TPZVec<int> *indexes, TPZVec<int> *matrixposition, TPZVec<int> *rowfirstindex, TPZVec<int> *colfirstindex)
-{
-  int i = blockIdx.x*blockDim.x + threadIdx.x;
-  if (i < n){
-      printf("a: %g\n",storage[i]);
-  }
-}
-#endif
-
 TPZSolveMatrix::TPZSolveMatrix() : TPZMatrix<STATE>(), fStorage(), fIndexes(), fColSizes(), fRowSizes(), fMatrixPosition()
 {
 }
@@ -48,54 +31,10 @@ void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatr
    result.Resize(2*n_globalsol,1);
    result.Zero();
 
-    TPZVec<REAL> expand_solution(n_globalsol);
+    TPZVec<REAL> expandsolution(n_globalsol);
 
     /// gather operation
-    cblas_dgthr(n_globalsol, global_solution, &expand_solution[0], &fIndexes[0]);
-
-#ifdef __CUDACC__
-  int nstorage = fStorage.size();
-  int nrowsizes = fRowSizes.size();
-  int ncolsizes = fColSizes.size();
-  int nindexes = fIndexes.size();
-  int nmatpos = fMatrixPosition.size();
-  int nrowfid = fRowFirstIndex.size();
-  int ncolfid = fColFirstIndex.size();
-
-  TPZVec<REAL> *dfStorage;
-  TPZVec<int> *dfRowSizes;
-  TPZVec<int> *dfColSizes;
-  TPZVec<int> *dfIndexes;
-  TPZVec<int> *dfMatrixPosition;
-  TPZVec<int> *dfRowFirstIndex;
-  TPZVec<int> *dfColFirstIndex;
-
-  cudaMalloc(&dfStorage, nstorage*sizeof(double));
-  cudaMalloc(&dfRowSizes, nrowsizes*sizeof(int));
-  cudaMalloc(&dfColSizes, ncolsizes*sizeof(int));
-  cudaMalloc(&dfIndexes, nindexes*sizeof(int));
-  cudaMalloc(&dfMatrixPosition, nmatpos*sizeof(int));
-  cudaMalloc(&dfRowFirstIndex, nrowfid*sizeof(int));
-  cudaMalloc(&dfColFirstIndex, ncolfid*sizeof(int));
-
-  cudaMemcpy(dfStorage, &fStorage[0], nstorage*sizeof(double), cudaMemcpyHostToDevice);
-  cudaMemcpy(dfRowSizes, &fRowSizes[0], nrowsizes*sizeof(int), cudaMemcpyHostToDevice);
-  cudaMemcpy(dfColSizes, &fColSizes[0], ncolsizes*sizeof(int), cudaMemcpyHostToDevice);
-  cudaMemcpy(dfIndexes, &fIndexes[0], nindexes*sizeof(int), cudaMemcpyHostToDevice);
-  cudaMemcpy(dfMatrixPosition, &fMatrixPosition[0], nmatpos*sizeof(int), cudaMemcpyHostToDevice);
-  cudaMemcpy(dfRowFirstIndex, &fRowFirstIndex[0], nrowfid*sizeof(int), cudaMemcpyHostToDevice);
-  cudaMemcpy(dfColFirstIndex, &fColFirstIndex[0], ncolfid*sizeof(int), cudaMemcpyHostToDevice);
-
-  test<<<(nstorage+31)/32,32>>>(nstorage, dfStorage, dfRowSizes, dfColSizes, dfIndexes, dfMatrixPosition, dfRowFirstIndex, dfColFirstIndex);
-
-  cudaFree(dfStorage);
-  cudaFree(dfRowSizes);
-  cudaFree(dfColSizes);
-  cudaFree(dfIndexes);
-  cudaFree(dfMatrixPosition);
-  cudaFree(dfRowFirstIndex);
-  cudaFree(dfColFirstIndex);
-#endif
+    cblas_dgthr(n_globalsol, global_solution, &expandsolution[0], &fIndexes[0]);
 
 #ifdef USING_TBB
     parallel_for(size_t(0),size_t(nelem),size_t(1),[&](size_t iel)
@@ -108,8 +47,8 @@ void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatr
                     int64_t cont_cols = fColFirstIndex[iel];
                     int64_t cont_rows = fRowFirstIndex[iel];
 
-                    TPZFMatrix<REAL> element_solution_x(cols,1,&expand_solution[cont_cols],cols);
-                    TPZFMatrix<REAL> element_solution_y(cols,1,&expand_solution[cont_cols+fColFirstIndex[nelem]],cols);
+                     TPZFMatrix<REAL> element_solution_x(cols,1,&expandsolution[cont_cols],cols);
+                     TPZFMatrix<REAL> element_solution_y(cols,1,&expandsolution[cont_cols+fColFirstIndex[nelem]],cols);
 
                     TPZFMatrix<REAL> solx(rows,1,&result(cont_rows,0),rows);
                     TPZFMatrix<REAL> soly(rows,1,&result(cont_rows+fRowFirstIndex[nelem],0),rows);
@@ -129,8 +68,8 @@ void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatr
         int64_t cont_cols = fColFirstIndex[iel];
         int64_t cont_rows = fRowFirstIndex[iel];
 
-        TPZFMatrix<REAL> element_solution_x(cols,1,&expand_solution[cont_cols],cols);
-        TPZFMatrix<REAL> element_solution_y(cols,1,&expand_solution[cont_cols+fColFirstIndex[nelem]],cols);
+        TPZFMatrix<REAL> element_solution_x(cols,1,&expandsolution[cont_cols],cols);
+        TPZFMatrix<REAL> element_solution_y(cols,1,&expandsolution[cont_cols+fColFirstIndex[nelem]],cols);
 
         TPZFMatrix<REAL> solx(rows,1,&result(cont_rows,0),rows); //du
         TPZFMatrix<REAL> soly(rows,1,&result(cont_rows+fRowFirstIndex[nelem],0),rows); //dv
