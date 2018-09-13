@@ -107,9 +107,8 @@ public:
     }
 
     /** @brief Solve procedure */
-#ifdef USING_CUDA
+
     void SolveWithCUDA (const TPZFMatrix<STATE> &global_solution) const;
-#endif
 
     void Multiply(const TPZFMatrix<STATE>  &global_solution, TPZFMatrix<STATE> &result, int transpose = 0) const;
 

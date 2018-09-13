@@ -17,8 +17,14 @@ TPZSolveMatrix::TPZSolveMatrix() : TPZMatrix<STATE>(), fStorage(), fIndexes(), f
 {
 }
 
-TPZSolveMatrix::~TPZSolveMatrix(){
+TPZSolveMatrix::~TPZSolveMatrix()
+{
 
+}
+
+void TPZSolveMatrix::SolveWithCUDA (const TPZFMatrix<STATE> &global_solution) const
+{
+    DebugStop();
 }
 
 void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result, int opt) const
@@ -68,8 +74,8 @@ void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatr
         int64_t cont_cols = fColFirstIndex[iel];
         int64_t cont_rows = fRowFirstIndex[iel];
 
-        TPZFMatrix<REAL> element_solution_x(cols,1,&expandsolution[cont_cols],cols);
-        TPZFMatrix<REAL> element_solution_y(cols,1,&expandsolution[cont_cols+fColFirstIndex[nelem]],cols);
+        TPZFMatrix<REAL> element_solution_x(cols,1,&expand_solution[cont_cols],cols);
+        TPZFMatrix<REAL> element_solution_y(cols,1,&expand_solution[cont_cols+fColFirstIndex[nelem]],cols);
 
         TPZFMatrix<REAL> solx(rows,1,&result(cont_rows,0),rows); //du
         TPZFMatrix<REAL> soly(rows,1,&result(cont_rows+fRowFirstIndex[nelem],0),rows); //dv
@@ -80,7 +86,8 @@ void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatr
 #endif
 }
 
-void TPZSolveMatrix::ComputeSigma( TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<STATE> &sigma){
+void TPZSolveMatrix::ComputeSigma( TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<STATE> &sigma)
+{
     REAL E = 200000000.;
     REAL nu =0.30;
     int npts_tot = fRow;
@@ -117,8 +124,8 @@ void TPZSolveMatrix::ComputeSigma( TPZStack<REAL> &weight, TPZFMatrix<REAL> &res
 #endif
 }
 
-/** @brief Multiply with the transpose matrix */
-void TPZSolveMatrix::MultiplyTranspose(TPZFMatrix<STATE>  &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec) {
+void TPZSolveMatrix::MultiplyTranspose(TPZFMatrix<STATE>  &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec)
+{
     int64_t nelem = fRowSizes.size();
     int64_t npts_tot = fRow;
     nodal_forces_vec.Resize(npts_tot,1);

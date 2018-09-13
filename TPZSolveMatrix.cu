@@ -32,8 +32,8 @@ TPZSolveMatrix::TPZSolveMatrix() : TPZMatrix<STATE>(), fStorage(), fIndexes(), f
 {
 }
 
-TPZSolveMatrix::~TPZSolveMatrix(){
-
+TPZSolveMatrix::~TPZSolveMatrix()
+{
 }
 
 void TPZSolveMatrix::SolveWithCUDA (const TPZFMatrix<STATE> &global_solution) const
@@ -97,6 +97,31 @@ void TPZSolveMatrix::SolveWithCUDA (const TPZFMatrix<STATE> &global_solution) co
     cudaFree(dfRowFirstIndex);
     cudaFree(dfColFirstIndex);
     cudaFree(dres);
+}
+
+void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE>  &global_solution, TPZFMatrix<STATE> &result, int transpose = 0) const
+{
+    DebugStop();
+}
+
+void TPZSolveMatrix::ComputeSigma(TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<REAL> &sigma)
+{
+    DebugStop();
+}
+
+void TPZSolveMatrix::MultiplyTranspose(TPZFMatrix<STATE>  &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec)
+{
+    DebugStop();
+}
+
+void TPZSolveMatrix::TraditionalAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const
+{
+    DebugStop();
+}
+
+void TPZSolveMatrix::ColoredAssemble(TPZCompMesh * cmesh, TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const
+{
+    DebugStop();
 }
 
 
