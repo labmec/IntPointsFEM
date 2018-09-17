@@ -52,6 +52,7 @@ for (int i = 0; i < 1; i++) {
     int nelem_x = pow(10,i);
     int nelem_y = pow(10,i);
 
+
     timing << "-------------------------------------------------" << std::endl;
     timing << "MESH SIZE: " << nelem_x << "x" << nelem_y << std::endl;
     std::cout << "-------------------------------------------------" << std::endl;
@@ -398,6 +399,7 @@ std::clock_t begin = clock();
 TPZFMatrix<REAL> coef_sol = cmesh->Solution();
 int neq= cmesh->NEquations();
 TPZFMatrix<REAL> nodal_forces_global1(neq,1,0.);
+TPZFMatrix<REAL> nodal_forces_global2(neq,1,0.);
 
 #ifdef USING_CUDA
 SolMat->HostToDevice();
@@ -421,7 +423,8 @@ SolMat->MultiplyTranspose(sigma, nodal_forces_vec); //nodal_forces_vec = [fx_0, 
 
 //// ASSEMBLE: RESIDUAL CALCULATION-------------------------------------------------
 SolMat->TraditionalAssemble(nodal_forces_vec,nodal_forces_global1); //traditional assemble
-nodal_forces_global1.Print(std::cout);
+SolMat->ColoredAssemble(cmesh, nodal_forces_vec,nodal_forces_global2);
+
 //// -------------------------------------------------------------------------------
 #endif
 //// TIMING END---------------------------------------------------------------------

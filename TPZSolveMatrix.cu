@@ -26,7 +26,7 @@ REAL nu = 0.30;
 int ipts = blockIdx.x*blockDim.x + threadIdx.x;
 
 if (ipts < npts_tot/2) {
-	sigma[2*ipts] = weight[ipts]*E/(1.-nu*nu)*(result[2*ipts]+nu*result[2*ipts+npts_tot+1]); // Sigma x
+	    sigma[2*ipts] = weight[ipts]*E/(1.-nu*nu)*(result[2*ipts]+nu*result[2*ipts+npts_tot+1]); // Sigma x
         sigma[2*ipts+1] = weight[ipts]*E/(1.-nu*nu)*(1.-nu)/2*(result[2*ipts+1]+result[2*ipts+npts_tot])*0.5; // Sigma xy
         sigma[2*ipts+npts_tot] = sigma[2*ipts+1]; //Sigma xy
         sigma[2*ipts+npts_tot+1] = weight[ipts]*E/(1.-nu*nu)*(result[2*ipts+npts_tot+1]+nu*result[2*ipts]); // Sigma y
@@ -177,7 +177,7 @@ for (int64_t iel = 0; iel < nelem; iel++) {
 	int64_t cont_rows = fRowFirstIndex[iel];
         int64_t cont_cols = fColFirstIndex[iel];
 
-	//Nodal forces in x direction
+	    //Nodal forces in x direction
         cublasDgemv(handle_mt, CUBLAS_OP_T, rows, cols, &alpha_mt, &dfStorage[pos], rows, &dsigma[cont_rows], 1, &beta_mt, &dnodal_forces_vec[cont_cols], 1);
 
         //Nodal forces in y direction
@@ -201,8 +201,10 @@ nodal_forces_global.Zero();
 double *dnodal_forces_global;
 cudaMalloc(&dnodal_forces_global, globvec*sizeof(double));
 
-///Kernel that assemble the nodal forces vector
-AssembleKernel<<<npts_tot,1>>>(npts_tot, dfIndexes,dnodal_forces_vec, dnodal_forces_global);
+///Kernel that assemble the nodal forces vectot
+dim3 dimGrid(ceil(npts_tot/32.0),1,1);
+dim3 dimBlock(32,1,1);
+AssembleKernel<<<dimGrid,dimBlock>>>(npts_tot, dfIndexes,dnodal_forces_vec, dnodal_forces_global);
 
 ///Transfer global nodal forces vector the host
 cudaMemcpy(&nodal_forces_global(0,0), dnodal_forces_global, globvec*sizeof(double), cudaMemcpyDeviceToHost);

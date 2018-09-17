@@ -180,161 +180,169 @@ for (int64_t ir=0; ir<fRow; ir++) {
 
 void TPZSolveMatrix::ColoredAssemble(TPZCompMesh * cmesh, TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const
 {
-int64_t nnodes_tot = cmesh->Reference()->NNodes();
-TPZManVector<REAL> nnodes_vec(nnodes_tot,0.);
+    int nelem = fRowSizes.size();
+    int nelem_c = cmesh->NElements();
+    int dim_mesh = cmesh->Dimension();
 
-int64_t nelem_c = cmesh->NElements();
-int dim_mesh = cmesh->Reference()->Dimension();
-int64_t nelem = fRowSizes.size();
-int cont_elem = 0;
+    // INÍCIO DA ASSEMBLAGEM
+    int64_t nnodes_tot = cmesh->Reference()->NNodes();
+    TPZManVector<REAL> nnodes_vec(nnodes_tot,0.);
 
-TPZManVector<int> nelem_cor(nelem,-1); // vetor de cores
-TPZManVector<int64_t> elem_neighbour(100,0.); // definindo que um elem pode ter no maximo 8 elem vizinhos
+    int cont_elem = 0;
 
-for (int64_t iel1=0; iel1<nelem_c; iel1++) {
-    if(!cmesh->Element(iel1)) continue;
-    TPZGeoEl * gel1 = cmesh->Element(iel1)->Reference();
-    if(!gel1 ||  gel1->Dimension() != dim_mesh) continue;
+    TPZManVector<int> nelem_cor(nelem,-1); // vetor de cores
+    TPZManVector<int64_t> elem_neighbour(100,0.); // definindo que um elem pode ter no maximo 8 elem vizinhos
 
-    TPZManVector<int64_t> nodeindices;
-    gel1->GetNodeIndices(nodeindices); // Armazena os nós do elemento finito
+    for (int64_t iel1=0; iel1<nelem_c; iel1++) {
+        if(!cmesh->Element(iel1)) continue;
+        TPZGeoEl * gel1 = cmesh->Element(iel1)->Reference();
+        if(!gel1 ||  gel1->Dimension() != dim_mesh) continue;
 
-    // ** Início da verificação de qual coord é repetida:
-    TPZGeoEl * gel2;
+        TPZVec<int64_t> nodeindices;
+        gel1->GetNodeIndices(nodeindices); // Armazena os nós do elemento finito
 
-    // contadores
-    int64_t cont_elem_cor = 0;
-    int64_t cont_elem_neighbour = 0;
+        // ** Início da verificação de qual coord é repetida:
+        TPZGeoEl * gel2;
 
-    // inicializa com nnodes_vec nulo, e preenche com 1 os nós repetidos
-    nnodes_vec.Fill(0);
-    for (int64_t iel2=0; iel2<nelem_c; iel2++) {
-        if(!cmesh->Element(iel2)) continue;
-        gel2 = cmesh->Element(iel2)->Reference();
-        if(!gel2 ||  gel2->Dimension() != dim_mesh) continue;
-        for (int64_t inode=0; inode<gel2->NNodes(); inode++) {
-            if(std::find (nodeindices.begin(), nodeindices.end(), gel2->NodeIndex(inode)) != nodeindices.end()){
-                nnodes_vec[gel2->NodeIndex(inode)] = 1; // preenchendo nnodes_vec
-                elem_neighbour[cont_elem_neighbour] = nelem_cor[cont_elem_cor]; // preenche o vetor de elementos vizinhos ao elemento de análise
-                cont_elem_neighbour++;
-            }
-        }
-        cont_elem_cor++;
-    }
-    // ** fim da verificação
+        // contadores
+        int64_t cont_elem_cor = 0;
+        int64_t cont_elem_neighbour = 0;
 
-    // Preenche a cor
-    for (int64_t inodes_tot=0; inodes_tot<nnodes_tot; inodes_tot++) {
-        cont_elem_cor = cont_elem;
-        if (nnodes_vec[inodes_tot] == 1){
-            for (int64_t iel2=iel1; iel2<nelem_c; iel2++) {
-                if(!cmesh->Element(iel2)) continue;
-                gel2 = cmesh->Element(iel2)->Reference();
-                if(!gel2 ||  gel2->Dimension() != dim_mesh) continue;
+        // inicializa com nnodes_vec nulo, e preenche com 1 os nós repetidos
+        nnodes_vec.Fill(0);
+        for (int64_t iel2=0; iel2<nelem_c; iel2++) {
+            if(!cmesh->Element(iel2)) continue;
+            gel2 = cmesh->Element(iel2)->Reference();
+            if(!gel2 ||  gel2->Dimension() != dim_mesh) continue;
 
-                gel2->GetNodeIndices(nodeindices);
-                if (std::find(nodeindices.begin(), nodeindices.end(), inodes_tot) != nodeindices.end()){
-                    nelem_cor[cont_elem_cor] = 1+nelem_cor[cont_elem];
+            for (int64_t inode=0; inode<gel2->NNodes(); inode++) {
+                if(std::find (nodeindices.begin(), nodeindices.end(), gel2->NodeIndex(inode)) != nodeindices.end()){
+                    nnodes_vec[gel2->NodeIndex(inode)] = 1; // preenchendo nnodes_vec
+                    elem_neighbour[cont_elem_neighbour] = nelem_cor[cont_elem_cor]; // preenche o vetor de elementos vizinhos ao elemento de análise
+                    cont_elem_neighbour++;
                 }
             }
+            cont_elem_cor++;
         }
+        // ** fim da verificação
 
-        // Verifica se pode ser uma cor menor
-        for (int64_t icor=0; icor<nelem_cor[cont_elem_cor]; icor++) {
-            if (std::find(elem_neighbour.begin(), elem_neighbour.end(), icor) == elem_neighbour.end())
-                nelem_cor[cont_elem_cor] = icor;
-            if (cont_elem==0)
-                nelem_cor[cont_elem_cor] = 0;
-        }
-        cont_elem_cor++;
-    }
-    cont_elem++;
-}
+        // Preenche a cor
+        for (int64_t inodes_tot=0; inodes_tot<nnodes_tot; inodes_tot++) {
+            cont_elem_cor = cont_elem;
+            if (nnodes_vec[inodes_tot] == 1){
+                for (int64_t iel2=iel1; iel2<nelem_c; iel2++) {
+                    if(!cmesh->Element(iel2)) continue;
+                    gel2 = cmesh->Element(iel2)->Reference();
+                    if(!gel2 ||  gel2->Dimension() != dim_mesh) continue;
 
-// -----------------------------------------------------------------------
-// ASSEMBLAGEM POR COR
-int ncor = *std::max_element(nelem_cor.begin(), nelem_cor.end());
-
-int nf_tot = fCol;
-TPZManVector<int64_t> assemble_cores(nf_tot*2, 0.);
-TPZManVector<int64_t> nf_por_cor(ncor+1, 0.);
-int pos = 0;
-
-
-// VETOR CORES E NEQ
-for (int icor=0; icor<ncor+1; icor++) {
-    auto it = std::find (nelem_cor.begin(), nelem_cor.end(), icor);
-    while (std::find (it, nelem_cor.end(), icor) != nelem_cor.end()) {
-        it = std::find (it, nelem_cor.end(), icor);
-        int poscor = std::distance(nelem_cor.begin(), it);
-        int cont1=0;
-        int cont2=0;
-        for (int iassemblecor = 0; iassemblecor<fRowSizes[poscor]; iassemblecor++){
-            if ((iassemblecor%2)==0) {
-                assemble_cores[iassemblecor+pos] = fIndexes[poscor*fRowSizes[poscor]/2+cont1];
-                cont1++;
-            }
-            else {
-                assemble_cores[iassemblecor+pos] = fIndexes[poscor*fRowSizes[poscor]/2+fRow+cont2];
-                cont2++;
-            }
-
-        }
-        it++;
-        pos += fRowSizes[poscor];
-        nf_por_cor[icor] += fRowSizes[poscor]/2;
-    }
-}
-
-// SE TERMINAR EM NÚMERO IMPAR DE CORES
-int64_t nf_cor = 0;
-if ( (ncor+1)%2 != 0) {
-
-    auto it = std::find (nelem_cor.begin(), nelem_cor.end(), ncor);
-    while (std::find (it, nelem_cor.end(), ncor) != nelem_cor.end()) {
-
-        it = std::find (it, nelem_cor.end(), ncor);
-
-        int iel = std::distance(nelem_cor.begin(), it);
-        int64_t nf_el = fRowSizes[iel]/2;
-        nf_cor += nf_el;
-
-        for (int64_t inf_el = 0; inf_el<nf_el*2; inf_el++) {
-            int64_t id = assemble_cores[nf_tot - nf_cor + inf_el];
-            if (id%2 == 0)
-                nodal_forces_global(id,0) += nodal_forces_vec(iel*fColSizes[iel]/2+inf_el/2,0);
-            else
-                nodal_forces_global(id,0) += nodal_forces_vec(iel*fColSizes[iel]/2+nelem+inf_el/2,0);
-        }
-        it++;
-    }
-}
-
-REAL ncor_to_assemble = (ncor+1)/2;
-while(ncor_to_assemble >= 0.5){
-    for (int64_t cor = 2*ncor_to_assemble-1; cor>=int(ncor_to_assemble); cor--) {
-
-        nf_cor += nf_por_cor[cor];
-        auto it = std::find (nelem_cor.begin(), nelem_cor.end(), cor);
-        int64_t nf_el = 0;
-
-        while (std::find (it, nelem_cor.end(), cor) != nelem_cor.end()) {
-            it = std::find (it, nelem_cor.end(), cor);
-            int iel = std::distance(nelem_cor.begin(), it);
-
-            for (int64_t inf_el = 0; inf_el<fRowSizes[iel]; inf_el++) {
-                int64_t id = assemble_cores[nf_tot*2 - nf_cor*2 + nf_el*2 + inf_el];
-                if (id%2 == 0) {
-                    nodal_forces_global(id, 0) += nodal_forces_vec(iel * fRowSizes[iel] / 2 + inf_el / 2, 0);
+                    gel2->GetNodeIndices(nodeindices);
+                    if (std::find(nodeindices.begin(), nodeindices.end(), inodes_tot) != nodeindices.end()){
+                        nelem_cor[cont_elem_cor] = 1+nelem_cor[cont_elem];
+                    }
                 }
-                else {
-                    nodal_forces_global(id, 0) += nodal_forces_vec(iel * fRowSizes[iel] / 2 + nelem * fRowSizes[iel] / 2 + inf_el / 2, 0);
+            }
+
+            // Verifica se pode ser uma cor menor
+            for (int64_t icor=0; icor<nelem_cor[cont_elem_cor]; icor++) {
+                if (std::find(elem_neighbour.begin(), elem_neighbour.end(), icor) == elem_neighbour.end())
+                    nelem_cor[cont_elem_cor] = icor;
+                if (cont_elem==0)
+                    nelem_cor[cont_elem_cor] = 0;
+            }
+            cont_elem_cor++;
+        }
+        cont_elem++;
+    }
+
+    // -----------------------------------------------------------------------
+    // ASSEMBLAGEM POR COR
+    int64_t ncoef = cmesh->Solution().Rows();
+    int nf_tot = fCol;
+
+    int ncor = *std::max_element(nelem_cor.begin(), nelem_cor.end());
+
+    TPZManVector<int64_t> assemble_cores(nf_tot*2, 0.);
+    TPZManVector<int64_t> nf_por_cor(ncor+1, 0.);
+
+    int pos = 0;
+    // VETOR CORES E NEQ
+
+    for (int icor=0; icor<ncor+1; icor++) {
+    int cont_a = 0;
+    int cont_b = 0;
+        auto it = std::find (nelem_cor.begin(), nelem_cor.end(), icor);
+        while (std::find (it, nelem_cor.end(), icor) != nelem_cor.end()) {
+            it = std::find (it, nelem_cor.end(), icor);
+            int poscor = std::distance(nelem_cor.begin(), it);
+            for (int iassemblecor = 0; iassemblecor<fRowSizes[poscor]; iassemblecor++)
+            {
+                if(iassemblecor%2==0){
+                    assemble_cores[iassemblecor+pos] = fIndexes[poscor*fRowSizes[poscor]/2+cont_a];
+                    cont_a++;
+                } else{
+                    assemble_cores[iassemblecor+pos] = fIndexes[poscor*fRowSizes[poscor]/2+fIndexes.size()/2+cont_b];
+                    cont_b++;
                 }
             }
             it++;
-            nf_el += fRowSizes[iel]/2;
+            pos += fRowSizes[poscor];
+            nf_por_cor[icor] += fColSizes[poscor];
         }
     }
-    ncor_to_assemble = ncor_to_assemble/2;
-}
+
+    // SE TERMINAR EM NÚMERO IMPAR DE CORES
+    int64_t nf_cor = 0;
+    if ( (ncor+1)%2 != 0) {
+
+        auto it = std::find (nelem_cor.begin(), nelem_cor.end(), ncor);
+        while (std::find (it, nelem_cor.end(), ncor) != nelem_cor.end()) {
+
+            it = std::find (it, nelem_cor.end(), ncor);
+
+            int iel = std::distance(nelem_cor.begin(), it);
+            int64_t nf_el = fColSizes[iel];
+            nf_cor += nf_el;
+
+            for (int64_t inf_el = 0; inf_el<nf_el*2; inf_el++) {
+                int64_t id = assemble_cores[nf_tot - nf_cor + inf_el];
+                if (id%2 == 0)
+                    nodal_forces_global(id,0) += nodal_forces_vec(iel*fColSizes[iel]/2+inf_el/2,0);
+                else
+                    nodal_forces_global(id,0) += nodal_forces_vec(iel*fColSizes[iel]/2+inf_el/2+nelem*fRow/2,0);
+            }
+            it++;
+        }
+    }
+
+    REAL ncor_to_assemble = (ncor+1)/2;
+    while(ncor_to_assemble >= 0.5){
+        for (int64_t cor = 2*ncor_to_assemble-1; cor>=int(ncor_to_assemble); cor--) {
+            int cont_a = 0;
+            int cont_b = 0;
+
+            nf_cor += nf_por_cor[cor];
+            auto it = std::find (nelem_cor.begin(), nelem_cor.end(), cor);
+            int64_t nf_el = 0;
+
+            while (std::find (it, nelem_cor.end(), cor) != nelem_cor.end()) {
+                it = std::find (it, nelem_cor.end(), cor);
+                int iel = std::distance(nelem_cor.begin(), it);
+
+                for (int64_t inf_el = 0; inf_el<fRowSizes[iel]; inf_el++) {
+                    int64_t id = assemble_cores[nf_tot*2 - nf_cor*2 + nf_el*2 + inf_el];
+                    if (id%2 == 0) {
+                        nodal_forces_global(id, 0) += nodal_forces_vec(iel * fColSizes[iel] + cont_a, 0);
+                        cont_a++;
+                    } else {
+                        nodal_forces_global(id, 0) += nodal_forces_vec(iel * fColSizes[iel] + cont_b + fRow / 2, 0);
+                        cont_b++;
+                    }
+                }
+                it++;
+                nf_el += fColSizes[iel];
+            }
+        }
+        ncor_to_assemble = ncor_to_assemble/2;
+    }
+
 }
