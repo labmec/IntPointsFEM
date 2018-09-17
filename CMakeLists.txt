@@ -107,9 +107,9 @@ if(USING_TBB)
             link_libraries(${TBB_LIB})
         endif()
     else()
-	#find_file(TBB_HEADER_FILE tbb.h HINTS /usr/local/TBB/tbb2018_20180618oss/include/tbb/ NO_DEFAULT_PATH)
+	find_file(TBB_HEADER_FILE tbb.h HINTS /usr/local/TBB/tbb2018_20180618oss/include/tbb/ NO_DEFAULT_PATH)
 	#--path do include do tbb no cluster       
-	find_file(TBB_HEADER_FILE tbb.h /softwares/intel/tbb/include/tbb NO_DEFAULT_PATH)
+	#find_file(TBB_HEADER_FILE tbb.h /softwares/intel/tbb/include/tbb NO_DEFAULT_PATH)
 	#-----------------------------------
         if(NOT TBB_HEADER_FILE MATCHES "tbb.h")
             set (TBB_HEADER_FILE "" CACHE PATH "Path to 'tbb.h' file")
@@ -121,9 +121,9 @@ if(USING_TBB)
             if(APPLE)
                 set(TBB_LIB ${TBB_ROOT_DIR}/lib/libtbb.dylib)
             else() # Linux
-                #set(TBB_LIB ${TBB_ROOT_DIR}/lib/intel64/gcc4.7/libtbb.so)
+                set(TBB_LIB ${TBB_ROOT_DIR}/lib/intel64/gcc4.7/libtbb.so)
 		        #--path da lib do tbb no cluster
-            	set(TBB_LIB ${TBB_ROOT_DIR}/lib/intel64_lin/gcc4.4/libtbb.so)
+            	#set(TBB_LIB ${TBB_ROOT_DIR}/lib/intel64_lin/gcc4.4/libtbb.so)
 	    	    #-------------------------------
 	    endif()
 
@@ -140,17 +140,14 @@ file(GLOB sources *.cpp)
 #enabling CUDA
 option(USING_CUDA OFF)
 if(USING_CUDA)
+	find_package(CUDA REQUIRED)
 	enable_language(CXX CUDA)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSING_CUDA")
-	set(CMAKE_NVCC_FLAGS "${CMAKE_NVCC_FLAGS} -DUSING_CUDA")
+    set(CMAKE_CUDA_FLAGS "-w")
+	#set(CMAKE_CUDA_FLAGS "-w -dc -dlink")
+	set(CMAKE_CUDA_STANDARD 11)
+	set(CUDA_NVCC_FLAGS -gencode arch=compute_35,code=sm_35)	
 
-	find_package(CUDA REQUIRED)
-	set(CUDA_SEPARABLE_COMPILATION ON)
-	set(CUDA_PROPAGATE_HOST_FLAGS ON)
-	set(CUDA_HOST_COMPILER gcc)
-	set(CMAKE_CUDA_FLAGS_DEBUG "-w")
-	
-	list(APPEND CUDA_NVCC_FLAGS "-lcublas -std=c++11")
 	file(GLOB cu *.cu)
     list(REMOVE_ITEM sources ${CMAKE_CURRENT_SOURCE_DIR}/TPZSolveMatrix.cpp)
 	set(main_SRCS ${sources} ${headers} ${cu})
@@ -159,5 +156,10 @@ else()
 endif(USING_CUDA)
 
 add_executable(IntegrationPointsExperiment ${main_SRCS})
-target_link_libraries(IntegrationPointsExperiment pz ${PTHREAD_LIB} ${CUDA_cusparse_LIBRARY} ${CUDA_cublas_LIBRARY}) 
-set_property(TARGET IntegrationPointsExperiment  PROPERTY CUDA_STANDARD 11)
+
+if(USING_CUDA)
+	target_link_libraries(IntegrationPointsExperiment pz ${PTHREAD_LIB} ${CUDA_cublas_LIBRARY} ${CUDA_cusparse_LIBRARY} ${CUDA_cublas_device_LIBRARY} ${CUDA_cudadevrt_LIBRARY})
+else()
+	target_link_libraries(IntegrationPointsExperiment pz ${PTHREAD_LIB})
+endif(USING_CUDA)
+
