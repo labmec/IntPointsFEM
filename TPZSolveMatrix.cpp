@@ -13,7 +13,7 @@
 using namespace tbb;
 #endif
 
-void TPZSolveMatrix::HostToDevice() 
+void TPZSolveMatrix::HostToDevice()
 {
     DebugStop();
 }
@@ -186,12 +186,12 @@ void TPZSolveMatrix::ColoredAssemble(TPZCompMesh * cmesh, TPZFMatrix<STATE>  &no
 
     // INÍCIO DA ASSEMBLAGEM
     int64_t nnodes_tot = cmesh->Reference()->NNodes();
-    TPZManVector<REAL> nnodes_vec(nnodes_tot,0.);
+    TPZVec<int> nnodes_vec(nnodes_tot,0.);
 
     int cont_elem = 0;
 
-    TPZManVector<int> nelem_cor(nelem,-1); // vetor de cores
-    TPZManVector<int64_t> elem_neighbour(100,0.); // definindo que um elem pode ter no maximo 8 elem vizinhos
+    TPZVec<int> nelem_cor(nelem,-1); // vetor de cores
+    TPZVec<int> elem_neighbour(100,0.);
 
     for (int64_t iel1=0; iel1<nelem_c; iel1++) {
         if(!cmesh->Element(iel1)) continue;
@@ -203,7 +203,6 @@ void TPZSolveMatrix::ColoredAssemble(TPZCompMesh * cmesh, TPZFMatrix<STATE>  &no
 
         // ** Início da verificação de qual coord é repetida:
         TPZGeoEl * gel2;
-
         // contadores
         int64_t cont_elem_cor = 0;
         int64_t cont_elem_neighbour = 0;
@@ -243,9 +242,9 @@ void TPZSolveMatrix::ColoredAssemble(TPZCompMesh * cmesh, TPZFMatrix<STATE>  &no
             }
 
             // Verifica se pode ser uma cor menor
-            for (int64_t icor=0; icor<nelem_cor[cont_elem_cor]; icor++) {
-                if (std::find(elem_neighbour.begin(), elem_neighbour.end(), icor) == elem_neighbour.end())
-                    nelem_cor[cont_elem_cor] = icor;
+            for (int64_t icolor=0; icolor<nelem_cor[cont_elem_cor]; icolor++) {
+                if (std::find(elem_neighbour.begin(), elem_neighbour.end(), icolor) == elem_neighbour.end())
+                    nelem_cor[cont_elem_cor] = icolor;
                 if (cont_elem==0)
                     nelem_cor[cont_elem_cor] = 0;
             }
@@ -253,96 +252,52 @@ void TPZSolveMatrix::ColoredAssemble(TPZCompMesh * cmesh, TPZFMatrix<STATE>  &no
         }
         cont_elem++;
     }
-
     // -----------------------------------------------------------------------
     // ASSEMBLAGEM POR COR
     int64_t ncoef = cmesh->Solution().Rows();
     int nf_tot = fCol;
+    int neq = cmesh->NEquations();
+    int ncolor = *std::max_element(nelem_cor.begin(), nelem_cor.end())+1;
 
-    int ncor = *std::max_element(nelem_cor.begin(), nelem_cor.end());
-
-    TPZManVector<int64_t> assemble_cores(nf_tot*2, 0.);
-    TPZManVector<int64_t> nf_por_cor(ncor+1, 0.);
-
+    nodal_forces_global.Resize(ncolor*neq,1);
     int pos = 0;
-    // VETOR CORES E NEQ
-
-    for (int icor=0; icor<ncor+1; icor++) {
-    int cont_a = 0;
-    int cont_b = 0;
-        auto it = std::find (nelem_cor.begin(), nelem_cor.end(), icor);
-        while (std::find (it, nelem_cor.end(), icor) != nelem_cor.end()) {
-            it = std::find (it, nelem_cor.end(), icor);
-            int poscor = std::distance(nelem_cor.begin(), it);
-            for (int iassemblecor = 0; iassemblecor<fRowSizes[poscor]; iassemblecor++)
-            {
-                if(iassemblecor%2==0){
-                    assemble_cores[iassemblecor+pos] = fIndexes[poscor*fRowSizes[poscor]/2+cont_a];
-                    cont_a++;
-                } else{
-                    assemble_cores[iassemblecor+pos] = fIndexes[poscor*fRowSizes[poscor]/2+fIndexes.size()/2+cont_b];
-                    cont_b++;
+    for (int icolor=0; icolor < ncolor; icolor++) {
+        for (int iel = 0; iel < nelem; iel++) {
+            if (icolor == nelem_cor[iel]) {
+                for (int ipts = 0; ipts < fRowSizes[iel]/2; ipts++) {
+                    int idx = fIndexes[iel * fRowSizes[iel]/2 + ipts];
+                    int idy = fIndexes[iel * fRowSizes[iel]/2 + ipts + fRow / 2];
+                    nodal_forces_global(idx + pos, 0) += nodal_forces_vec(iel * fRowSizes[iel] / 2 + ipts, 0);
+                    nodal_forces_global(idy + pos, 0) += nodal_forces_vec(iel * fRowSizes[iel] / 2 + ipts + fRow / 2, 0);
                 }
             }
-            it++;
-            pos += fRowSizes[poscor];
-            nf_por_cor[icor] += fColSizes[poscor];
         }
+        pos += neq;
     }
 
-    // SE TERMINAR EM NÚMERO IMPAR DE CORES
-    int64_t nf_cor = 0;
-    if ( (ncor+1)%2 != 0) {
+    int colorid;
 
-        auto it = std::find (nelem_cor.begin(), nelem_cor.end(), ncor);
-        while (std::find (it, nelem_cor.end(), ncor) != nelem_cor.end()) {
+    if(ncolor%2 != 0 && ncolor > 1){ //se o numero de cores da malha eh impar, adiciona a ultima cor nas posicoes 0 a neq
+        colorid = ncolor - 1;
+        TPZFMatrix<REAL> assemblecolorid(neq, 1, &nodal_forces_global(colorid * neq, 0), neq);
+        nodal_forces_global.AddSub(0, 0, assemblecolorid);
+        ncolor -= 1; //menos uma cor para assemblar
+    }
 
-            it = std::find (it, nelem_cor.end(), ncor);
-
-            int iel = std::distance(nelem_cor.begin(), it);
-            int64_t nf_el = fColSizes[iel];
-            nf_cor += nf_el;
-
-            for (int64_t inf_el = 0; inf_el<nf_el*2; inf_el++) {
-                int64_t id = assemble_cores[nf_tot - nf_cor + inf_el];
-                if (id%2 == 0)
-                    nodal_forces_global(id,0) += nodal_forces_vec(iel*fColSizes[iel]/2+inf_el/2,0);
-                else
-                    nodal_forces_global(id,0) += nodal_forces_vec(iel*fColSizes[iel]/2+inf_el/2+nelem*fRow/2,0);
+    double colorassemb = ncolor/2.;
+    while (colorassemb >= 1) {
+            for (int icolor = 0; icolor < colorassemb; icolor++) {
+                colorid = icolor + colorassemb;
+                TPZFMatrix<REAL> assemblecolorid(neq, 1, &nodal_forces_global(colorid * neq, 0), neq);
+                nodal_forces_global.AddSub(icolor * neq, 0, assemblecolorid);
             }
-            it++;
-        }
-    }
-
-    REAL ncor_to_assemble = (ncor+1)/2;
-    while(ncor_to_assemble >= 0.5){
-        for (int64_t cor = 2*ncor_to_assemble-1; cor>=int(ncor_to_assemble); cor--) {
-            int cont_a = 0;
-            int cont_b = 0;
-
-            nf_cor += nf_por_cor[cor];
-            auto it = std::find (nelem_cor.begin(), nelem_cor.end(), cor);
-            int64_t nf_el = 0;
-
-            while (std::find (it, nelem_cor.end(), cor) != nelem_cor.end()) {
-                it = std::find (it, nelem_cor.end(), cor);
-                int iel = std::distance(nelem_cor.begin(), it);
-
-                for (int64_t inf_el = 0; inf_el<fRowSizes[iel]; inf_el++) {
-                    int64_t id = assemble_cores[nf_tot*2 - nf_cor*2 + nf_el*2 + inf_el];
-                    if (id%2 == 0) {
-                        nodal_forces_global(id, 0) += nodal_forces_vec(iel * fColSizes[iel] + cont_a, 0);
-                        cont_a++;
-                    } else {
-                        nodal_forces_global(id, 0) += nodal_forces_vec(iel * fColSizes[iel] + cont_b + fRow / 2, 0);
-                        cont_b++;
-                    }
-                }
-                it++;
-                nf_el += fColSizes[iel];
+            colorassemb = colorassemb / 2;
+            if (std::fmod(colorassemb,2) != 0 && colorassemb > 1) { //se depois de "dobrar" o vetor, restar um numero impar de cores, adiciona ultima cor nas posicoes 0 a neq
+                colorid = 2 * colorassemb - 1;
+                TPZFMatrix<REAL> assemblecolorid(neq, 1, &nodal_forces_global(colorid * neq, 0), neq);
+                nodal_forces_global.AddSub(0, 0, assemblecolorid);
+                colorassemb = ceil(colorassemb)/2;
             }
-        }
-        ncor_to_assemble = ncor_to_assemble/2;
     }
-
+    nodal_forces_global.Resize(neq,1);
 }

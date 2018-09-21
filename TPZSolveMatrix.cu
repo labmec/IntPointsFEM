@@ -8,17 +8,13 @@
 #include <algorithm>
 #endif
 
-#include<cuda.h>
+#include <cuda.h>
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
 #include <cusparse.h>
 
-///CUDA KERNELS--------------------------------------
-__global__ void MultiplyKernel()
-{
 
-}
-
+///CUDA KERNELS
 __global__ void ComputeSigmaKernel(int npts_tot, double *weight, double *result, double *sigma)
 {
 REAL E = 200000000.;
@@ -33,22 +29,14 @@ if (ipts < npts_tot/2) {
 }
 }
 
-__global__ void MultiplyTransposeKernel()
-{
-
-}
-
 __global__ void AssembleKernel(int npts, int *indexes, double *nfvec, double *nfglob)
 {
-int i = blockIdx.x*blockDim.x + threadIdx.x;
-
-    if (i < npts) {
-        nfglob[indexes[i]] = nfglob[indexes[i]] + nfvec[i];
-    }
-
+//int i = blockIdx.x*blockDim.x + threadIdx.x;
+//
+//    if (i < npts) {
+//	nfglob[indexes[i]] += nfvec[i];
+//    }
 }
-///--------------------------------------------------
-
 
 void TPZSolveMatrix::HostToDevice()
 {
@@ -89,7 +77,7 @@ cudaFree(dfRowFirstIndex);
 cudaFree(dfColFirstIndex);
 }
 
-void TPZSolveMatrix::SolveWithCUDA(const TPZFMatrix<STATE>  &global_solution, TPZStack<REAL> &weight, TPZFMatrix<REAL> &nodal_forces_global) const
+void  TPZSolveMatrix::SolveWithCUDA(const TPZFMatrix<STATE>  &global_solution, TPZStack<REAL> &weight, TPZFMatrix<REAL> &nodal_forces_global) const
 {
 int64_t nelem = fRowSizes.size();
 
@@ -101,6 +89,7 @@ cblas_dgthr(n_globalsol, global_solution, &expandsolution[0], &fIndexes[0]); //U
 
 ///MULTIPLY--------------------------------------------------------
 ///Initialize result and expandsolution on device
+TPZVec<REAL> result(2*n_globalsol);
 double *dresult;
 cudaMalloc(&dresult, 2*n_globalsol*sizeof(double));
 
@@ -108,13 +97,20 @@ double *dexpandsolution;
 cudaMalloc(&dexpandsolution, n_globalsol*sizeof(double));
 cudaMemcpy(dexpandsolution, &expandsolution[0], n_globalsol*sizeof(double), cudaMemcpyHostToDevice);
 
-///Use CUBLAS library to do the multiplication
-cublasHandle_t handle_m;
-cublasCreate(&handle_m);
+//Use CUBLAS library to do the multiplication
+cudaStream_t stream_m[2*nelem];
+cublasHandle_t handle_m[2*nelem];
+
 double alpha_m = 1.0;
 double beta_m = 0.0;
 
 for (int iel = 0; iel < nelem; iel++){
+	cudaStreamCreate(&stream_m[2*iel]);
+	cudaStreamCreate(&stream_m[2*iel+1]);
+
+	cublasCreate(&handle_m[2*iel]);
+	cublasCreate(&handle_m[2*iel+1]);
+
 	int64_t pos = fMatrixPosition[iel];
 	int64_t cols = fColSizes[iel];
 	int64_t rows = fRowSizes[iel];
@@ -123,16 +119,19 @@ for (int iel = 0; iel < nelem; iel++){
 	int64_t cont_rows = fRowFirstIndex[iel];
 
 	//du
-	cublasDgemv(handle_m, CUBLAS_OP_N, rows, cols, &alpha_m, &dfStorage[pos], rows, &dexpandsolution[cont_cols], 1, &beta_m, &dresult[cont_rows], 1);
+	cublasSetStream(handle_m[2*iel],stream_m[2*iel]);
+	cublasDgemv(handle_m[2*iel], CUBLAS_OP_N, rows, cols, &alpha_m, &dfStorage[pos], rows, &dexpandsolution[cont_cols], 1, &beta_m, &dresult[cont_rows], 1);
 
 	//dv   
-	cublasDgemv(handle_m, CUBLAS_OP_N, rows, cols, &alpha_m, &dfStorage[pos], rows, &dexpandsolution[cont_cols + fColFirstIndex[nelem]], 1, &beta_m, &dresult[cont_rows + fRowFirstIndex[nelem]], 1);
+	cublasSetStream(handle_m[2*iel+1],stream_m[2*iel+1]);
+	cublasDgemv(handle_m[2*iel+1], CUBLAS_OP_N, rows, cols, &alpha_m, &dfStorage[pos], rows, &dexpandsolution[cont_cols + fColFirstIndex[nelem]], 1, &beta_m, &dresult[cont_rows + fRowFirstIndex[nelem]], 1);
 
 }
 
 ///Free device memory
 cudaFree(dexpandsolution); 
-cublasDestroy(handle_m);
+cublasDestroy(*handle_m);
+cudaStreamSynchronize(0);
 ///----------------------------------------------------------------
 
 ///COMPUTE SIGMA---------------------------------------------------
@@ -164,12 +163,19 @@ double *dnodal_forces_vec;
 cudaMalloc(&dnodal_forces_vec, npts_tot*sizeof(double));
 
 ///Use CUBLAS to do the multiplication
-cublasHandle_t handle_mt;
-cublasCreate(&handle_mt);
+cudaStream_t stream_mt[2*nelem];
+cublasHandle_t handle_mt[2*nelem];
+
 double alpha_mt = 1.0;
 double beta_mt = 0.0;
 
 for (int64_t iel = 0; iel < nelem; iel++) {
+	cudaStreamCreate(&stream_mt[2*iel]);
+	cudaStreamCreate(&stream_mt[2*iel+1]);
+
+	cublasCreate(&handle_mt[2*iel]);
+	cublasCreate(&handle_mt[2*iel+1]);
+
 	int64_t pos = fMatrixPosition[iel];
         int64_t rows = fRowSizes[iel];
         int64_t cols = fColSizes[iel];
@@ -177,21 +183,24 @@ for (int64_t iel = 0; iel < nelem; iel++) {
 	int64_t cont_rows = fRowFirstIndex[iel];
         int64_t cont_cols = fColFirstIndex[iel];
 
-	    //Nodal forces in x direction
-        cublasDgemv(handle_mt, CUBLAS_OP_T, rows, cols, &alpha_mt, &dfStorage[pos], rows, &dsigma[cont_rows], 1, &beta_mt, &dnodal_forces_vec[cont_cols], 1);
+	//Nodal forces in x direction
+        cublasSetStream(handle_mt[2*iel],stream_mt[2*iel]);
+        cublasDgemv(handle_mt[2*iel], CUBLAS_OP_T, rows, cols, &alpha_mt, &dfStorage[pos], rows, &dsigma[cont_rows], 1, &beta_mt, &dnodal_forces_vec[cont_cols], 1);
 
         //Nodal forces in y direction
-        cublasDgemv(handle_mt, CUBLAS_OP_T, rows, cols, &alpha_mt, &dfStorage[pos], rows, &dsigma[cont_rows + npts_tot], 1, &beta_mt, &dnodal_forces_vec[cont_cols + npts_tot/2], 1);
+        cublasSetStream(handle_mt[2*iel+1],stream_mt[2*iel+1]);
+        cublasDgemv(handle_mt[2*iel+1], CUBLAS_OP_T, rows, cols, &alpha_mt, &dfStorage[pos], rows, &dsigma[cont_rows + npts_tot], 1, &beta_mt, &dnodal_forces_vec[cont_cols + npts_tot/2], 1);
 }
 
 cudaMemcpy(&nodal_forces_vec[0], dnodal_forces_vec, npts_tot*sizeof(double), cudaMemcpyDeviceToHost);
+std::cout << "Nodal forces vector:" << std::endl;
 for(int i = 0; i < npts_tot; i++){
 std::cout << nodal_forces_vec[i] << std::endl;
 }
 
 ///Free device memory
 cudaFree(dsigma);
-cublasDestroy(handle_mt);
+cublasDestroy(*handle_mt);
 ///----------------------------------------------------------------
 
 ///ASSEMBLE--------------------------------------------------------
@@ -202,12 +211,15 @@ double *dnodal_forces_global;
 cudaMalloc(&dnodal_forces_global, globvec*sizeof(double));
 
 ///Kernel that assemble the nodal forces vectot
-dim3 dimGrid(ceil(npts_tot/32.0),1,1);
-dim3 dimBlock(32,1,1);
+dim3 dimGrid_assemb(ceil(npts_tot/32.0),1,1);
+dim3 dimBlock_assemb(32,1,1);
 AssembleKernel<<<dimGrid,dimBlock>>>(npts_tot, dfIndexes,dnodal_forces_vec, dnodal_forces_global);
 
 ///Transfer global nodal forces vector the host
 cudaMemcpy(&nodal_forces_global(0,0), dnodal_forces_global, globvec*sizeof(double), cudaMemcpyDeviceToHost);
+    
+//std::cout << "Assemble:\n" << std::endl;
+//nodal_forces_global.Print(std::cout);
 
 ///Free device memory
 cudaFree(dnodal_forces_vec);

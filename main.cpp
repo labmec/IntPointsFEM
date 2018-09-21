@@ -49,8 +49,10 @@ std::cout << "--------------------USING CUDA-------------------" << std::endl;
 for (int i = 0; i < 1; i++) {
     //// ------------------------ DATA INPUT ------------------------------
     //// NUMBER OF ELEMENTS IN X AND Y DIRECTIONS
-    int nelem_x = pow(10,i);
-    int nelem_y = pow(10,i);
+//    int nelem_x = pow(10,i);
+//    int nelem_y = pow(10,i);
+        int nelem_x = 120;
+        int nelem_y = 120;
 
 
     timing << "-------------------------------------------------" << std::endl;
@@ -425,6 +427,9 @@ SolMat->MultiplyTranspose(sigma, nodal_forces_vec); //nodal_forces_vec = [fx_0, 
 SolMat->TraditionalAssemble(nodal_forces_vec,nodal_forces_global1); //traditional assemble
 SolMat->ColoredAssemble(cmesh, nodal_forces_vec,nodal_forces_global2);
 
+    for (int i = 0; i < neq; ++i) {
+        std::cout << nodal_forces_global2(i,0) - nodal_forces_global1(i,0) << std::endl;
+    }
 //// -------------------------------------------------------------------------------
 #endif
 //// TIMING END---------------------------------------------------------------------
