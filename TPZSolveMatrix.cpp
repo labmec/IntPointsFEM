@@ -190,11 +190,6 @@ void TPZSolveMatrix::ColoredElements(TPZCompMesh * cmesh, TPZVec<int> &nelem_col
 
     int cont_elem = 0;
 
-    for (int i = 0; i < nelem; i++) {
-        nelem_color[i] = -1;
-    }
-    
-//    TPZVec<int> nelem_color(nelem,-1); // vetor de cores
     TPZVec<int> elem_neighbour(100,0.);
 
     for (int64_t iel1=0; iel1<nelem_c; iel1++) {
@@ -260,49 +255,65 @@ void TPZSolveMatrix::ColoredElements(TPZCompMesh * cmesh, TPZVec<int> &nelem_col
 
 void TPZSolveMatrix::ColoredAssemble(TPZVec<int> &nelem_color, TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global)
 {
-    int nf_tot = fCol;
     int neq = nodal_forces_global.Rows();
     int nelem = nelem_color.size();
+    MKL_INT sz = fIndexes.size();
     int ncolor = *std::max_element(nelem_color.begin(), nelem_color.end())+1;
 
     nodal_forces_global.Resize(ncolor*neq,1);
-    int pos = 0;
-    for (int icolor=0; icolor < ncolor; icolor++) {
-        for (int iel = 0; iel < nelem; iel++) {
-            if (icolor == nelem_color[iel]) {
-                for (int ipts = 0; ipts < fRowSizes[iel]/2; ipts++) {
-                    int idx = fIndexes[iel * fRowSizes[iel]/2 + ipts];
-                    int idy = fIndexes[iel * fRowSizes[iel]/2 + ipts + fRow / 2];
-                    nodal_forces_global(idx + pos, 0) += nodal_forces_vec(iel * fRowSizes[iel] / 2 + ipts, 0);
-                    nodal_forces_global(idy + pos, 0) += nodal_forces_vec(iel * fRowSizes[iel] / 2 + ipts + fRow / 2, 0);
-                }
-            }
-        }
-        pos += neq;
+    TPZVec<MKL_INT> ColoredIndexes(sz);
+
+    for (int iel = 0; iel < nelem; iel++) {
+        int64_t cols = fColSizes[iel];
+        int64_t cont_cols = fColFirstIndex[iel];
+
+        TPZFMatrix<int> indexes_x(cols, 1, &fIndexes[cont_cols], cols);
+        TPZFMatrix<int> indexes_y(cols, 1, &fIndexes[cont_cols + fRow/2], cols);
+
+        TPZFMatrix<int> indexescolor_x(cols,1,&ColoredIndexes[cont_cols],cols);
+        TPZFMatrix<int> indexescolor_y(cols,1,&ColoredIndexes[cont_cols+fRow/2],cols);
+
+        indexescolor_x = indexes_x.operator+(nelem_color[iel]*neq);
+        indexescolor_y = indexes_y.operator+(nelem_color[iel]*neq);
     }
+
+#ifdef USING_TBB
+    parallel_for(size_t(0),size_t(nelem),size_t(1),[&](size_t iel)
+                      {
+                       int64_t cols = fColSizes[iel];
+                       int64_t cont_cols = fColFirstIndex[iel];
+
+                       TPZFMatrix<int> indexes_x(cols, 1, &fIndexes[cont_cols], cols);
+                       TPZFMatrix<int> indexes_y(cols, 1, &fIndexes[cont_cols + fRow/2], cols);
+
+                       TPZFMatrix<int> indexescolor_x(cols,1,&ColoredIndexes[cont_cols],cols);
+                       TPZFMatrix<int> indexescolor_y(cols,1,&ColoredIndexes[cont_cols+fRow/2],cols);
+
+                       indexescolor_x = indexes_x.operator+(nelem_color[iel]*neq);
+                       indexescolor_y = indexes_y.operator+(nelem_color[iel]*neq);
+                      }
+                      );
+#endif
+
+    cblas_dsctr(sz, nodal_forces_vec, &ColoredIndexes[0], &nodal_forces_global(0,0));
 
     int colorid;
-
-    if(ncolor%2 != 0 && ncolor > 1){ //se o numero de cores da malha eh impar, adiciona a ultima cor nas posicoes 0 a neq
-        colorid = ncolor - 1;
-        TPZFMatrix<REAL> assemblecolorid(neq, 1, &nodal_forces_global(colorid * neq, 0), neq);
-        nodal_forces_global.AddSub(0, 0, assemblecolorid);
-        ncolor -= 1; //menos uma cor para assemblar
-    }
-
     double colorassemb = ncolor/2.;
     while (colorassemb >= 1) {
-        for (int icolor = 0; icolor < colorassemb; icolor++) {
-            colorid = icolor + colorassemb;
-            TPZFMatrix<REAL> assemblecolorid(neq, 1, &nodal_forces_global(colorid * neq, 0), neq);
-            nodal_forces_global.AddSub(icolor * neq, 0, assemblecolorid);
+        if (colorassemb - floor(colorassemb) == 0) {
+            for (int icolor = 0; icolor < colorassemb; icolor++) {
+                colorid = icolor + colorassemb;
+                TPZFMatrix<REAL> assemblecolorid(neq, 1, &nodal_forces_global(colorid * neq, 0), neq);
+                nodal_forces_global.AddSub(icolor * neq, 0, assemblecolorid);
+            }
+            colorassemb = colorassemb / 2;
         }
-        colorassemb = colorassemb / 2;
-        if (std::fmod(colorassemb,2) != 0 && colorassemb > 1) { //se depois de "dobrar" o vetor, restar um numero impar de cores, adiciona ultima cor nas posicoes 0 a neq
+
+        else if (colorassemb - floor(colorassemb) != 0) { //caso o numero de cores seja impar, assembla a ultima cor
             colorid = 2 * colorassemb - 1;
             TPZFMatrix<REAL> assemblecolorid(neq, 1, &nodal_forces_global(colorid * neq, 0), neq);
             nodal_forces_global.AddSub(0, 0, assemblecolorid);
-            colorassemb = ceil(colorassemb)/2;
+            colorassemb = ceil(colorassemb) - 1;
         }
     }
     nodal_forces_global.Resize(neq,1);
