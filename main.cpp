@@ -51,8 +51,8 @@ for (int i = 0; i < 1; i++) {
     //// NUMBER OF ELEMENTS IN X AND Y DIRECTIONS
 //    int nelem_x = pow(10,i);
 //    int nelem_y = pow(10,i);
-        int nelem_x = 120;
-        int nelem_y = 120;
+        int nelem_x = 3;
+        int nelem_y = 3;
 
 
     timing << "-------------------------------------------------" << std::endl;
@@ -425,7 +425,10 @@ SolMat->MultiplyTranspose(sigma, nodal_forces_vec); //nodal_forces_vec = [fx_0, 
 
 //// ASSEMBLE: RESIDUAL CALCULATION-------------------------------------------------
 SolMat->TraditionalAssemble(nodal_forces_vec,nodal_forces_global1); //traditional assemble
-SolMat->ColoredAssemble(cmesh, nodal_forces_vec,nodal_forces_global2);
+
+TPZVec<int> nelem_color(nelem);
+SolMat->ColoredElements(cmesh, nelem_color);
+SolMat->ColoredAssemble(nelem_color, nodal_forces_vec,nodal_forces_global2);
 
     for (int i = 0; i < neq; ++i) {
         std::cout << nodal_forces_global2(i,0) - nodal_forces_global1(i,0) << std::endl;

@@ -127,7 +127,9 @@ void MultiplyTranspose(TPZFMatrix<STATE>  &intpoint_solution, TPZFMatrix<STATE> 
 
 void TraditionalAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const;
 
-void ColoredAssemble(TPZCompMesh * cmesh, TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const;
+void ColoredElements(TPZCompMesh * cmesh, TPZVec<int> &nelem_color) const;
+
+void ColoredAssemble(TPZVec<int> &nelem_color, TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global);
 
 protected:
 
