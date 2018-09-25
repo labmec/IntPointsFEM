@@ -292,8 +292,8 @@ for (int64_t i = 0; i < nelem_c; i++) {
 //// -------------------------------------------------------------------------------
 
 //// ROWSIZES AND COLSIZES VECTORS--------------------------------------------------
-TPZVec<MKL_INT> rowsizes(nelem);
-TPZVec<MKL_INT> colsizes(nelem);
+TPZVec<int64_t> rowsizes(nelem);
+TPZVec<int64_t> colsizes(nelem);
 
 int64_t npts_tot = 0;
 int64_t nf_tot = 0;

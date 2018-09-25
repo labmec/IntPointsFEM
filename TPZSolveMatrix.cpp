@@ -13,71 +13,6 @@
 using namespace tbb;
 #endif
 
-static bool CanAssemble(TPZStack<int64_t> &connectlist, TPZVec<int> &elContribute)
-{
-    for (int i = 0 ; i < connectlist.NElements() ; i++)
-    {
-        if (elContribute[connectlist[i]] >= 0){
-            return false;
-        }
-    }
-    return true;
-}
-
-static int WhoBlockedMe(TPZStack<int64_t> &connectlist, TPZVec<int> &elContribute, TPZVec<int64_t> &elSeqinv)
-{
-    int el = -1;
-    for (int i = 0 ; i < connectlist.NElements() ; i++)
-    {
-        int elBlocked = elContribute[connectlist[i]];
-        if (elBlocked == -1) continue;
-        int elBlockedIndex = elSeqinv[elBlocked];
-        if (el == -1) el = elBlockedIndex;
-        if (elBlockedIndex < el) el = elBlockedIndex;
-    }
-    return el;
-}
-
-static void RemoveEl(int el,TPZCompMesh *cmesh,TPZVec<int> &elContribute,int elSequence)
-{
-    TPZCompEl *cel = cmesh->ElementVec()[el];
-    if(!cel) DebugStop();
-    TPZStack<int64_t> connectlist;
-    cel->BuildConnectList(connectlist);
-    for (int i = 0 ; i < connectlist.NElements() ; i++)
-    {
-        int conindex = connectlist[i];
-        if (elContribute[conindex] != elSequence){
-            DebugStop();
-        }
-        elContribute[conindex] = -1;
-    }
-}
-
-static int MinPassIndex(TPZStack<int64_t> &connectlist,TPZVec<int> &elContribute, TPZVec<int> &passIndex)
-{
-    int minPassIndex = -1;
-    for (int i = 0 ; i < connectlist.NElements() ; i++)
-    {
-        int elcont = elContribute[connectlist[i]];
-        int passindex = -1;
-        if (elcont != -1){
-            passindex = passIndex[elcont];
-            if (minPassIndex == -1) minPassIndex = passindex;
-        }
-        if (minPassIndex < passindex) minPassIndex = passindex;
-    }
-    return minPassIndex;
-}
-
-static void AssembleColor(int el,TPZStack<int64_t> &connectlist, TPZVec<int> &elContribute)
-{
-    for (int i = 0 ; i < connectlist.NElements() ; i++)
-    {
-        elContribute[connectlist[i]] = el;
-    }
-}
-
 void TPZSolveMatrix::HostToDevice()
 {
     DebugStop();
@@ -97,7 +32,7 @@ void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatr
 {
 int64_t nelem = fRowSizes.size();
 
-MKL_INT n_globalsol = fIndexes.size();
+int64_t n_globalsol = fIndexes.size();
 
 result.Resize(2*n_globalsol,1);
 result.Zero();

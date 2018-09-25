@@ -24,7 +24,7 @@ TPZSolveMatrix() : TPZMatrix<STATE>(), fStorage(), fIndexes(), fColSizes(), fRow
 
 }
 
-TPZSolveMatrix(int64_t rows, int64_t cols, TPZVec<MKL_INT> rowsizes, TPZVec<MKL_INT> colsizes) : TPZMatrix(rows,cols)
+TPZSolveMatrix(int64_t rows, int64_t cols, TPZVec<int64_t> rowsizes, TPZVec<int64_t> colsizes) : TPZMatrix(rows,cols)
 {
     SetParameters(rowsizes, colsizes);
 }
@@ -39,10 +39,12 @@ TPZSolveMatrix(const TPZSolveMatrix &copy) : TPZMatrix<STATE>(copy),
     fStorage(copy.fStorage),fIndexes(copy.fIndexes),
     fColSizes(copy.fColSizes), fRowSizes(copy.fRowSizes),
     fMatrixPosition(copy.fMatrixPosition),fRowFirstIndex(copy.fRowFirstIndex),
+    fElemColor(copy.fElemColor), fIndexesColor(copy.fIndexesColor),
     fColFirstIndex(copy.fColFirstIndex), dfStorage(copy.dfStorage),
-    dfColSizes(copy.dfColSizes), dfRowSizes(copy.dfRowSizes), dfIndexes(copy.dfIndexes), dfIndexesColor(copy.dfIndexesColor),
-    dfElemColor(copy.dfElemColor),dfMatrixPosition(copy.dfMatrixPosition),dfRowFirstIndex(copy.dfRowFirstIndex),
-    dfColFirstIndex(copy.dfColFirstIndex), fIndexesColor(copy.fIndexesColor), fElemColor(copy.fElemColor)
+    dfColSizes(copy.dfColSizes), dfRowSizes(copy.dfRowSizes), dfIndexes(copy.dfIndexes),
+    dfElemColor(copy.dfElemColor), dfIndexesColor(copy.dfIndexesColor),
+    dfMatrixPosition(copy.dfMatrixPosition),dfRowFirstIndex(copy.dfRowFirstIndex),
+    dfColFirstIndex(copy.dfColFirstIndex)
 
 {
 
@@ -55,6 +57,8 @@ TPZSolveMatrix &operator=(const TPZSolveMatrix &copy)
     fIndexes = copy.fIndexes;
     fColSizes = copy.fColSizes;
     fRowSizes = copy.fRowSizes;
+    fElemColor = copy.fElemColor;
+    fIndexesColor = copy.fIndexesColor;
     fMatrixPosition = copy.fMatrixPosition;
     fRowFirstIndex = copy.fRowFirstIndex;
     fColFirstIndex = copy.fColFirstIndex;
@@ -62,13 +66,11 @@ TPZSolveMatrix &operator=(const TPZSolveMatrix &copy)
     dfColSizes = copy.dfColSizes;
     dfRowSizes = copy.dfRowSizes;
     dfIndexes = copy.dfIndexes;
-    dfIndexesColor = copy.dfIndexesColor;
     dfElemColor = copy.dfElemColor;
+    dfIndexesColor = copy.dfIndexesColor;
     dfMatrixPosition = copy.dfMatrixPosition;
     dfRowFirstIndex = copy.dfRowFirstIndex;
     dfColFirstIndex = copy.dfColFirstIndex;
-    fIndexesColor = copy.fIndexesColor;
-    fElemColor = copy.fElemColor;
 
     return *this;
 }
@@ -78,7 +80,7 @@ TPZMatrix<STATE> *Clone() const
     return new TPZSolveMatrix(*this);
 }
 
-void SetParameters(TPZVec<MKL_INT> rowsize, TPZVec<MKL_INT> colsize)
+void SetParameters(TPZVec<int64_t> rowsize, TPZVec<int64_t> colsize)
 {
 int64_t nelem = rowsize.size();
 
@@ -151,10 +153,10 @@ TPZVec<int64_t> fRowSizes;
 TPZVec<int64_t> fColSizes;
 
 /// indexes vector in x and y direction
-TPZVec<int64_t> fIndexes;
+TPZVec<MKL_INT> fIndexes;
 
 /// indexes vector in x and y direction by color
-TPZVec<int64_t> fIndexesColor;
+TPZVec<MKL_INT> fIndexesColor;
 
 /// color indexes of each element
 TPZVec<int64_t> fElemColor;
