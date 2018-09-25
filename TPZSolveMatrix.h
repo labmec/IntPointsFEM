@@ -33,16 +33,17 @@ TPZSolveMatrix(int64_t rows, int64_t cols, TPZVec<MKL_INT> rowsizes, TPZVec<MKL_
 ~TPZSolveMatrix()
 {
 
-} 
+}
 
 TPZSolveMatrix(const TPZSolveMatrix &copy) : TPZMatrix<STATE>(copy),
     fStorage(copy.fStorage),fIndexes(copy.fIndexes),
     fColSizes(copy.fColSizes), fRowSizes(copy.fRowSizes),
     fMatrixPosition(copy.fMatrixPosition),fRowFirstIndex(copy.fRowFirstIndex),
-    fColFirstIndex(copy.fColFirstIndex), dfStorage(copy.dfStorage), 
-    dfColSizes(copy.dfColSizes), dfRowSizes(copy.dfRowSizes), dfIndexes(copy.dfIndexes),
-    dfMatrixPosition(copy.dfMatrixPosition),dfRowFirstIndex(copy.dfRowFirstIndex),
-    dfColFirstIndex(copy.dfColFirstIndex)
+    fColFirstIndex(copy.fColFirstIndex), dfStorage(copy.dfStorage),
+    dfColSizes(copy.dfColSizes), dfRowSizes(copy.dfRowSizes), dfIndexes(copy.dfIndexes), dfIndexesColor(copy.dfIndexesColor),
+    dfElemColor(copy.dfElemColor),dfMatrixPosition(copy.dfMatrixPosition),dfRowFirstIndex(copy.dfRowFirstIndex),
+    dfColFirstIndex(copy.dfColFirstIndex), fIndexesColor(copy.fIndexesColor), fElemColor(copy.fElemColor)
+
 {
 
 }
@@ -61,9 +62,13 @@ TPZSolveMatrix &operator=(const TPZSolveMatrix &copy)
     dfColSizes = copy.dfColSizes;
     dfRowSizes = copy.dfRowSizes;
     dfIndexes = copy.dfIndexes;
+    dfIndexesColor = copy.dfIndexesColor;
+    dfElemColor = copy.dfElemColor;
     dfMatrixPosition = copy.dfMatrixPosition;
     dfRowFirstIndex = copy.dfRowFirstIndex;
     dfColFirstIndex = copy.dfColFirstIndex;
+    fIndexesColor = copy.fIndexesColor;
+    fElemColor = copy.fElemColor;
 
     return *this;
 }
@@ -96,6 +101,8 @@ for (int64_t iel = 0; iel < nelem; ++iel) {
     fColFirstIndex[iel+1]= fColFirstIndex[iel]+fColSizes[iel];
 }
 fStorage.resize(fMatrixPosition[nelem]);
+fElemColor.resize(nelem);
+fElemColor.Fill(-1);
 }
 
 void SetElementMatrix(int iel, TPZFMatrix<REAL> &elmat)
@@ -103,19 +110,20 @@ void SetElementMatrix(int iel, TPZFMatrix<REAL> &elmat)
 TPZFMatrix<REAL> elmatloc(fRowSizes[iel],fColSizes[iel],&fStorage[fMatrixPosition[iel]],fRowSizes[iel]*fColSizes[iel]);
 elmatloc = elmat;
 }
- 
+
 void SetIndexes(TPZVec<MKL_INT> indexes)
 {
 int64_t indsize = indexes.size();
 fIndexes.resize(indsize);
 fIndexes = indexes;
+fIndexesColor.resize(indexes.size());
 }
 
     /** @brief Solve procedure */
 
 void HostToDevice();
 
-void SolveWithCUDA(const TPZFMatrix<STATE>  &global_solution, TPZStack<REAL> &weight, TPZFMatrix<REAL> &nodal_forces_global) const;
+void SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE>  &global_solution, TPZStack<REAL> &weight, TPZFMatrix<REAL> &nodal_forces_global) const;
 
 void FreeDeviceMemory();
 
@@ -127,38 +135,46 @@ void MultiplyTranspose(TPZFMatrix<STATE>  &intpoint_solution, TPZFMatrix<STATE> 
 
 void TraditionalAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const;
 
-void ColoredElements(TPZCompMesh * cmesh, TPZVec<int> &nelem_color) const;
+void ColoringElements(TPZCompMesh * cmesh) const;
 
-void ColoredAssemble(TPZVec<int> &nelem_color, TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global);
+void ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global);
 
 protected:
 
-/// vector containing the matrix coeficients
+/// vector containing the matrix coefficients
 TPZVec<REAL> fStorage;
 
 /// number of rows of each block matrix
-TPZVec<MKL_INT> fRowSizes;
+TPZVec<int64_t> fRowSizes;
 
 /// number of columns of each block matrix
-TPZVec<MKL_INT> fColSizes;
+TPZVec<int64_t> fColSizes;
 
-/// indexes vector in x direction and the y direction
-TPZManVector<MKL_INT> fIndexes;
+/// indexes vector in x and y direction
+TPZVec<int64_t> fIndexes;
+
+/// indexes vector in x and y direction by color
+TPZVec<int64_t> fIndexesColor;
+
+/// color indexes of each element
+TPZVec<int64_t> fElemColor;
 
 /// position of the matrix of the elements
 TPZVec<int64_t> fMatrixPosition;
 
 /// position of the result vector
-TPZVec<MKL_INT> fRowFirstIndex;
+TPZVec<int64_t> fRowFirstIndex;
 
 /// position in the fIndex vector of each element
-TPZVec<MKL_INT> fColFirstIndex;
+TPZVec<int64_t> fColFirstIndex;
 
-// Parameters stored on device
+/// Parameters stored on device
 double *dfStorage;
 int *dfRowSizes;
 int *dfColSizes;
 int *dfIndexes;
+int *dfIndexesColor;
+int *dfElemColor;
 int *dfMatrixPosition;
 int *dfRowFirstIndex;
 int *dfColFirstIndex;

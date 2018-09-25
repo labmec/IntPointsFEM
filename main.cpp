@@ -405,7 +405,7 @@ TPZFMatrix<REAL> nodal_forces_global2(neq,1,0.);
 
 #ifdef USING_CUDA
 SolMat->HostToDevice();
-SolMat->SolveWithCUDA(coef_sol, weight, nodal_forces_global1);
+SolMat->SolveWithCUDA(cmesh, coef_sol, weight, nodal_forces_global1);
 SolMat->FreeDeviceMemory();
 #else
 //// SOLVE ADVEC*COEF_SOL-----------------------------------------------------------
@@ -426,9 +426,8 @@ SolMat->MultiplyTranspose(sigma, nodal_forces_vec); //nodal_forces_vec = [fx_0, 
 //// ASSEMBLE: RESIDUAL CALCULATION-------------------------------------------------
 SolMat->TraditionalAssemble(nodal_forces_vec,nodal_forces_global1); //traditional assemble
 
-TPZVec<int> nelem_color(nelem);
-SolMat->ColoredElements(cmesh, nelem_color);
-SolMat->ColoredAssemble(nelem_color, nodal_forces_vec,nodal_forces_global2);
+SolMat->ColoringElements(cmesh);
+SolMat->ColoredAssemble(nodal_forces_vec,nodal_forces_global2);
 
     for (int i = 0; i < neq; ++i) {
         std::cout << nodal_forces_global2(i,0) - nodal_forces_global1(i,0) << std::endl;

@@ -13,12 +13,77 @@
 using namespace tbb;
 #endif
 
+static bool CanAssemble(TPZStack<int64_t> &connectlist, TPZVec<int> &elContribute)
+{
+    for (int i = 0 ; i < connectlist.NElements() ; i++)
+    {
+        if (elContribute[connectlist[i]] >= 0){
+            return false;
+        }
+    }
+    return true;
+}
+
+static int WhoBlockedMe(TPZStack<int64_t> &connectlist, TPZVec<int> &elContribute, TPZVec<int64_t> &elSeqinv)
+{
+    int el = -1;
+    for (int i = 0 ; i < connectlist.NElements() ; i++)
+    {
+        int elBlocked = elContribute[connectlist[i]];
+        if (elBlocked == -1) continue;
+        int elBlockedIndex = elSeqinv[elBlocked];
+        if (el == -1) el = elBlockedIndex;
+        if (elBlockedIndex < el) el = elBlockedIndex;
+    }
+    return el;
+}
+
+static void RemoveEl(int el,TPZCompMesh *cmesh,TPZVec<int> &elContribute,int elSequence)
+{
+    TPZCompEl *cel = cmesh->ElementVec()[el];
+    if(!cel) DebugStop();
+    TPZStack<int64_t> connectlist;
+    cel->BuildConnectList(connectlist);
+    for (int i = 0 ; i < connectlist.NElements() ; i++)
+    {
+        int conindex = connectlist[i];
+        if (elContribute[conindex] != elSequence){
+            DebugStop();
+        }
+        elContribute[conindex] = -1;
+    }
+}
+
+static int MinPassIndex(TPZStack<int64_t> &connectlist,TPZVec<int> &elContribute, TPZVec<int> &passIndex)
+{
+    int minPassIndex = -1;
+    for (int i = 0 ; i < connectlist.NElements() ; i++)
+    {
+        int elcont = elContribute[connectlist[i]];
+        int passindex = -1;
+        if (elcont != -1){
+            passindex = passIndex[elcont];
+            if (minPassIndex == -1) minPassIndex = passindex;
+        }
+        if (minPassIndex < passindex) minPassIndex = passindex;
+    }
+    return minPassIndex;
+}
+
+static void AssembleColor(int el,TPZStack<int64_t> &connectlist, TPZVec<int> &elContribute)
+{
+    for (int i = 0 ; i < connectlist.NElements() ; i++)
+    {
+        elContribute[connectlist[i]] = el;
+    }
+}
+
 void TPZSolveMatrix::HostToDevice()
 {
     DebugStop();
 }
 
-void TPZSolveMatrix::SolveWithCUDA(const TPZFMatrix<STATE>  &global_solution, TPZStack<REAL> &weight, TPZFMatrix<REAL> &nodal_forces_global) const
+void TPZSolveMatrix::SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE>  &global_solution, TPZStack<REAL> &weight, TPZFMatrix<REAL> &nodal_forces_global) const
 {
     DebugStop();
 }
@@ -178,143 +243,77 @@ for (int64_t ir=0; ir<fRow; ir++) {
 #endif
 }
 
-void TPZSolveMatrix::ColoredElements(TPZCompMesh * cmesh, TPZVec<int> &nelem_color) const
+void TPZSolveMatrix::ColoringElements(TPZCompMesh * cmesh) const
 {
-    int nelem = fRowSizes.size();
-    int nelem_c = cmesh->NElements();
-    int dim_mesh = cmesh->Dimension();
+    int64_t nelem_c = cmesh->NElements();
+    int64_t nconnects = cmesh->NConnects();
+    TPZVec<int64_t> connects_vec(nconnects,0);
 
-    // INÍCIO DA ASSEMBLAGEM
-    int64_t nnodes_tot = cmesh->Reference()->NNodes();
-    TPZVec<int> nnodes_vec(nnodes_tot,0.);
+    int64_t contcolor = 0;
+    bool needstocontinue = true;
 
-    int cont_elem = 0;
+    while (needstocontinue)
+    {
+        needstocontinue = false;
+        for (int64_t iel = 0; iel < nelem_c; iel++) {
+            TPZCompEl *cel = cmesh->Element(iel);
+            if (!cel || cel->Dimension() != cmesh->Dimension()) continue;
 
-    TPZVec<int> elem_neighbour(100,0.);
+            if (fElemColor[iel] != -1) continue;
+            TPZStack<int64_t> connectlist;
+            cmesh->Element(iel)->BuildConnectList(connectlist);
+            int64_t ncon = connectlist.size();
 
-    for (int64_t iel1=0; iel1<nelem_c; iel1++) {
-        if(!cmesh->Element(iel1)) continue;
-        TPZGeoEl * gel1 = cmesh->Element(iel1)->Reference();
-        if(!gel1 ||  gel1->Dimension() != dim_mesh) continue;
-
-        TPZVec<int64_t> nodeindices;
-        gel1->GetNodeIndices(nodeindices); // Armazena os nós do elemento finito
-
-        // ** Início da verificação de qual coord é repetida:
-        TPZGeoEl * gel2;
-        // contadores
-        int64_t cont_elem_cor = 0;
-        int64_t cont_elem_neighbour = 0;
-
-        // inicializa com nnodes_vec nulo, e preenche com 1 os nós repetidos
-        nnodes_vec.Fill(0);
-        for (int64_t iel2=0; iel2<nelem_c; iel2++) {
-            if(!cmesh->Element(iel2)) continue;
-            gel2 = cmesh->Element(iel2)->Reference();
-            if(!gel2 ||  gel2->Dimension() != dim_mesh) continue;
-
-            for (int64_t inode=0; inode<gel2->NNodes(); inode++) {
-                if(std::find (nodeindices.begin(), nodeindices.end(), gel2->NodeIndex(inode)) != nodeindices.end()){
-                    nnodes_vec[gel2->NodeIndex(inode)] = 1; // preenchendo nnodes_vec
-                    elem_neighbour[cont_elem_neighbour] = nelem_color[cont_elem_cor]; // preenche o vetor de elementos vizinhos ao elemento de análise
-                    cont_elem_neighbour++;
-                }
+            int64_t icon;
+            for (icon = 0; icon < ncon; icon++) {
+                if (connects_vec[connectlist[icon]] != 0) break;
             }
-            cont_elem_cor++;
+            if (icon != ncon) {
+                needstocontinue = true;
+                continue;
+            }
+            fElemColor[iel] = contcolor;
+
+            for (icon = 0; icon < ncon; icon++) {
+                connects_vec[connectlist[icon]] = 1;
+            }
         }
-        // ** fim da verificação
-
-        // Preenche a cor
-        for (int64_t inodes_tot=0; inodes_tot<nnodes_tot; inodes_tot++) {
-            cont_elem_cor = cont_elem;
-            if (nnodes_vec[inodes_tot] == 1){
-                for (int64_t iel2=iel1; iel2<nelem_c; iel2++) {
-                    if(!cmesh->Element(iel2)) continue;
-                    gel2 = cmesh->Element(iel2)->Reference();
-                    if(!gel2 ||  gel2->Dimension() != dim_mesh) continue;
-
-                    gel2->GetNodeIndices(nodeindices);
-                    if (std::find(nodeindices.begin(), nodeindices.end(), inodes_tot) != nodeindices.end()){
-                        nelem_color[cont_elem_cor] = 1+nelem_color[cont_elem];
-                    }
-                }
-            }
-
-            // Verifica se pode ser uma cor menor
-            for (int64_t icolor=0; icolor<nelem_color[cont_elem_cor]; icolor++) {
-                if (std::find(elem_neighbour.begin(), elem_neighbour.end(), icolor) == elem_neighbour.end())
-                    nelem_color[cont_elem_cor] = icolor;
-                if (cont_elem==0)
-                    nelem_color[cont_elem_cor] = 0;
-            }
-            cont_elem_cor++;
-        }
-        cont_elem++;
+        contcolor++;
+        connects_vec.Fill(0);
     }
-}
 
-void TPZSolveMatrix::ColoredAssemble(TPZVec<int> &nelem_color, TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global)
-{
-    int neq = nodal_forces_global.Rows();
-    int nelem = nelem_color.size();
-    MKL_INT sz = fIndexes.size();
-    int ncolor = *std::max_element(nelem_color.begin(), nelem_color.end())+1;
-
-    nodal_forces_global.Resize(ncolor*neq,1);
-    TPZVec<MKL_INT> ColoredIndexes(sz);
-
-    for (int iel = 0; iel < nelem; iel++) {
+    int64_t nelem = fRowSizes.size();
+    int64_t neq = cmesh->NEquations();
+    for (int64_t iel = 0; iel < nelem; iel++) {
         int64_t cols = fColSizes[iel];
         int64_t cont_cols = fColFirstIndex[iel];
 
-        TPZFMatrix<int> indexes_x(cols, 1, &fIndexes[cont_cols], cols);
-        TPZFMatrix<int> indexes_y(cols, 1, &fIndexes[cont_cols + fRow/2], cols);
-
-        TPZFMatrix<int> indexescolor_x(cols,1,&ColoredIndexes[cont_cols],cols);
-        TPZFMatrix<int> indexescolor_y(cols,1,&ColoredIndexes[cont_cols+fRow/2],cols);
-
-        indexescolor_x = indexes_x.operator+(nelem_color[iel]*neq);
-        indexescolor_y = indexes_y.operator+(nelem_color[iel]*neq);
-    }
-
-#ifdef USING_TBB
-    parallel_for(size_t(0),size_t(nelem),size_t(1),[&](size_t iel)
-                      {
-                       int64_t cols = fColSizes[iel];
-                       int64_t cont_cols = fColFirstIndex[iel];
-
-                       TPZFMatrix<int> indexes_x(cols, 1, &fIndexes[cont_cols], cols);
-                       TPZFMatrix<int> indexes_y(cols, 1, &fIndexes[cont_cols + fRow/2], cols);
-
-                       TPZFMatrix<int> indexescolor_x(cols,1,&ColoredIndexes[cont_cols],cols);
-                       TPZFMatrix<int> indexescolor_y(cols,1,&ColoredIndexes[cont_cols+fRow/2],cols);
-
-                       indexescolor_x = indexes_x.operator+(nelem_color[iel]*neq);
-                       indexescolor_y = indexes_y.operator+(nelem_color[iel]*neq);
-                      }
-                      );
-#endif
-
-    cblas_dsctr(sz, nodal_forces_vec, &ColoredIndexes[0], &nodal_forces_global(0,0));
-
-    int colorid;
-    double colorassemb = ncolor/2.;
-    while (colorassemb >= 1) {
-        if (colorassemb - floor(colorassemb) == 0) {
-            for (int icolor = 0; icolor < colorassemb; icolor++) {
-                colorid = icolor + colorassemb;
-                TPZFMatrix<REAL> assemblecolorid(neq, 1, &nodal_forces_global(colorid * neq, 0), neq);
-                nodal_forces_global.AddSub(icolor * neq, 0, assemblecolorid);
-            }
-            colorassemb = colorassemb / 2;
-        }
-
-        else if (colorassemb - floor(colorassemb) != 0) { //caso o numero de cores seja impar, assembla a ultima cor
-            colorid = 2 * colorassemb - 1;
-            TPZFMatrix<REAL> assemblecolorid(neq, 1, &nodal_forces_global(colorid * neq, 0), neq);
-            nodal_forces_global.AddSub(0, 0, assemblecolorid);
-            colorassemb = ceil(colorassemb) - 1;
+        for (int64_t icols = 0; icols < cols; icols++) {
+            fIndexesColor[cont_cols + icols] = fIndexes[cont_cols + icols] + fElemColor[iel]*neq;
+            fIndexesColor[cont_cols+fRow/2 + icols] = fIndexes[cont_cols + fRow/2 + icols] + fElemColor[iel]*neq;
         }
     }
-    nodal_forces_global.Resize(neq,1);
+}
+
+void TPZSolveMatrix::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global)
+{
+    int64_t ncolor = *std::max_element(fElemColor.begin(), fElemColor.end())+1;
+    int64_t sz = fIndexes.size();
+    int64_t neq = nodal_forces_global.Rows();
+    nodal_forces_global.Resize(neq*ncolor,1);
+
+    cblas_dsctr(sz, nodal_forces_vec, &fIndexesColor[0], &nodal_forces_global(0,0));
+
+    double colorassemb = ncolor / 2.;
+    while (colorassemb > 0) {
+
+        int64_t firsteq = (ncolor - colorassemb) * neq;
+        int64_t neqassemb = colorassemb * neq;
+
+        cblas_daxpy(neq*ncolor, 1., &nodal_forces_global(firsteq, 0), 1., &nodal_forces_global(0, 0), 1.);
+
+        ncolor -= colorassemb;
+        colorassemb = ncolor/2;
+    }
+    nodal_forces_global.Resize(neq, 1);
 }

@@ -13,7 +13,6 @@
 #include <cuda_runtime.h>
 #include <cusparse.h>
 
-
 ///CUDA KERNELS
 __global__ void ComputeSigmaKernel(int npts_tot, double *weight, double *result, double *sigma) {
     REAL E = 200000000.;
@@ -28,9 +27,14 @@ __global__ void ComputeSigmaKernel(int npts_tot, double *weight, double *result,
     }
 }
 
-__global__ void AssembleKernel(int npts, int *indexes, double *nfvec, double *nfglob)
-{
 
+__global__ void sumvecscalar( int *vector, int *out, const int scalar, int N)
+{
+    int i = threadIdx.x + blockIdx.x*blockDim.x;
+    if(i < N){
+	out[i] = vector[i] + scalar;
+    }
+ 
 }
 
 void TPZSolveMatrix::HostToDevice() {
@@ -69,24 +73,33 @@ void TPZSolveMatrix::FreeDeviceMemory() {
     cudaFree(dfColFirstIndex);
 }
 
-void TPZSolveMatrix::SolveWithCUDA(const TPZFMatrix<STATE> &global_solution, TPZStack<REAL> &weight, TPZFMatrix<REAL> &nodal_forces_global) const {
+void TPZSolveMatrix::SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE> &global_solution, TPZStack<REAL> &weight, TPZFMatrix<REAL> &nodal_forces_global) const {
     int64_t nelem = fRowSizes.size();
+    MKL_INT n_globalsol = fIndexes.size();
 
 ///GATHER OPERATION------------------------------------------------
-    MKL_INT n_globalsol = fIndexes.size();
-    TPZVec<REAL> expandsolution(n_globalsol);
-    cblas_dgthr(n_globalsol, global_solution, &expandsolution[0], &fIndexes[0]); //USAR O METODO DA CUSPARSE
+///Initialize and transfer expandsolution and globalsolution to the device
+    double *dexpandsolution;
+    cudaMalloc(&dexpandsolution, n_globalsol * sizeof(double));
+
+    double *dglobal_solution;
+    cudaMalloc(&dglobal_solution, global_solution.Rows() * sizeof(double));
+    cudaMemcpy(dglobal_solution, &global_solution[0], global_solution.Rows() * sizeof(double), cudaMemcpyHostToDevice);
+
+    cusparseHandle_t handle_gthr;
+    cusparseCreate (&handle_gthr);
+    cusparseDgthr(handle_gthr, n_globalsol, dglobal_solution, &dexpandsolution[0], &dfIndexes[0], CUSPARSE_INDEX_BASE_ZERO);
+
+///Free device memory
+    cudaFree(dglobal_solution);
+    cusparseDestroy(handle_gthr);
 ///----------------------------------------------------------------
 
 ///MULTIPLY--------------------------------------------------------
-///Initialize and transfer result and expandsolution to the device
+///Initialize result on device
     TPZVec<REAL> result(2 * n_globalsol);
     double *dresult;
     cudaMalloc(&dresult, 2 * n_globalsol * sizeof(double));
-
-    double *dexpandsolution;
-    cudaMalloc(&dexpandsolution, n_globalsol * sizeof(double));
-    cudaMemcpy(dexpandsolution, &expandsolution[0], n_globalsol * sizeof(double), cudaMemcpyHostToDevice);
 
 ///Use CUBLAS library to do the multiplication
     cudaStream_t stream_m[2 * nelem];
@@ -147,8 +160,7 @@ void TPZSolveMatrix::SolveWithCUDA(const TPZFMatrix<STATE> &global_solution, TPZ
 ///----------------------------------------------------------------
 
 ///MULTIPLY TRANSPOSE----------------------------------------------
-///Initialize nodal forces vector on device
-    TPZVec<REAL> nodal_forces_vec(npts_tot);
+///Initialize nodal_forces_vector on device
     double *dnodal_forces_vec;
     cudaMalloc(&dnodal_forces_vec, npts_tot * sizeof(double));
 
@@ -185,53 +197,36 @@ void TPZSolveMatrix::SolveWithCUDA(const TPZFMatrix<STATE> &global_solution, TPZ
 ///Free device memory
     cudaFree(dsigma);
     cublasDestroy(*handle_mt);
+    cudaStreamSynchronize(0);
 ///----------------------------------------------------------------
 
 ///ASSEMBLE--------------------------------------------------------
-///Assemble with colors
-    this->ColoredElements(cmesh, nelem_color);
+    ColoringElements(cmesh);
 
-    int ncolor = *std::max_element(nelem_color.begin(), nelem_color.end()) + 1;
-    int neq = nodal_forces_global.Rows();
-    int nelem = nelem_color.size();
-    MKL_INT sz = fIndexes.size();
-    int ncolor = *std::max_element(nelem_color.begin(), nelem_color.end()) + 1;
+///Initialize fIndexesColor on device
+    cudaMalloc(&dfIndexesColor, n_globalsol * sizeof(double));
+    cudaMemcpy(dfIndexesColor, &fIndexesColor[0], n_globalsol * sizeof(double), cudaMemcpyHostToDevice);
 
-///Initialize global nodal forces vector on device------------------
+///Initialize nodal_forces_global on device
+    int64_t ncolor = *std::max_element(fElemColor.begin(), fElemColor.end())+1;
+    int64_t sz = fIndexes.size();
+    int64_t neq = nodal_forces_global.Rows();
+
+    nodal_forces_global.Resize(ncolor * neq,1);
     double *dnodal_forces_global;
     cudaMalloc(&dnodal_forces_global, ncolor * neq * sizeof(double));
 
-    int *dfcoloredindexes;
-    cudaMalloc(&dfcoloredindexes, sz * sizeof(double));
+    cusparseHandle_t handle_sctr;
+    cusparseCreate(&handle_sctr);
+    cusparseDsctr(handle_sctr, sz, dnodal_forces_vec, &dfIndexesColor[0], &dnodal_forces_global[0], CUSPARSE_INDEX_BASE_ZERO);
 
-    int *indexesx;
-    cudaMalloc(&indexesx, 4 * sizeof(double));
-
-    cublasHandle_t handle_coloredindexes;
-    cublasCreate (&handle_coloredindexes);
-    double alpha_coloredindexes = 2;
-
-    TPZVec<int> vec(4);
-    cublasSaxpy(handle_coloredindexes,4,&alpha_coloredindexes,indexesx,1,&dfIndexes[cont_cols],1);
-    cudaMemcpy(&vec(0, 0), dfIndexes, 4 * sizeof(double), cudaMemcpyDeviceToHost);
-
-
-/////Kernel that assemble the nodal forces vectot
-//    dim3 dimGrid_assemb(ceil(npts_tot / 32.0), 1, 1);
-//    dim3 dimBlock_assemb(32, 1, 1);
-//    AssembleKernel << < dimGrid, dimBlock >> > (npts_tot, dfIndexes, dnodal_forces_vec, dnodal_forces_global);
-
-/////Transfer global nodal forces vector the host
-//    cudaMemcpy(&nodal_forces_global(0, 0), dnodal_forces_global, globvec * sizeof(double), cudaMemcpyDeviceToHost);
-
-//std::cout << "Assemble:\n" << std::endl;
-//nodal_forces_global.Print(std::cout);
+    cudaMemcpy(&nodal_forces_global(0, 0), dnodal_forces_global, ncolor * neq * sizeof(double), cudaMemcpyDeviceToHost);
+    nodal_forces_global.Print(std::cout);
 
 ///Free device memory
+    cusparseDestroy(handle_sctr);
     cudaFree(dnodal_forces_vec);
-    cudaFree(dfcoloredindexes);
-    cudaFree(dnodal_forces_global);
-///----------------------------------------------------------------
+    cudaFree(dcoloredindexes);
 }
 
 void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE>  &global_solution, TPZFMatrix<REAL> &result) const
@@ -254,89 +249,61 @@ void TPZSolveMatrix::TraditionalAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, T
     DebugStop();
 }
 
-void TPZSolveMatrix::ColoredElements(TPZCompMesh * cmesh, TPZVec<int> &nelem_color) const
+void TPZSolveMatrix::ColoredElements(TPZCompMesh * cmesh) const
 {
-	int nelem = fRowSizes.size();
-	int nelem_c = cmesh->NElements();
-	int dim_mesh = cmesh->Dimension();
+    int64_t nelem_c = cmesh->NElements();
+    int64_t nconnects = cmesh->NConnects();
+    TPZVec<int64_t> connects_vec(nconnects,0);
 
-	// INÍCIO DA ASSEMBLAGEM
-	int64_t nnodes_tot = cmesh->Reference()->NNodes();
-	TPZVec<int> nnodes_vec(nnodes_tot,0.);
+    int64_t contcolor = 0;
+    bool needstocontinue = true;
 
-	int cont_elem = 0;
+    while (needstocontinue)
+    {
+        needstocontinue = false;
+        for (int64_t iel = 0; iel < nelem_c; iel++) {
+            TPZCompEl *cel = cmesh->Element(iel);
+            if (!cel || cel->Dimension() != cmesh->Dimension()) continue;
 
-	for (int i = 0; i < nelem; i++) {
-		nelem_color[i] = -1;
-	}
+            if (fElemColor[iel] != -1) continue;
+            TPZStack<int64_t> connectlist;
+            cmesh->Element(iel)->BuildConnectList(connectlist);
+            int64_t ncon = connectlist.size();
 
-//    TPZVec<int> nelem_color(nelem,-1); // vetor de cores
-	TPZVec<int> elem_neighbour(100,0.);
+            int64_t icon;
+            for (icon = 0; icon < ncon; icon++) {
+                if (connects_vec[connectlist[icon]] != 0) break;
+            }
+            if (icon != ncon) {
+                needstocontinue = true;
+                continue;
+            }
+            fElemColor[iel] = contcolor;
 
-	for (int64_t iel1=0; iel1<nelem_c; iel1++) {
-		if(!cmesh->Element(iel1)) continue;
-		TPZGeoEl * gel1 = cmesh->Element(iel1)->Reference();
-		if(!gel1 ||  gel1->Dimension() != dim_mesh) continue;
+            for (icon = 0; icon < ncon; icon++) {
+                connects_vec[connectlist[icon]] = 1;
+            }
+        }
+        contcolor++;
+        connects_vec.Fill(0);
+    }
 
-		TPZVec<int64_t> nodeindices;
-		gel1->GetNodeIndices(nodeindices); // Armazena os nós do elemento finito
+    int64_t nelem = fRowSizes.size();
+    int64_t neq = cmesh->NEquations();
+    for (int64_t iel = 0; iel < nelem; iel++) {
+        int64_t cols = fColSizes[iel];
+        int64_t cont_cols = fColFirstIndex[iel];
 
-		// ** Início da verificação de qual coord é repetida:
-		TPZGeoEl * gel2;
-		// contadores
-		int64_t cont_elem_cor = 0;
-		int64_t cont_elem_neighbour = 0;
-
-		// inicializa com nnodes_vec nulo, e preenche com 1 os nós repetidos
-		nnodes_vec.Fill(0);
-		for (int64_t iel2=0; iel2<nelem_c; iel2++) {
-			if(!cmesh->Element(iel2)) continue;
-			gel2 = cmesh->Element(iel2)->Reference();
-			if(!gel2 ||  gel2->Dimension() != dim_mesh) continue;
-
-			for (int64_t inode=0; inode<gel2->NNodes(); inode++) {
-				if(std::find (nodeindices.begin(), nodeindices.end(), gel2->NodeIndex(inode)) != nodeindices.end()){
-					nnodes_vec[gel2->NodeIndex(inode)] = 1; // preenchendo nnodes_vec
-					elem_neighbour[cont_elem_neighbour] = nelem_color[cont_elem_cor]; // preenche o vetor de elementos vizinhos ao elemento de análise
-					cont_elem_neighbour++;
-				}
-			}
-			cont_elem_cor++;
-		}
-		// ** fim da verificação
-
-		// Preenche a cor
-		for (int64_t inodes_tot=0; inodes_tot<nnodes_tot; inodes_tot++) {
-			cont_elem_cor = cont_elem;
-			if (nnodes_vec[inodes_tot] == 1){
-				for (int64_t iel2=iel1; iel2<nelem_c; iel2++) {
-					if(!cmesh->Element(iel2)) continue;
-					gel2 = cmesh->Element(iel2)->Reference();
-					if(!gel2 ||  gel2->Dimension() != dim_mesh) continue;
-
-					gel2->GetNodeIndices(nodeindices);
-					if (std::find(nodeindices.begin(), nodeindices.end(), inodes_tot) != nodeindices.end()){
-						nelem_color[cont_elem_cor] = 1+nelem_color[cont_elem];
-					}
-				}
-			}
-
-			// Verifica se pode ser uma cor menor
-			for (int64_t icolor=0; icolor<nelem_color[cont_elem_cor]; icolor++) {
-				if (std::find(elem_neighbour.begin(), elem_neighbour.end(), icolor) == elem_neighbour.end())
-					nelem_color[cont_elem_cor] = icolor;
-				if (cont_elem==0)
-					nelem_color[cont_elem_cor] = 0;
-			}
-			cont_elem_cor++;
-		}
-		cont_elem++;
-	}
+        for (int64_t icols = 0; icols < cols; icols++) {
+            fIndexesColor[cont_cols + icols] = fIndexes[cont_cols + icols] + fElemColor[iel]*neq;
+            fIndexesColor[cont_cols+fRow/2 + icols] = fIndexes[cont_cols + fRow/2 + icols] + fElemColor[iel]*neq;
+        }
+    }
 }
 
-void TPZSolveMatrix::ColoredAssemble(TPZVec<int> &nelem_color, TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global)
+void TPZSolveMatrix::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global)
 {
-	DebugStop();
+
 }
 
 
