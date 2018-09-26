@@ -27,16 +27,6 @@ __global__ void ComputeSigmaKernel(int npts_tot, double *weight, double *result,
     }
 }
 
-
-__global__ void sumvecscalar( int *vector, int *out, const int scalar, int N)
-{
-    int i = threadIdx.x + blockIdx.x*blockDim.x;
-    if(i < N){
-	out[i] = vector[i] + scalar;
-    }
- 
-}
-
 void TPZSolveMatrix::HostToDevice() {
     int nstorage = fStorage.size();
     int nrowsizes = fRowSizes.size();
@@ -160,7 +150,7 @@ void TPZSolveMatrix::SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE> &
 ///----------------------------------------------------------------
 
 ///MULTIPLY TRANSPOSE----------------------------------------------
-///Initialize nodal_forces_vector on device
+///Initialize nodal_forces_vec on device
     double *dnodal_forces_vec;
     cudaMalloc(&dnodal_forces_vec, npts_tot * sizeof(double));
 
@@ -203,30 +193,51 @@ void TPZSolveMatrix::SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE> &
 ///ASSEMBLE--------------------------------------------------------
     ColoringElements(cmesh);
 
-///Initialize fIndexesColor on device
-    cudaMalloc(&dfIndexesColor, n_globalsol * sizeof(double));
-    cudaMemcpy(dfIndexesColor, &fIndexesColor[0], n_globalsol * sizeof(double), cudaMemcpyHostToDevice);
-
-///Initialize nodal_forces_global on device
     int64_t ncolor = *std::max_element(fElemColor.begin(), fElemColor.end())+1;
     int64_t sz = fIndexes.size();
     int64_t neq = nodal_forces_global.Rows();
 
     nodal_forces_global.Resize(ncolor * neq,1);
+    nodal_forces_global.Zero();
+
+///Initialize fIndexesColor and nodal_forces_global on device
+    int *dindexescolor;
+    cudaMalloc(&dindexescolor, sz * sizeof(int));
+    cudaMemcpy(dindexescolor, &fIndexesColor[0], sz* sizeof(int), cudaMemcpyHostToDevice);
+
     double *dnodal_forces_global;
     cudaMalloc(&dnodal_forces_global, ncolor * neq * sizeof(double));
+    cudaMemcpy(dnodal_forces_global, &nodal_forces_global(0,0), ncolor*neq*sizeof(double), cudaMemcpyHostToDevice);
 
+///Scatter operation
     cusparseHandle_t handle_sctr;
     cusparseCreate(&handle_sctr);
-    cusparseDsctr(handle_sctr, sz, dnodal_forces_vec, &dfIndexesColor[0], &dnodal_forces_global[0], CUSPARSE_INDEX_BASE_ZERO);
+    cusparseDsctr(handle_sctr, sz, dnodal_forces_vec, &dindexescolor[0], &dnodal_forces_global[0], CUSPARSE_INDEX_BASE_ZERO);
 
-    cudaMemcpy(&nodal_forces_global(0, 0), dnodal_forces_global, ncolor * neq * sizeof(double), cudaMemcpyDeviceToHost);
+    double colorassemb = ncolor / 2.;
+    while (colorassemb > 0) {
+
+        int64_t firsteq = (ncolor - colorassemb) * neq;
+        int64_t neqassemb = colorassemb * neq;
+
+        cublasHandle_t handle_daxpy;
+	cublasCreate(&handle_daxpy);
+	double alpha = 1.;
+	cublasDaxpy(handle_daxpy, neq*ncolor, &alpha, &dnodal_forces_global[firsteq], 1., &dnodal_forces_global[0], 1.);
+
+        ncolor -= colorassemb;
+        colorassemb = ncolor/2;
+    }
+    nodal_forces_global.Resize(neq, 1);
+
+    cudaMemcpy(&nodal_forces_global(0, 0), dnodal_forces_global, neq * sizeof(double), cudaMemcpyDeviceToHost);
     nodal_forces_global.Print(std::cout);
 
 ///Free device memory
     cusparseDestroy(handle_sctr);
     cudaFree(dnodal_forces_vec);
-    cudaFree(dcoloredindexes);
+    cudaFree(dindexescolor);
+    cudaFree(dnodal_forces_global);
 }
 
 void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE>  &global_solution, TPZFMatrix<REAL> &result) const
@@ -249,7 +260,7 @@ void TPZSolveMatrix::TraditionalAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, T
     DebugStop();
 }
 
-void TPZSolveMatrix::ColoredElements(TPZCompMesh * cmesh) const
+void TPZSolveMatrix::ColoringElements(TPZCompMesh * cmesh) const
 {
     int64_t nelem_c = cmesh->NElements();
     int64_t nconnects = cmesh->NConnects();
@@ -303,7 +314,7 @@ void TPZSolveMatrix::ColoredElements(TPZCompMesh * cmesh) const
 
 void TPZSolveMatrix::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global)
 {
-
+    DebugStop();
 }
 
 

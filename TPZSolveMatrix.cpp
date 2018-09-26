@@ -237,15 +237,16 @@ void TPZSolveMatrix::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFM
     int64_t neq = nodal_forces_global.Rows();
     nodal_forces_global.Resize(neq*ncolor,1);
 
+
     cblas_dsctr(sz, nodal_forces_vec, &fIndexesColor[0], &nodal_forces_global(0,0));
 
-    double colorassemb = ncolor / 2.;
+    int64_t colorassemb = ncolor / 2.;
     while (colorassemb > 0) {
 
         int64_t firsteq = (ncolor - colorassemb) * neq;
-        int64_t neqassemb = colorassemb * neq;
 
         cblas_daxpy(neq*ncolor, 1., &nodal_forces_global(firsteq, 0), 1., &nodal_forces_global(0, 0), 1.);
+        nodal_forces_global.Print(std::cout);
 
         ncolor -= colorassemb;
         colorassemb = ncolor/2;

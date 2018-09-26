@@ -394,45 +394,26 @@ for (int64_t iel = 0; iel < nelem; ++iel) {
 SolMat->SetIndexes(indexes);
 //// -------------------------------------------------------------------------------
 
-//// TIMING START-------------------------------------------------------------------
-std::clock_t begin = clock();
-//// -------------------------------------------------------------------------------
-
 TPZFMatrix<REAL> coef_sol = cmesh->Solution();
 int neq= cmesh->NEquations();
 TPZFMatrix<REAL> nodal_forces_global1(neq,1,0.);
-TPZFMatrix<REAL> nodal_forces_global2(neq,1,0.);
 
+//// TIMING START-------------------------------------------------------------------
+std::clock_t begin = clock();
+//// -------------------------------------------------------------------------------
 #ifdef USING_CUDA
 SolMat->HostToDevice();
 SolMat->SolveWithCUDA(cmesh, coef_sol, weight, nodal_forces_global1);
 SolMat->FreeDeviceMemory();
 #else
-//// SOLVE ADVEC*COEF_SOL-----------------------------------------------------------
 TPZFMatrix<REAL> result;
-SolMat->Multiply(coef_sol,result); //result = [du_0, ..., du_nelem-1, dv_0,..., dv_nelem-1]
-//// -------------------------------------------------------------------------------
-
-//// SIGMA CALCULATION--------------------------------------------------------------
 TPZFMatrix<REAL> sigma;
-SolMat->ComputeSigma(weight,result,sigma); //sigma = [sigmax_0, sigmaxy_0, ..., sigmax_nelem-1, sigmaxy_nelem-1, sigmaxy_0, sigmay_0, ..., sigmaxy_nelem-1, sigmay_nelem-1]
-//// -------------------------------------------------------------------------------
-
-//// COMPUTE NODAL FORCES-----------------------------------------------------------
 TPZFMatrix<REAL> nodal_forces_vec;
-SolMat->MultiplyTranspose(sigma, nodal_forces_vec); //nodal_forces_vec = [fx_0, ..., fx_nelem-1, fy_0, ..., fy_nelem-1]
-//// -------------------------------------------------------------------------------
 
-//// ASSEMBLE: RESIDUAL CALCULATION-------------------------------------------------
-SolMat->TraditionalAssemble(nodal_forces_vec,nodal_forces_global1); //traditional assemble
-
-SolMat->ColoringElements(cmesh);
-SolMat->ColoredAssemble(nodal_forces_vec,nodal_forces_global2);
-
-    for (int i = 0; i < neq; ++i) {
-        std::cout << nodal_forces_global2(i,0) - nodal_forces_global1(i,0) << std::endl;
-    }
-//// -------------------------------------------------------------------------------
+SolMat->Multiply(coef_sol,result);
+SolMat->ComputeSigma(weight,result,sigma);
+SolMat->MultiplyTranspose(sigma, nodal_forces_vec);
+SolMat->TraditionalAssemble(nodal_forces_vec,nodal_forces_global1);
 #endif
 //// TIMING END---------------------------------------------------------------------
 std::clock_t end = clock();

@@ -42,7 +42,6 @@ TPZSolveMatrix(const TPZSolveMatrix &copy) : TPZMatrix<STATE>(copy),
     fElemColor(copy.fElemColor), fIndexesColor(copy.fIndexesColor),
     fColFirstIndex(copy.fColFirstIndex), dfStorage(copy.dfStorage),
     dfColSizes(copy.dfColSizes), dfRowSizes(copy.dfRowSizes), dfIndexes(copy.dfIndexes),
-    dfElemColor(copy.dfElemColor), dfIndexesColor(copy.dfIndexesColor),
     dfMatrixPosition(copy.dfMatrixPosition),dfRowFirstIndex(copy.dfRowFirstIndex),
     dfColFirstIndex(copy.dfColFirstIndex)
 
@@ -66,8 +65,6 @@ TPZSolveMatrix &operator=(const TPZSolveMatrix &copy)
     dfColSizes = copy.dfColSizes;
     dfRowSizes = copy.dfRowSizes;
     dfIndexes = copy.dfIndexes;
-    dfElemColor = copy.dfElemColor;
-    dfIndexesColor = copy.dfIndexesColor;
     dfMatrixPosition = copy.dfMatrixPosition;
     dfRowFirstIndex = copy.dfRowFirstIndex;
     dfColFirstIndex = copy.dfColFirstIndex;
@@ -175,8 +172,6 @@ double *dfStorage;
 int *dfRowSizes;
 int *dfColSizes;
 int *dfIndexes;
-int *dfIndexesColor;
-int *dfElemColor;
 int *dfMatrixPosition;
 int *dfRowFirstIndex;
 int *dfColFirstIndex;
