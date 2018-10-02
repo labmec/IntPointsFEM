@@ -13,20 +13,11 @@
 using namespace tbb;
 #endif
 
-void TPZSolveMatrix::HostToDevice()
-{
-    DebugStop();
-}
-
 void TPZSolveMatrix::SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE>  &global_solution, TPZStack<REAL> &weight, TPZFMatrix<REAL> &nodal_forces_global) const
 {
-    DebugStop();
+    return;
 }
 
-void TPZSolveMatrix::FreeDeviceMemory()
-{
-    DebugStop();
-}
 
 void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const
 {
@@ -244,9 +235,7 @@ void TPZSolveMatrix::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFM
     while (colorassemb > 0) {
 
         int64_t firsteq = (ncolor - colorassemb) * neq;
-
         cblas_daxpy(neq*ncolor, 1., &nodal_forces_global(firsteq, 0), 1., &nodal_forces_global(0, 0), 1.);
-        nodal_forces_global.Print(std::cout);
 
         ncolor -= colorassemb;
         colorassemb = ncolor/2;

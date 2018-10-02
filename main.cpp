@@ -26,7 +26,7 @@
 
 TPZGeoMesh * geometry_2D(int nelem_x, int nelem_y, REAL len, int ndivide);
 TPZCompMesh * cmesh_2D(TPZGeoMesh * gmesh, int pOrder);
-void ComputeRhsPointbyPoint(TPZCompMesh *cmesh);
+//void ComputeRhsPointbyPoint(TPZCompMesh *cmesh);
 void sol_teste(TPZCompMesh * cmesh);
 
 
@@ -47,11 +47,11 @@ timing << "--------------------USING CUDA-------------------"  << std::endl;
 std::cout << "--------------------USING CUDA-------------------" << std::endl;
 #endif
 
-for (int i = 0; i < 9; i++) {
+for (int i = 0; i < 1; i++) {
     //// ------------------------ DATA INPUT ------------------------------
     //// NUMBER OF ELEMENTS IN X AND Y DIRECTIONS
-    int nelem_x = pow(2,i);
-    int nelem_y = pow(2,i);
+    int nelem_x = 63;
+    int nelem_y = 63;
 
     timing << "-------------------------------------------------" << std::endl;
     timing << "MESH SIZE: " << nelem_x << "x" << nelem_y << std::endl;
@@ -100,17 +100,8 @@ an.Run();
 //an.DefineGraphMesh(2, scalarnames, vecnames, namefile + "ElasticitySolutions.vtk");
 //an.PostProcess(1);
 
-    std::clock_t begin = clock();
-    ComputeRhsPointbyPoint(cmesh);
-    std::clock_t end = clock();
-    REAL elapsed_secs = REAL(end - begin) / CLOCKS_PER_SEC;
-    timing << "Time elapsed (point by point): " << elapsed_secs << " s" << std::endl;
-
-    std::clock_t begin2 = clock();
     sol_teste(cmesh);
-    std::clock_t end2 = clock();
-    REAL elapsed_secs2 = REAL(end2 - begin2) / CLOCKS_PER_SEC;
-    timing << "Time elapsed (restructured data): " << elapsed_secs2 << " s" << std::endl;
+
 
 }
 return 0;
@@ -276,63 +267,63 @@ cmesh->CleanUpUnconnectedNodes();
 return cmesh;
 }
 
-void ComputeRhsPointbyPoint(TPZCompMesh *cmesh) {
-
-    int64_t neq = cmesh->NEquations();
-    TPZFMatrix <REAL> rhs(neq, 1);
-    int64_t nelem = cmesh->NElements();
-
-    for (int64_t iel = 0; iel < nelem; ++iel) {
-        TPZCompEl *cel = cmesh->Element(iel);
-        if (!cel || cel->Dimension() != cmesh->Dimension()) continue;
-
-        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement * >(cel);
-        if (!cel_inter) DebugStop();
-
-        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
-        int64_t npts = int_rule->NPoints();
-        int64_t dim = cel_inter->Dimension();
-        int64_t nf = cel_inter->NShapeF();
-
-        TPZMaterialData data;
-        cel_inter->InitMaterialData(data);
-
-        TPZFMatrix <REAL> ef(dim * nf, 1);
-        ef.Zero();
-
-        for (int64_t ipts = 0; ipts < npts; ipts++) {
-            TPZManVector <REAL> qsi(dim, 1);
-            REAL w;
-            int_rule->Point(ipts, qsi, w);
-            cel_inter->ComputeRequiredData(data, qsi);
-            TPZMaterial *material = cel_inter->Material();
-            material->Contribute(data, w, ef);
-        }
-
-        int64_t ncon = cel->NConnects();
-        TPZVec<int> iglob(dim * nf, 0);
-        int ni = 0;
-
-        for (int64_t icon = 0; icon < ncon; icon++) {
-            int64_t id = cel->ConnectIndex(icon);
-            TPZConnect &df = cmesh->ConnectVec()[id];
-            int64_t conid = df.SequenceNumber();
-            if (df.NElConnected() == 0 || conid < 0 || cmesh->Block().Size(conid) == 0) continue;
-            else {
-                int64_t pos = cmesh->Block().Position(conid);
-                int64_t nsize = cmesh->Block().Size(conid);
-                for (int64_t isize = 0; isize < nsize; isize++) {
-                    iglob[ni] = pos + isize;
-                    ni++;
-                }
-            }
-        }
-
-        for (int i = 0; i < ef.Rows(); i++) {
-            rhs(iglob[i], 0) += ef(i, 0);
-        }
-    }
-}
+//void ComputeRhsPointbyPoint(TPZCompMesh *cmesh) {
+//
+//    int64_t neq = cmesh->NEquations();
+//    TPZFMatrix <REAL> rhs(neq, 1);
+//    int64_t nelem = cmesh->NElements();
+//
+//    for (int64_t iel = 0; iel < nelem; ++iel) {
+//        TPZCompEl *cel = cmesh->Element(iel);
+//        if (!cel || cel->Dimension() != cmesh->Dimension()) continue;
+//
+//        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement * >(cel);
+//        if (!cel_inter) DebugStop();
+//
+//        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
+//        int64_t npts = int_rule->NPoints();
+//        int64_t dim = cel_inter->Dimension();
+//        int64_t nf = cel_inter->NShapeF();
+//
+//        TPZMaterialData data;
+//        cel_inter->InitMaterialData(data);
+//
+//        TPZFMatrix <REAL> ef(dim * nf, 1);
+//        ef.Zero();
+//
+//        for (int64_t ipts = 0; ipts < npts; ipts++) {
+//            TPZManVector <REAL> qsi(dim, 1);
+//            REAL w;
+//            int_rule->Point(ipts, qsi, w);
+//            cel_inter->ComputeRequiredData(data, qsi);
+//            TPZMaterial *material = cel_inter->Material();
+//            material->Contribute(data, w, ef);
+//        }
+//
+//        int64_t ncon = cel->NConnects();
+//        TPZVec<int> iglob(dim * nf, 0);
+//        int ni = 0;
+//
+//        for (int64_t icon = 0; icon < ncon; icon++) {
+//            int64_t id = cel->ConnectIndex(icon);
+//            TPZConnect &df = cmesh->ConnectVec()[id];
+//            int64_t conid = df.SequenceNumber();
+//            if (df.NElConnected() == 0 || conid < 0 || cmesh->Block().Size(conid) == 0) continue;
+//            else {
+//                int64_t pos = cmesh->Block().Position(conid);
+//                int64_t nsize = cmesh->Block().Size(conid);
+//                for (int64_t isize = 0; isize < nsize; isize++) {
+//                    iglob[ni] = pos + isize;
+//                    ni++;
+//                }
+//            }
+//        }
+//
+//        for (int i = 0; i < ef.Rows(); i++) {
+//            rhs(iglob[i], 0) += ef(i, 0);
+//        }
+//    }
+//}
 
 void sol_teste(TPZCompMesh *cmesh) {
 
@@ -456,22 +447,35 @@ SolMat->SetIndexes(indexes);
 TPZFMatrix<REAL> coef_sol = cmesh->Solution();
 int neq= cmesh->NEquations();
 TPZFMatrix<REAL> nodal_forces_global1(neq,1,0.);
-
-
-#ifdef USING_CUDA
-SolMat->HostToDevice();
-SolMat->SolveWithCUDA(cmesh, coef_sol, weight, nodal_forces_global1);
-SolMat->FreeDeviceMemory();
-#else
+TPZFMatrix<REAL> nodal_forces_global2(neq,1,0.);
 TPZFMatrix<REAL> result;
 TPZFMatrix<REAL> sigma;
 TPZFMatrix<REAL> nodal_forces_vec;
 
+//std::cout << "SOLVING WITH GPU" << std::endl;
+//std::clock_t begingpu = clock();
+//SolMat->SolveWithCUDA(cmesh, coef_sol, weight, nodal_forces_global1);
+//std::clock_t endgpu = clock();
+
+std::cout << "SOLVING WITH CPU" << std::endl;
+std::clock_t begincpu = clock();
 SolMat->Multiply(coef_sol,result);
 SolMat->ComputeSigma(weight,result,sigma);
 SolMat->MultiplyTranspose(sigma, nodal_forces_vec);
 SolMat->TraditionalAssemble(nodal_forces_vec,nodal_forces_global1);
-#endif
+SolMat->ColoringElements(cmesh);
+SolMat->ColoredAssemble(nodal_forces_vec,nodal_forces_global2);
+std::clock_t endcpu = clock();
+
+//REAL elapsed_secs_gpu = REAL(endgpu - begingpu) / CLOCKS_PER_SEC;
+REAL elapsed_secs_cpu = REAL(endcpu - begincpu) / CLOCKS_PER_SEC;
+//timing << "Time elapsed (GPU): " << std::setprecision(5) << std::fixed << elapsed_secs_gpu << " s" << std::endl;
+timing << "Time elapsed (CPU): "<< std::setprecision(5) << std::fixed << elapsed_secs_cpu << " s" << std::endl;
+
+for(int i = 0; i < neq; i++){
+    std::cout << nodal_forces_global1(i,0) - nodal_forces_global2(i,0)<< std::endl;
+}
+
 
 
 }

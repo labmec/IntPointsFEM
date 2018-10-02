@@ -120,11 +120,7 @@ fIndexesColor.resize(indexes.size());
 
     /** @brief Solve procedure */
 
-void HostToDevice();
-
 void SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE>  &global_solution, TPZStack<REAL> &weight, TPZFMatrix<REAL> &nodal_forces_global) const;
-
-void FreeDeviceMemory();
 
 void Multiply(const TPZFMatrix<STATE>  &global_solution, TPZFMatrix<STATE> &result) const;
 

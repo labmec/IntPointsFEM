@@ -12,7 +12,7 @@
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
 #include <cusparse.h>
-
+#include <omp.h>
 ///CUDA KERNELS
 __global__ void ComputeSigmaKernel(int npts_tot, double *weight, double *result, double *sigma) {
     REAL E = 200000000.;
@@ -27,48 +27,12 @@ __global__ void ComputeSigmaKernel(int npts_tot, double *weight, double *result,
     }
 }
 
-void TPZSolveMatrix::HostToDevice() {
-    int nstorage = fStorage.size();
-    int nrowsizes = fRowSizes.size();
-    int ncolsizes = fColSizes.size();
-    int nindexes = fIndexes.size();
-    int nmatrixposition = fMatrixPosition.size();
-    int nrowfirstindex = fRowFirstIndex.size();
-    int ncolfirstindex = fColFirstIndex.size();
-
-    cudaMalloc(&dfStorage, nstorage * sizeof(double));
-    cudaMalloc(&dfRowSizes, nrowsizes * sizeof(int));
-    cudaMalloc(&dfColSizes, ncolsizes * sizeof(int));
-    cudaMalloc(&dfIndexes, nindexes * sizeof(int));
-    cudaMalloc(&dfMatrixPosition, nmatrixposition * sizeof(int));
-    cudaMalloc(&dfRowFirstIndex, nrowfirstindex * sizeof(int));
-    cudaMalloc(&dfColFirstIndex, ncolfirstindex * sizeof(int));
-
-    cudaMemcpy(dfStorage, &fStorage[0], nstorage * sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(dfRowSizes, &fRowSizes[0], nrowsizes * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(dfColSizes, &fColSizes[0], ncolsizes * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(dfIndexes, &fIndexes[0], nindexes * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(dfMatrixPosition, &fMatrixPosition[0], nmatrixposition * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(dfRowFirstIndex, &fRowFirstIndex[0], nrowfirstindex * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(dfColFirstIndex, &fColFirstIndex[0], ncolfirstindex * sizeof(int), cudaMemcpyHostToDevice);
-}
-
-void TPZSolveMatrix::FreeDeviceMemory() {
-    cudaFree(dfStorage);
-    cudaFree(dfRowSizes);
-    cudaFree(dfColSizes);
-    cudaFree(dfIndexes);
-    cudaFree(dfMatrixPosition);
-    cudaFree(dfRowFirstIndex);
-    cudaFree(dfColFirstIndex);
-}
-
 void TPZSolveMatrix::SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE> &global_solution, TPZStack<REAL> &weight, TPZFMatrix<REAL> &nodal_forces_global) const {
     int64_t nelem = fRowSizes.size();
-    MKL_INT n_globalsol = fIndexes.size();
+    int64_t n_globalsol = fIndexes.size();
 
 ///GATHER OPERATION------------------------------------------------
-///Initialize and transfer expandsolution and globalsolution to the device
+///Initialize and transfer findexes, expandsolution and globalsolution to the device
     double *dexpandsolution;
     cudaMalloc(&dexpandsolution, n_globalsol * sizeof(double));
 
@@ -76,35 +40,45 @@ void TPZSolveMatrix::SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE> &
     cudaMalloc(&dglobal_solution, global_solution.Rows() * sizeof(double));
     cudaMemcpy(dglobal_solution, &global_solution[0], global_solution.Rows() * sizeof(double), cudaMemcpyHostToDevice);
 
+    int *dindexes;
+    cudaMalloc(&dindexes, n_globalsol * sizeof(int));
+    cudaMemcpy(dindexes, &fIndexes[0], n_globalsol * sizeof(int), cudaMemcpyHostToDevice);
+
+/// Gather global solution
     cusparseHandle_t handle_gthr;
     cusparseCreate (&handle_gthr);
-    cusparseDgthr(handle_gthr, n_globalsol, dglobal_solution, &dexpandsolution[0], &dfIndexes[0], CUSPARSE_INDEX_BASE_ZERO);
+    cusparseDgthr(handle_gthr, n_globalsol, dglobal_solution, &dexpandsolution[0], &dindexes[0], CUSPARSE_INDEX_BASE_ZERO);
 
 ///Free device memory
     cudaFree(dglobal_solution);
+    cudaFree(dindexes);
     cusparseDestroy(handle_gthr);
 ///----------------------------------------------------------------
 
 ///MULTIPLY--------------------------------------------------------
 ///Initialize result on device
-    TPZVec<REAL> result(2 * n_globalsol);
     double *dresult;
     cudaMalloc(&dresult, 2 * n_globalsol * sizeof(double));
 
+    int nstorage = fStorage.size();
+    double *dstorage;
+    cudaMalloc(&dstorage, nstorage * sizeof(double));
+    cudaMemcpy(dstorage, &fStorage[0], nstorage * sizeof(double), cudaMemcpyHostToDevice);
+
+
 ///Use CUBLAS library to do the multiplication
-    cudaStream_t stream_m[2 * nelem];
-    cublasHandle_t handle_m[2 * nelem];
+    cudaStream_t *stream_m = (cudaStream_t *)malloc(nelem*sizeof(cudaStream_t));
+    cublasHandle_t handle_m;
+    cublasCreate(&handle_m);
+
+    for (int iel = 0; iel < nelem; iel++) {
+        cudaStreamCreate(&(stream_m[iel]));
+    }
 
     double alpha_m = 1.0;
     double beta_m = 0.0;
-
+    #pragma omp parallel for
     for (int iel = 0; iel < nelem; iel++) {
-        cudaStreamCreate(&stream_m[2 * iel]);
-        cudaStreamCreate(&stream_m[2 * iel + 1]);
-
-        cublasCreate(&handle_m[2 * iel]);
-        cublasCreate(&handle_m[2 * iel + 1]);
-
         int64_t pos = fMatrixPosition[iel];
         int64_t cols = fColSizes[iel];
         int64_t rows = fRowSizes[iel];
@@ -112,25 +86,27 @@ void TPZSolveMatrix::SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE> &
         int64_t cont_cols = fColFirstIndex[iel];
         int64_t cont_rows = fRowFirstIndex[iel];
 
+
         //du
-        cublasSetStream(handle_m[2 * iel], stream_m[2 * iel]);
-        cublasDgemv(handle_m[2 * iel], CUBLAS_OP_N, rows, cols, &alpha_m, &dfStorage[pos], rows, &dexpandsolution[cont_cols], 1, &beta_m, &dresult[cont_rows], 1);
+        cublasSetStream(handle_m, stream_m[iel]);
+        cublasDgemv(handle_m, CUBLAS_OP_N, rows, cols, &alpha_m, &dstorage[pos], rows, &dexpandsolution[cont_cols], 1, &beta_m, &dresult[cont_rows], 1);
 
         //dv
-        cublasSetStream(handle_m[2 * iel + 1], stream_m[2 * iel + 1]);
-        cublasDgemv(handle_m[2 * iel + 1], CUBLAS_OP_N, rows, cols, &alpha_m, &dfStorage[pos], rows, &dexpandsolution[cont_cols + fColFirstIndex[nelem]], 1, &beta_m, &dresult[cont_rows + fRowFirstIndex[nelem]], 1);
+        cublasSetStream(handle_m, stream_m[iel]);
+        cublasDgemv(handle_m, CUBLAS_OP_N, rows, cols, &alpha_m, dstorage, rows, &dexpandsolution[cont_cols + fColFirstIndex[nelem]], 1, &beta_m, &dresult[cont_rows + fRowFirstIndex[nelem]], 1);
+
+//	cudaFree(dstorage);
     }
 
 ///Free device memory
+  //  cudaFree(dstorage);
     cudaFree(dexpandsolution);
-    cublasDestroy(*handle_m);
     cudaStreamSynchronize(0);
 ///----------------------------------------------------------------
 
 ///COMPUTE SIGMA---------------------------------------------------
 ///Initialize and transfer sigma and weight to the device
     int npts_tot = fRow;
-    TPZVec<REAL> sigma(2 * npts_tot);
     double *dsigma;
     cudaMalloc(&dsigma, 2 * npts_tot * sizeof(double));
 
@@ -153,21 +129,12 @@ void TPZSolveMatrix::SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE> &
 ///Initialize nodal_forces_vec on device
     double *dnodal_forces_vec;
     cudaMalloc(&dnodal_forces_vec, npts_tot * sizeof(double));
-
+  
 ///Use CUBLAS to do the multiplication
-    cudaStream_t stream_mt[2 * nelem];
-    cublasHandle_t handle_mt[2 * nelem];
-
     double alpha_mt = 1.0;
     double beta_mt = 0.0;
-
+    #pragma omp parallel for
     for (int64_t iel = 0; iel < nelem; iel++) {
-        cudaStreamCreate(&stream_mt[2 * iel]);
-        cudaStreamCreate(&stream_mt[2 * iel + 1]);
-
-        cublasCreate(&handle_mt[2 * iel]);
-        cublasCreate(&handle_mt[2 * iel + 1]);
-
         int64_t pos = fMatrixPosition[iel];
         int64_t rows = fRowSizes[iel];
         int64_t cols = fColSizes[iel];
@@ -176,18 +143,19 @@ void TPZSolveMatrix::SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE> &
         int64_t cont_cols = fColFirstIndex[iel];
 
         //Nodal forces in x direction
-        cublasSetStream(handle_mt[2 * iel], stream_mt[2 * iel]);
-        cublasDgemv(handle_mt[2 * iel], CUBLAS_OP_T, rows, cols, &alpha_mt, &dfStorage[pos], rows, &dsigma[cont_rows], 1, &beta_mt, &dnodal_forces_vec[cont_cols], 1);
+        cublasSetStream(handle_m, stream_m[iel]);
+        cublasDgemv(handle_m, CUBLAS_OP_T, rows, cols, &alpha_mt, dstorage, rows, &dsigma[cont_rows], 1, &beta_mt, &dnodal_forces_vec[cont_cols], 1);
 
         //Nodal forces in y direction
-        cublasSetStream(handle_mt[2 * iel + 1], stream_mt[2 * iel + 1]);
-        cublasDgemv(handle_mt[2 * iel + 1], CUBLAS_OP_T, rows, cols, &alpha_mt, &dfStorage[pos], rows, &dsigma[cont_rows + npts_tot], 1, &beta_mt, &dnodal_forces_vec[cont_cols + npts_tot / 2], 1);
-    }
+        cublasSetStream(handle_m, stream_m[iel]);
+        cublasDgemv(handle_m, CUBLAS_OP_T, rows, cols, &alpha_mt, dstorage, rows, &dsigma[cont_rows + npts_tot], 1, &beta_mt, &dnodal_forces_vec[cont_cols + npts_tot / 2], 1);
 
-///Free device memory
+    }
+//Free device memory
     cudaFree(dsigma);
-    cublasDestroy(*handle_mt);
-    cudaStreamSynchronize(0);
+    cublasDestroy(handle_m);
+    cudaStreamSynchronize(0); 
+    cudaFree(dstorage);
 ///----------------------------------------------------------------
 
 ///ASSEMBLE--------------------------------------------------------
@@ -214,11 +182,10 @@ void TPZSolveMatrix::SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE> &
     cusparseCreate(&handle_sctr);
     cusparseDsctr(handle_sctr, sz, dnodal_forces_vec, &dindexescolor[0], &dnodal_forces_global[0], CUSPARSE_INDEX_BASE_ZERO);
 
-    double colorassemb = ncolor / 2.;
+    int64_t colorassemb = ncolor / 2.;
     while (colorassemb > 0) {
 
         int64_t firsteq = (ncolor - colorassemb) * neq;
-        int64_t neqassemb = colorassemb * neq;
 
         cublasHandle_t handle_daxpy;
 	cublasCreate(&handle_daxpy);
@@ -227,11 +194,12 @@ void TPZSolveMatrix::SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE> &
 
         ncolor -= colorassemb;
         colorassemb = ncolor/2;
+
+    cudaMemcpy(&nodal_forces_global(0, 0), dnodal_forces_global, neq * sizeof(double), cudaMemcpyDeviceToHost);
     }
     nodal_forces_global.Resize(neq, 1);
 
     cudaMemcpy(&nodal_forces_global(0, 0), dnodal_forces_global, neq * sizeof(double), cudaMemcpyDeviceToHost);
-    nodal_forces_global.Print(std::cout);
 
 ///Free device memory
     cusparseDestroy(handle_sctr);
@@ -240,24 +208,154 @@ void TPZSolveMatrix::SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE> &
     cudaFree(dnodal_forces_global);
 }
 
-void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE>  &global_solution, TPZFMatrix<REAL> &result) const
+void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const
 {
-    DebugStop();
+    int64_t nelem = fRowSizes.size();
+
+    int64_t n_globalsol = fIndexes.size();
+
+    result.Resize(2*n_globalsol,1);
+    result.Zero();
+
+    TPZVec<REAL> expandsolution(n_globalsol);
+
+/// gather operation
+    cblas_dgthr(n_globalsol, global_solution, &expandsolution[0], &fIndexes[0]);
+
+#ifdef USING_TBB
+    parallel_for(size_t(0),size_t(nelem),size_t(1),[&](size_t iel)
+             {
+                int64_t pos = fMatrixPosition[iel];
+                int64_t cols = fColSizes[iel];
+                int64_t rows = fRowSizes[iel];
+                TPZFMatrix<REAL> elmatrix(rows,cols,&fStorage[pos],rows*cols);
+
+                int64_t cont_cols = fColFirstIndex[iel];
+                int64_t cont_rows = fRowFirstIndex[iel];
+
+                 TPZFMatrix<REAL> element_solution_x(cols,1,&expandsolution[cont_cols],cols);
+                 TPZFMatrix<REAL> element_solution_y(cols,1,&expandsolution[cont_cols+fColFirstIndex[nelem]],cols);
+
+                TPZFMatrix<REAL> solx(rows,1,&result(cont_rows,0),rows);
+                TPZFMatrix<REAL> soly(rows,1,&result(cont_rows+fRowFirstIndex[nelem],0),rows);
+
+                elmatrix.Multiply(element_solution_x,solx);
+                elmatrix.Multiply(element_solution_y,soly);
+             }
+             );
+
+#else
+    for (int64_t iel=0; iel<nelem; iel++) {
+        int64_t pos = fMatrixPosition[iel];
+        int64_t cols = fColSizes[iel];
+        int64_t rows = fRowSizes[iel];
+        TPZFMatrix<REAL> elmatrix(rows,cols,&fStorage[pos],rows*cols);
+
+        int64_t cont_cols = fColFirstIndex[iel];
+        int64_t cont_rows = fRowFirstIndex[iel];
+
+        TPZFMatrix<REAL> element_solution_x(cols,1,&expandsolution[cont_cols],cols);
+        TPZFMatrix<REAL> element_solution_y(cols,1,&expandsolution[cont_cols+fColFirstIndex[nelem]],cols);
+
+        TPZFMatrix<REAL> solx(rows,1,&result(cont_rows,0),rows); //du
+        TPZFMatrix<REAL> soly(rows,1,&result(cont_rows+fRowFirstIndex[nelem],0),rows); //dv
+
+        elmatrix.Multiply(element_solution_x,solx);
+        elmatrix.Multiply(element_solution_y,soly);
+    }
+#endif
 }
 
-void TPZSolveMatrix::ComputeSigma(TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<REAL> &sigma)
+void TPZSolveMatrix::ComputeSigma( TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<STATE> &sigma)
 {
-    DebugStop();
+    REAL E = 200000000.;
+    REAL nu =0.30;
+    int npts_tot = fRow;
+    sigma.Resize(2*npts_tot,1);
+
+#ifdef USING_TBB
+    parallel_for(size_t(0),size_t(npts_tot/2),size_t(1),[&](size_t ipts)
+                      {
+                            sigma(2*ipts,0) = weight[ipts]*E/(1.-nu*nu)*(result(2*ipts,0)+nu*result(2*ipts+npts_tot+1,0)); // Sigma x
+                            sigma(2*ipts+1,0) = weight[ipts]*E/(1.-nu*nu)*(1.-nu)/2*(result(2*ipts+1,0)+result(2*ipts+npts_tot,0))*0.5; // Sigma xy
+                            sigma(2*ipts+npts_tot,0) = sigma(2*ipts+1,0); //Sigma xy
+                            sigma(2*ipts+npts_tot+1,0) = weight[ipts]*E/(1.-nu*nu)*(result(2*ipts+npts_tot+1,0)+nu*result(2*ipts,0)); // Sigma y
+                      }
+                      );
+#else
+
+    for (int64_t ipts=0; ipts< npts_tot/2; ipts++) {
+        sigma(2*ipts,0) = weight[ipts]*E/(1.-nu*nu)*(result(2*ipts,0)+nu*result(2*ipts+npts_tot+1,0)); // Sigma x
+        sigma(2*ipts+1,0) = weight[ipts]*E/(1.-nu*nu)*(1.-nu)/2*(result(2*ipts+1,0)+result(2*ipts+npts_tot,0))*0.5; // Sigma xy
+        sigma(2*ipts+npts_tot,0) = sigma(2*ipts+1,0); //Sigma xy
+        sigma(2*ipts+npts_tot+1,0) = weight[ipts]*E/(1.-nu*nu)*(result(2*ipts+npts_tot+1,0)+nu*result(2*ipts,0)); // Sigma y
+    }
+#endif
 }
 
 void TPZSolveMatrix::MultiplyTranspose(TPZFMatrix<STATE>  &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec)
 {
-    DebugStop();
+    int64_t nelem = fRowSizes.size();
+    int64_t npts_tot = fRow;
+    nodal_forces_vec.Resize(npts_tot,1);
+    nodal_forces_vec.Zero();
+
+#ifdef USING_TBB
+    parallel_for(size_t(0),size_t(nelem),size_t(1),[&](size_t iel)
+                  {
+                        int64_t pos = fMatrixPosition[iel];
+                        int64_t rows = fRowSizes[iel];
+                        int64_t cols = fColSizes[iel];
+                        int64_t cont_rows = fRowFirstIndex[iel];
+                        int64_t cont_cols = fColFirstIndex[iel];
+                        TPZFMatrix<REAL> elmatrix(rows,cols,&fStorage[pos],rows*cols);
+
+                        // Forças nodais na direção x
+                        TPZFMatrix<REAL> fvx(rows,1, &intpoint_solution(cont_rows,0),rows);
+                        TPZFMatrix<STATE> nodal_forcex(cols, 1, &nodal_forces_vec(cont_cols, 0), cols);
+                        elmatrix.MultAdd(fvx,nodal_forcex,nodal_forcex,1,0,1);
+
+                        // Forças nodais na direção y
+                        TPZFMatrix<REAL> fvy(rows,1, &intpoint_solution(cont_rows+npts_tot,0),rows);
+                        TPZFMatrix<STATE> nodal_forcey(cols, 1, &nodal_forces_vec(cont_cols + npts_tot/2, 0), cols);
+                        elmatrix.MultAdd(fvy,nodal_forcey,nodal_forcey,1,0,1);
+                  }
+                  );
+#else
+    for (int64_t iel = 0; iel < nelem; iel++) {
+        int64_t pos = fMatrixPosition[iel];
+        int64_t rows = fRowSizes[iel];
+        int64_t cols = fColSizes[iel];
+        int64_t cont_rows = fRowFirstIndex[iel];
+        int64_t cont_cols = fColFirstIndex[iel];
+        TPZFMatrix<REAL> elmatrix(rows,cols,&fStorage[pos],rows*cols);
+
+        // Nodal forces in x direction
+        TPZFMatrix<REAL> fvx(rows,1, &intpoint_solution(cont_rows,0),rows);
+        TPZFMatrix<STATE> nodal_forcex(cols, 1, &nodal_forces_vec(cont_cols, 0), cols);
+        elmatrix.MultAdd(fvx,nodal_forcex,nodal_forcex,1,0,1);
+
+        // Nodal forces in y direction
+        TPZFMatrix<REAL> fvy(rows,1, &intpoint_solution(cont_rows+npts_tot,0),rows);
+        TPZFMatrix<STATE> nodal_forcey(cols, 1, &nodal_forces_vec(cont_cols + npts_tot/2, 0), cols);
+        elmatrix.MultAdd(fvy,nodal_forcey,nodal_forcey,1,0,1);
+    }
+#endif
 }
 
 void TPZSolveMatrix::TraditionalAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const
 {
-    DebugStop();
+#ifdef USING_TBB
+    parallel_for(size_t(0),size_t(fRow),size_t(1),[&](size_t ir)
+             {
+                 nodal_forces_global(fIndexes[ir], 0) += nodal_forces_vec(ir, 0);
+             }
+);
+#else
+    for (int64_t ir=0; ir<fRow; ir++) {
+        nodal_forces_global(fIndexes[ir], 0) += nodal_forces_vec(ir, 0);
+    }
+#endif
 }
 
 void TPZSolveMatrix::ColoringElements(TPZCompMesh * cmesh) const
@@ -314,7 +412,23 @@ void TPZSolveMatrix::ColoringElements(TPZCompMesh * cmesh) const
 
 void TPZSolveMatrix::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global)
 {
-    DebugStop();
+    int64_t ncolor = *std::max_element(fElemColor.begin(), fElemColor.end())+1;
+    int64_t sz = fIndexes.size();
+    int64_t neq = nodal_forces_global.Rows();
+    nodal_forces_global.Resize(neq*ncolor,1);
+
+
+    cblas_dsctr(sz, nodal_forces_vec, &fIndexesColor[0], &nodal_forces_global(0,0));
+
+    int64_t colorassemb = ncolor / 2.;
+    while (colorassemb > 0) {
+
+        int64_t firsteq = (ncolor - colorassemb) * neq;
+
+        cblas_daxpy(neq*ncolor, 1., &nodal_forces_global(firsteq, 0), 1., &nodal_forces_global(0, 0), 1.);
+
+        ncolor -= colorassemb;
+        colorassemb = ncolor/2;
+    }
+    nodal_forces_global.Resize(neq, 1);
 }
-
-
