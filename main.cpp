@@ -17,6 +17,7 @@
 #include "pzintel.h"
 #include "tpzintpoints.h"
 #include "TPZMatElasticity2D.h"
+#include "TPZSSpStructMatrix.h"
 
 #include "TPZSolveMatrix.h"
 
@@ -26,7 +27,8 @@
 
 TPZGeoMesh * geometry_2D(int nelem_x, int nelem_y, REAL len, int ndivide);
 TPZCompMesh * cmesh_2D(TPZGeoMesh * gmesh, int pOrder);
-//void ComputeRhsPointbyPoint(TPZCompMesh *cmesh);
+TPZCompMesh * cmesh_mat_2D(TPZGeoMesh * gmesh, int pOrder);
+void ComputeRhsPointbyPoint(TPZCompMesh *cmesh);
 void sol_teste(TPZCompMesh * cmesh);
 
 
@@ -50,8 +52,8 @@ std::cout << "--------------------USING CUDA-------------------" << std::endl;
 for (int i = 0; i < 1; i++) {
     //// ------------------------ DATA INPUT ------------------------------
     //// NUMBER OF ELEMENTS IN X AND Y DIRECTIONS
-    int nelem_x = 63;
-    int nelem_y = 63;
+    int nelem_x = 60;
+    int nelem_y = 60;
 
     timing << "-------------------------------------------------" << std::endl;
     timing << "MESH SIZE: " << nelem_x << "x" << nelem_y << std::endl;
@@ -78,29 +80,52 @@ TPZGeoMesh *gmesh = geometry_2D(nelem_x, nelem_y, len, ndivide);
 
 //// Creating the computational mesh
 TPZCompMesh *cmesh = cmesh_2D(gmesh, pOrder);
+TPZCompMesh *cmesh_d = cmesh_mat_2D(gmesh, pOrder);
 
 //// Defining the analysis
 bool optimizeBandwidth = true;
+int n_threads = 12;
 TPZAnalysis an(cmesh, optimizeBandwidth);
+TPZAnalysis an_d(cmesh_d, optimizeBandwidth);
+#ifdef USING_MKL
+TPZSymetricSpStructMatrix strskyl(cmesh);
+TPZSymetricSpStructMatrix strskyl_d(cmesh_d);
+#else
 TPZSkylineStructMatrix strskyl(cmesh);
+TPZSkylineStructMatrix strskyl_d(cmesh_d);
+#endif
+strskyl.SetNumThreads(n_threads);
+strskyl_d.SetNumThreads(n_threads);
 an.SetStructuralMatrix(strskyl);
-
+an_d.SetStructuralMatrix(strskyl_d);
+    
 //// Solve
 TPZStepSolver<STATE> *direct = new TPZStepSolver<STATE>;
-direct->SetDirect(ELDLt);
+direct->SetDirect(ECholesky);
 an.SetSolver(*direct);
+an_d.SetSolver(*direct);
 delete direct;
-an.Run();
+an.Assemble();
+an.Solve();
+    
+// Computing global K
+an_d.Assemble();
+TPZFMatrix<STATE> res_d;
+// Computing K u
+an_d.Solver().Matrix()->Multiply(an.Solution(), res_d);
 
-////// Post processing in Paraview
-//TPZManVector<std::string> scalarnames(2), vecnames(1);
-//scalarnames[0] = "SigmaX";
-//scalarnames[1] = "SigmaY";
-//vecnames[0] = "Displacement";
-//an.DefineGraphMesh(2, scalarnames, vecnames, namefile + "ElasticitySolutions.vtk");
-//an.PostProcess(1);
+//    res_d.Print("ku = ",std::cout,EMathematicaInput);
+    
+    
+//// Post processing in Paraview
+TPZManVector<std::string> scalarnames(2), vecnames(1);
+scalarnames[0] = "SigmaX";
+scalarnames[1] = "SigmaY";
+vecnames[0] = "Displacement";
+an.DefineGraphMesh(2, scalarnames, vecnames, namefile + "ElasticitySolutions.vtk");
+an.PostProcess(0);
 
-    sol_teste(cmesh);
+sol_teste(cmesh);
 
 
 }
@@ -234,31 +259,30 @@ cmesh->InsertMaterialObject(bcLeft);
 cmesh->SetAllCreateFunctionsContinuous();
 cmesh->AutoBuild();
 
-int64_t nelem = cmesh->NElements();
-
-for (int64_t i = 0; i < nelem; i++) {
-
-    // If there is no computational element, continue to the next element
-    TPZCompEl *cel = cmesh->ElementVec()[i];
-    if (!cel) continue;
-
-    // If there is no geometric element, continue to the next element
-    TPZGeoEl *gel = cel->Reference();
-    if (!gel) continue;
-
-    // If the element has no "father", continue to the next element (It means it is not a subelement)
-    TPZGeoEl *father = gel->Father();
-    if (!father) continue;
-
-    // Gets the element level
-    int level = gel->Level();
-
-    // Defines the element
-    TPZInterpolatedElement *intel = dynamic_cast<TPZInterpolatedElement *>(cel);
-    if (!intel) continue;
-    intel->PRefine(level + pOrder + 1);
-
-}
+//int64_t nelem = cmesh->NElements();
+//for (int64_t i = 0; i < nelem; i++) {
+//
+//    // If there is no computational element, continue to the next element
+//    TPZCompEl *cel = cmesh->ElementVec()[i];
+//    if (!cel) continue;
+//
+//    // If there is no geometric element, continue to the next element
+//    TPZGeoEl *gel = cel->Reference();
+//    if (!gel) continue;
+//
+//    // If the element has no "father", continue to the next element (It means it is not a subelement)
+//    TPZGeoEl *father = gel->Father();
+//    if (!father) continue;
+//
+//    // Gets the element level
+//    int level = gel->Level();
+//
+//    // Defines the element
+//    TPZInterpolatedElement *intel = dynamic_cast<TPZInterpolatedElement *>(cel);
+//    if (!intel) continue;
+//    intel->PRefine(level + pOrder + 1);
+//
+//}
 
 cmesh->AutoBuild();
 cmesh->AdjustBoundaryElements();
@@ -266,95 +290,116 @@ cmesh->CleanUpUnconnectedNodes();
 
 return cmesh;
 }
+TPZCompMesh * cmesh_mat_2D(TPZGeoMesh * gmesh, int pOrder){
+    
+    // Creating the computational mesh
+    TPZCompMesh *cmesh = new TPZCompMesh(gmesh);
+    cmesh->SetDefaultOrder(pOrder);
+    
+    // Creating elasticity material
+    TPZMatElasticity2D *mat = new TPZMatElasticity2D(1);
+    mat->SetElasticParameters(200000000., 0.3);
+    cmesh->InsertMaterialObject(mat);
+    
+    cmesh->SetAllCreateFunctionsContinuous();
+    cmesh->AutoBuild();
+    return cmesh;
+}
 
-//void ComputeRhsPointbyPoint(TPZCompMesh *cmesh) {
-//
-//    int64_t neq = cmesh->NEquations();
-//    TPZFMatrix <REAL> rhs(neq, 1);
-//    int64_t nelem = cmesh->NElements();
-//
-//    for (int64_t iel = 0; iel < nelem; ++iel) {
-//        TPZCompEl *cel = cmesh->Element(iel);
-//        if (!cel || cel->Dimension() != cmesh->Dimension()) continue;
-//
-//        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement * >(cel);
-//        if (!cel_inter) DebugStop();
-//
-//        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
-//        int64_t npts = int_rule->NPoints();
-//        int64_t dim = cel_inter->Dimension();
-//        int64_t nf = cel_inter->NShapeF();
-//
-//        TPZMaterialData data;
-//        cel_inter->InitMaterialData(data);
-//
-//        TPZFMatrix <REAL> ef(dim * nf, 1);
-//        ef.Zero();
-//
-//        for (int64_t ipts = 0; ipts < npts; ipts++) {
-//            TPZManVector <REAL> qsi(dim, 1);
-//            REAL w;
-//            int_rule->Point(ipts, qsi, w);
-//            cel_inter->ComputeRequiredData(data, qsi);
-//            TPZMaterial *material = cel_inter->Material();
-//            material->Contribute(data, w, ef);
-//        }
-//
-//        int64_t ncon = cel->NConnects();
-//        TPZVec<int> iglob(dim * nf, 0);
-//        int ni = 0;
-//
-//        for (int64_t icon = 0; icon < ncon; icon++) {
-//            int64_t id = cel->ConnectIndex(icon);
-//            TPZConnect &df = cmesh->ConnectVec()[id];
-//            int64_t conid = df.SequenceNumber();
-//            if (df.NElConnected() == 0 || conid < 0 || cmesh->Block().Size(conid) == 0) continue;
-//            else {
-//                int64_t pos = cmesh->Block().Position(conid);
-//                int64_t nsize = cmesh->Block().Size(conid);
-//                for (int64_t isize = 0; isize < nsize; isize++) {
-//                    iglob[ni] = pos + isize;
-//                    ni++;
-//                }
-//            }
-//        }
-//
-//        for (int i = 0; i < ef.Rows(); i++) {
-//            rhs(iglob[i], 0) += ef(i, 0);
-//        }
-//    }
-//}
+void ComputeRhsPointbyPoint(TPZCompMesh *cmesh) {
+
+    int64_t neq = cmesh->NEquations();
+    TPZFMatrix <REAL> rhs(neq, 1);
+    rhs.Zero();
+    int64_t nelem = cmesh->NElements();
+
+    for (int64_t iel = 0; iel < nelem; ++iel) {
+        TPZCompEl *cel = cmesh->Element(iel);
+        if (!cel || cel->Dimension() != cmesh->Dimension()) continue;
+
+        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement * >(cel);
+        if (!cel_inter) DebugStop();
+
+        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
+        int64_t npts = int_rule->NPoints();
+        int64_t dim = cel_inter->Dimension();
+        int64_t nf = cel_inter->NShapeF();
+
+        TPZMaterialData data;
+        cel_inter->InitMaterialData(data);
+
+        TPZFMatrix <REAL> ef(dim * nf, 1);
+        ef.Zero();
+
+        for (int64_t ipts = 0; ipts < npts; ipts++) {
+            TPZManVector <REAL> qsi(dim, 1);
+            REAL w;
+            int_rule->Point(ipts, qsi, w);
+            cel_inter->ComputeRequiredData(data, qsi);
+            TPZMaterial *material = cel_inter->Material();
+            material->Contribute(data, w, ef);
+        }
+
+        int64_t ncon = cel->NConnects();
+        TPZVec<int> iglob(dim * nf, 0);
+        int ni = 0;
+
+        for (int64_t icon = 0; icon < ncon; icon++) {
+            int64_t id = cel->ConnectIndex(icon);
+            TPZConnect &df = cmesh->ConnectVec()[id];
+            int64_t conid = df.SequenceNumber();
+            if (df.NElConnected() == 0 || conid < 0 || cmesh->Block().Size(conid) == 0) continue;
+            else {
+                int64_t pos = cmesh->Block().Position(conid);
+                int64_t nsize = cmesh->Block().Size(conid);
+                for (int64_t isize = 0; isize < nsize; isize++) {
+                    iglob[ni] = pos + isize;
+                    ni++;
+                }
+            }
+        }
+
+        for (int i = 0; i < ef.Rows(); i++) {
+            rhs(iglob[i], 0) += ef(i, 0);
+        }
+    }
+    
+    rhs.Print("r = ",std::cout,EMathematicaInput);
+}
+
 
 void sol_teste(TPZCompMesh *cmesh) {
 
 int dim_mesh = (cmesh->Reference())->Dimension(); // Mesh dimension
-int64_t nelem = 0; // Number of geometric elements
 int64_t nelem_c = cmesh->NElements(); // Number of computational elements
+std::vector<int64_t> cel_indexes;
 
 //// -------------------------------------------------------------------------------
-//// NUMBER OF GEOMETRIC ELEMENTS
+//// NUMBER OF DOMAIN GEOMETRIC ELEMENTS
 for (int64_t i = 0; i < nelem_c; i++) {
     TPZCompEl *cel = cmesh->Element(i);
     if (!cel) continue;
     TPZGeoEl *gel = cmesh->Element(i)->Reference();
     if (!gel || gel->Dimension() != dim_mesh) continue;
-    nelem++;
+    cel_indexes.push_back(cel->Index());
 }
 //// -------------------------------------------------------------------------------
 
+    if (cel_indexes.size() == 0) {
+        DebugStop();
+    }
+    
 //// ROWSIZES AND COLSIZES VECTORS--------------------------------------------------
+int64_t nelem = cel_indexes.size(); // Number of domain geometric elements
 TPZVec<int64_t> rowsizes(nelem);
 TPZVec<int64_t> colsizes(nelem);
 
 int64_t npts_tot = 0;
 int64_t nf_tot = 0;
 
-for (int64_t iel = 0; iel < nelem; ++iel) {
+for (auto iel : cel_indexes) {
     //Verification
     TPZCompEl *cel = cmesh->Element(iel);
-    if (!cel) continue;
-    TPZGeoEl *gel = cel->Reference();
-    if (!gel) continue;
 
     //Integration rule
     TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement * >(cel);
@@ -383,12 +428,9 @@ TPZManVector<MKL_INT> indexes(dim_mesh*nf_tot);
 int64_t cont1 = 0;
 int64_t cont2 = 0;
 
-for (int64_t iel = 0; iel < nelem; ++iel) {
-//Verification
+for (auto iel : cel_indexes) {
+        //Verification
     TPZCompEl *cel = cmesh->Element(iel);
-    if (!cel) continue;
-    TPZGeoEl *gel = cel->Reference();
-    if (!gel) continue;
 
     //Integration rule
     TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement * >(cel);
@@ -462,20 +504,24 @@ std::clock_t begincpu = clock();
 SolMat->Multiply(coef_sol,result);
 SolMat->ComputeSigma(weight,result,sigma);
 SolMat->MultiplyTranspose(sigma, nodal_forces_vec);
-SolMat->TraditionalAssemble(nodal_forces_vec,nodal_forces_global1);
+SolMat->TraditionalAssemble(nodal_forces_vec,nodal_forces_global1); // ok
+//nodal_forces_global1.Print("f = ",std::cout,EMathematicaInput);
 SolMat->ColoringElements(cmesh);
 SolMat->ColoredAssemble(nodal_forces_vec,nodal_forces_global2);
 std::clock_t endcpu = clock();
 
+
+    
 //REAL elapsed_secs_gpu = REAL(endgpu - begingpu) / CLOCKS_PER_SEC;
 REAL elapsed_secs_cpu = REAL(endcpu - begincpu) / CLOCKS_PER_SEC;
 //timing << "Time elapsed (GPU): " << std::setprecision(5) << std::fixed << elapsed_secs_gpu << " s" << std::endl;
 timing << "Time elapsed (CPU): "<< std::setprecision(5) << std::fixed << elapsed_secs_cpu << " s" << std::endl;
 
-for(int i = 0; i < neq; i++){
-    std::cout << nodal_forces_global1(i,0) - nodal_forces_global2(i,0)<< std::endl;
-}
+//for(int i = 0; i < neq; i++){
+//    std::cout << nodal_forces_global1(i,0) - nodal_forces_global2(i,0)<< std::endl;
+//}
 
+    std::cout << "norm of diff = " << Norm(nodal_forces_global1-nodal_forces_global2) << std::endl;
 
 
 }

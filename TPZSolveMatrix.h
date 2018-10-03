@@ -116,7 +116,7 @@ void SetIndexes(TPZVec<MKL_INT> indexes)
 int64_t indsize = indexes.size();
 fIndexes.resize(indsize);
 fIndexes = indexes;
-fIndexesColor.resize(indexes.size());
+fIndexesColor.resize(indsize);
 }
 
     /** @brief Solve procedure */
