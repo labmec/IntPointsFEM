@@ -10,6 +10,7 @@
 #include "pzfmatrix.h"
 #include <mkl.h>
 #include "pzinterpolationspace.h"
+#include "pzcmesh.h"
 
 #ifdef USING_MKL
 #include "mkl.h"
