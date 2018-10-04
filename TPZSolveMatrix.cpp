@@ -235,7 +235,7 @@ void TPZSolveMatrix::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFM
     while (colorassemb > 0) {
 
         int64_t firsteq = (ncolor - colorassemb) * neq;
-        cblas_daxpy(neq*ncolor, 1., &nodal_forces_global(firsteq, 0), 1., &nodal_forces_global(0, 0), 1.);
+        cblas_daxpy(firsteq, 1., &nodal_forces_global(firsteq, 0), 1., &nodal_forces_global(0, 0), 1.);
 
         ncolor -= colorassemb;
         colorassemb = ncolor/2;

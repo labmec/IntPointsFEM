@@ -45,7 +45,7 @@ class TPZMatGriffith : public TPZMaterial {
 protected:
 
     /** @brief Forcing vector */
-    TPZManVector<STATE,2>  ff;
+    TPZManVector<STATE, 2> ff;
 
     /** @brief Elasticity modulus */
     REAL fE;
@@ -97,16 +97,15 @@ public:
     /** @brief Copy constructor */
     TPZMatGriffith(const TPZMatGriffith &cp);
 
-    virtual TPZMaterial *NewMaterial()
-    {
+    virtual TPZMaterial *NewMaterial() {
         return new TPZMatGriffith(*this);
     }
 
-    virtual void Print(std::ostream & out);
+    virtual void Print(std::ostream &out);
 
     virtual std::string Name() { return "TPZMatGriffith"; }
 
-    int Dimension() const {return 2;}
+    int Dimension() const { return 2; }
 
     virtual int NStateVariables();
 
@@ -118,10 +117,9 @@ public:
      * @param fy forcing function \f$ -y = fy \f$
      * @param plainstress \f$ plainstress = 1 \f$ indicates use of plainstress
      */
-    void SetParameters(REAL Lambda, REAL mu, REAL fx, REAL fy)
-    {
-        fE = (mu*(3.0*Lambda+2.0*mu))/(Lambda+mu);
-        fnu = (Lambda)/(2*(Lambda+mu));
+    void SetParameters(REAL Lambda, REAL mu, REAL fx, REAL fy) {
+        fE = (mu * (3.0 * Lambda + 2.0 * mu)) / (Lambda + mu);
+        fnu = (Lambda) / (2 * (Lambda + mu));
 
         flambda = Lambda;
         fmu = mu;
@@ -136,9 +134,8 @@ public:
      * @param fx forcing function \f$ -x = 0 \f$
      * @param fy forcing function \f$ -y = 0 \f$
      */
-    void SetElasticParameters(REAL Eyoung, REAL nu)
-    {
-        this->SetElasticity(Eyoung,nu);
+    void SetElasticParameters(REAL Eyoung, REAL nu) {
+        this->SetElasticity(Eyoung, nu);
     }
 
     /**
@@ -149,12 +146,11 @@ public:
      * @param fy forcing function \f$ -y = fy \f$
      * @param plainstress \f$ plainstress = 1 \f$ indicates use of plainstress
      */
-    void SetElasticity(REAL Ey, REAL nu)
-    {
+    void SetElasticity(REAL Ey, REAL nu) {
         fE = Ey;
         fnu = nu;
-        flambda = (Ey*nu)/((1+nu)*(1-2*nu));
-        fmu = Ey/(2*(1+nu));
+        flambda = (Ey * nu) / ((1 + nu) * (1 - 2 * nu));
+        fmu = Ey / (2 * (1 + nu));
 
     }
 
@@ -162,8 +158,7 @@ public:
      * planestress = 1 => Plain stress state
      * planestress != 1 => Plain Strain state
      */
-    void SetfPlaneProblem(int planestress)
-    {
+    void SetfPlaneProblem(int planestress) {
         fPlaneStress = planestress;
     }
 
@@ -171,14 +166,12 @@ public:
      * planestress = 1 => Plain stress state
      * planestress != 1 => Plain Strain state
      */
-    void SetPlaneStrain()
-    {
+    void SetPlaneStrain() {
         fPlaneStress = 0;
     }
 
     /** @brief Set Initial Stress */
-    void SetPreStress(REAL SigmaXX, REAL SigmaXY, REAL SigmaYY, REAL SigmaZZ)
-    {
+    void SetPreStress(REAL SigmaXX, REAL SigmaXY, REAL SigmaYY, REAL SigmaZZ) {
         fPreStressXX = SigmaXX;
         fPreStressXY = SigmaXY;
         fPreStressYY = SigmaYY;
@@ -189,11 +182,10 @@ public:
     void ComputeSigma(const TPZFMatrix<STATE> &dudx, TPZFMatrix<STATE> &sigma);
 
     // Get Elastic Materials Parameters
-    void GetElasticParameters(REAL &Ey, REAL &nu, REAL &Lambda, REAL &G)
-    {
+    void GetElasticParameters(REAL &Ey, REAL &nu, REAL &Lambda, REAL &G) {
         Ey = fE;
-        nu =  fnu;
-        Lambda =  flambda;
+        nu = fnu;
+        Lambda = flambda;
         G = fmu;
     }
 
@@ -201,15 +193,17 @@ public:
      * fE young modulus
      * fnu Poisson ratio
      */
-    STATE GetEyoung() {return fE;}
-    STATE GetNu() {return fnu;}
+    STATE GetEyoung() { return fE; }
+
+    STATE GetNu() { return fnu; }
 
     /** @brief Get lame parameters
      * Lambda first lame
      * Mu Second lame
      */
-    STATE GetLambda() {return flambda;}
-    STATE GetMu() {return fmu;}
+    STATE GetLambda() { return flambda; }
+
+    STATE GetMu() { return fmu; }
 
 
     virtual void FillDataRequirements(TPZMaterialData &data);
@@ -224,12 +218,17 @@ public:
      * @param ef [out] is the load vector
      */
     virtual void Contribute(TPZMaterialData &data, REAL weight, TPZFMatrix<STATE> &ek, TPZFMatrix<STATE> &ef);
+
     virtual void Contribute(TPZMaterialData &data, REAL weight, TPZFMatrix<STATE> &ef);
+
     void ContributeVec(TPZMaterialData &data, REAL weight, TPZFMatrix<STATE> &ek, TPZFMatrix<STATE> &ef);
+
     void ContributeVec(TPZMaterialData &data, REAL weight, TPZFMatrix<STATE> &ef);
 
-    virtual void ContributeBC(TPZMaterialData &data, REAL weight, TPZFMatrix<STATE> &ek,TPZFMatrix<STATE> &ef,TPZBndCond &bc);
-    virtual void ContributeBC(TPZMaterialData &data, REAL weight, TPZFMatrix<STATE> &ef,TPZBndCond &bc);
+    virtual void
+    ContributeBC(TPZMaterialData &data, REAL weight, TPZFMatrix<STATE> &ek, TPZFMatrix<STATE> &ef, TPZBndCond &bc);
+
+    virtual void ContributeBC(TPZMaterialData &data, REAL weight, TPZFMatrix<STATE> &ef, TPZBndCond &bc);
 
     virtual int VariableIndex(const std::string &name);
 
@@ -237,7 +236,10 @@ public:
 
     //public:
     virtual void Solution(TPZMaterialData &data, int var, TPZVec<STATE> &Solout);
-    virtual void Solution(TPZMaterialData &data, TPZVec<TPZMaterialData> &dataleftvec, TPZVec<TPZMaterialData> &datarightvec, int var, TPZVec<STATE> &Solout, TPZCompEl * Left, TPZCompEl * Right) {
+
+    virtual void
+    Solution(TPZMaterialData &data, TPZVec<TPZMaterialData> &dataleftvec, TPZVec<TPZMaterialData> &datarightvec,
+             int var, TPZVec<STATE> &Solout, TPZCompEl *Left, TPZCompEl *Right) {
         DebugStop();
     }
 
@@ -262,9 +264,6 @@ public:
     void Read(TPZStream &buf, void *context);
 
 };
-
-
-
 
 
 #endif /* defined(__PZ__TPZMatGriffith__) */
