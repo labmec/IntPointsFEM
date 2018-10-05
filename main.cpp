@@ -43,7 +43,7 @@ std::ofstream timing("timingcuda.txt");
 std::ofstream timing("timing.txt");
 #endif
 
-int main() {
+int main(int argc, char *argv[]) {
 #ifdef USING_TBB
     timing << "--------------------USING TBB--------------------"<< std::endl;
     std::cout << "--------------------USING TBB--------------------" << std::endl;
@@ -55,8 +55,8 @@ int main() {
     for (int i = 0; i < 1; i++) {
         //// ------------------------ DATA INPUT ------------------------------
         //// NUMBER OF ELEMENTS IN X AND Y DIRECTIONS
-        int nelem_x = 60;
-        int nelem_y = 60;
+        int nelem_x = atoi(argv[1]);
+        int nelem_y = atoi(argv[1]);
 
         timing << "-------------------------------------------------" << std::endl;
         timing << "MESH SIZE: " << nelem_x << "x" << nelem_y << std::endl;
@@ -398,18 +398,19 @@ void sol_teste(TPZCompMesh *cmesh) {
 
     TPZFMatrix<REAL> coef_sol = cmesh->Solution();
     int neq = cmesh->NEquations();
-    TPZFMatrix<REAL> nodal_forces_global1(neq, 1, 0.);
+    TPZFMatrix<REAL> nodal_forces_global1(neq, 1, 0.);    
     TPZFMatrix<REAL> nodal_forces_global2(neq, 1, 0.);
+    TPZFMatrix<REAL> nodal_forces_global3(neq, 1, 0.);
     TPZFMatrix<REAL> result;
     TPZFMatrix<REAL> sigma;
     TPZFMatrix<REAL> nodal_forces_vec;
 
-//std::cout << "SOLVING WITH GPU" << std::endl;
-//std::clock_t begingpu = clock();
-//SolMat->SolveWithCUDA(cmesh, coef_sol, weight, nodal_forces_global1);
-//std::clock_t endgpu = clock();
+    std::cout << "\n\nSOLVING WITH GPU" << std::endl;
+    std::clock_t begingpu = clock();
+    SolMat->SolveWithCUDA(cmesh, coef_sol, weight, nodal_forces_global3);
+    std::clock_t endgpu = clock();
 
-    std::cout << "SOLVING WITH CPU" << std::endl;
+    std::cout << "\n\nSOLVING WITH CPU" << std::endl;
     std::clock_t begincpu = clock();
     SolMat->Multiply(coef_sol, result);
     SolMat->ComputeSigma(weight, result, sigma);
@@ -418,10 +419,24 @@ void sol_teste(TPZCompMesh *cmesh) {
     SolMat->ColoredAssemble(nodal_forces_vec, nodal_forces_global2);
     std::clock_t endcpu = clock();
 
-//REAL elapsed_secs_gpu = REAL(endgpu - begingpu) / CLOCKS_PER_SEC;
+    REAL elapsed_secs_gpu = REAL(endgpu - begingpu) / CLOCKS_PER_SEC;
     REAL elapsed_secs_cpu = REAL(endcpu - begincpu) / CLOCKS_PER_SEC;
-//timing << "Time elapsed (GPU): " << std::setprecision(5) << std::fixed << elapsed_secs_gpu << " s" << std::endl;
-    timing << "Time elapsed (CPU): " << std::setprecision(5) << std::fixed << elapsed_secs_cpu << " s" << std::endl;
+    std::cout << "\nTime elapsed (GPU): " << std::setprecision(5) << std::fixed << elapsed_secs_gpu << " s" << std::endl;
+    std::cout << "\nTime elapsed (CPU): " << std::setprecision(5) << std::fixed << elapsed_secs_cpu << " s" << std::endl;
 
-    std::cout << "norm of diff = " << Norm(nodal_forces_global1 - nodal_forces_global2) << std::endl;
+    int rescpu = Norm(nodal_forces_global1 - nodal_forces_global2);
+    int resgpu = Norm(nodal_forces_global1 - nodal_forces_global3);
+
+    if(rescpu == 0){
+        std::cout << "\nAssemble done in the CPU is ok." << std::endl;
+    } else {
+        std::cout << "\nAssemble done in the CPU is not ok." << std::endl;
+    }
+
+    if(resgpu == 0){
+        std::cout << "\nAssemble done in the GPU is ok." << std::endl;
+    } else {
+        std::cout << "\nAssemble done in the GPU is not ok." << std::endl;
+    }
+
 }
