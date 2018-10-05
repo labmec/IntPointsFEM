@@ -44,21 +44,29 @@ void TPZSolveMatrix::SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE> &
     nodal_forces_global.Resize(ncolor * neq, 1);
     nodal_forces_global.Zero();
 
-    ///Create handles for CUBLAS and CUSPARSE
-    cusparseHandle_t handle_cusparse;
-    cusparseCreate(&handle_cusparse);
-
-    cublasHandle_t handle_cublas;
-    cublasCreate(&handle_cublas);
-
     ///Create CUDA events
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     float timing = 0;
 
+    ///Create handles for CUBLAS and CUSPARSE
+    cudaEventRecord(start); //start handle timing
+
+    cusparseHandle_t handle_cusparse;
+    cusparseCreate(&handle_cusparse);
+
+    cublasHandle_t handle_cublas;
+    cublasCreate(&handle_cublas);
+
+    cudaEventRecord(stop); //stop handle timing
+
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&timing, start, stop);
+    std::cout << "Create handles: " << timing / 1000 << std::endl;
+
     ///Allocation and Transfer memory
-    cudaEventRecord(start); //start gather timing
+    cudaEventRecord(start); //start memory allocation and transfer timing
 
     double *dexpandsolution;
     cudaMalloc(&dexpandsolution, nindexes * sizeof(double));
@@ -96,54 +104,51 @@ void TPZSolveMatrix::SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE> &
     cudaMalloc(&dnodal_forces_global, ncolor * neq * sizeof(double));
     cudaMemcpy(dnodal_forces_global, &nodal_forces_global(0, 0), ncolor * neq * sizeof(double), cudaMemcpyHostToDevice);
 
+    cudaEventRecord(stop); //stop memory allocation and transfer timing
+
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&timing, start, stop);
+    std::cout << "Memory allocation and transfer: " << timing / 1000 << std::endl;
+    ///GATHER OPERATION------------------------------------------------
+    cudaEventRecord(start); //start gather timing
+
+    cusparseDgthr(handle_cusparse, nindexes, dglobal_solution, &dexpandsolution[0], &dindexes[0],
+                  CUSPARSE_INDEX_BASE_ZERO);
+
     cudaEventRecord(stop); //stop gather timing
 
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&timing, start, stop);
-    std::cout << "Allocation and Transfer of memory: " << timing / 1000 << std::endl;
-    ///GATHER OPERATION------------------------------------------------
-    cusparseDgthr(handle_cusparse, nindexes, dglobal_solution, &dexpandsolution[0], &dindexes[0],
-                  CUSPARSE_INDEX_BASE_ZERO);
+    std::cout << "Gather operarion: " << timing / 1000 << std::endl;
     ///----------------------------------------------------------------
     ///MULTIPLY--------------------------------------------------------
     cudaEventRecord(start); //start multiply timing
+
     double alpha_m = 1.0;
     double beta_m = 0.0;
 
-//    cublasDgemmBatched(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_N, fRowSizes[0], 1, fColSizes[0], &alpha_m, (const double**) dstorage, fRowSizes[0], (const double**) &dexpandsolution[0], fColSizes[0], &beta_m,(double**) &dresult[0], fRowSizes[0], nelem);
+    int64_t cols = fColSizes[0];
+    int64_t rows = fRowSizes[0];
 
-//    cublasDgemmBatched(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_N, fRowSizes[0], 1, fColSizes[0], &alpha_m, (const double**) dstorage, fRowSizes[0], (const double**) &dexpandsolution[fColFirstIndex[nelem]], fColSizes[0], &beta_m, (double**) &dresult[fRowFirstIndex[nelem]], fRowSizes[0], nelem);
-    for (int iel = 0; iel < nelem; iel++) {
-        int64_t pos = fMatrixPosition[iel];
-        int64_t cols = fColSizes[iel];
-        int64_t rows = fRowSizes[iel];
-        int64_t cont_cols = fColFirstIndex[iel];
-        int64_t cont_rows = fRowFirstIndex[iel];
+    cublasDgemmStridedBatched(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_N, rows, 1, cols, &alpha_m, dstorage, rows, rows*cols, &dexpandsolution[0], cols, cols*1, &beta_m, &dresult[0], rows, rows*1, nelem);
 
-        //du
-        cublasDgemv(handle_cublas, CUBLAS_OP_N, rows, cols, &alpha_m, &dstorage[pos], rows, &dexpandsolution[cont_cols],
-                    1, &beta_m, &dresult[cont_rows], 1);
-        //dv
-        cublasDgemv(handle_cublas, CUBLAS_OP_N, rows, cols, &alpha_m, &dstorage[pos], rows,
-                    &dexpandsolution[cont_cols + fColFirstIndex[nelem]], 1, &beta_m,
-                    &dresult[cont_rows + fRowFirstIndex[nelem]], 1);
-    }
+    cublasDgemmStridedBatched(handle_cublas, CUBLAS_OP_N, CUBLAS_OP_N, rows, 1, cols, &alpha_m, dstorage, rows, rows*cols, &dexpandsolution[fColFirstIndex[nelem]], cols, cols*1, &beta_m,  &dresult[fRowFirstIndex[nelem]], rows, rows*1, nelem);
+
     cudaEventRecord(stop); //stop multiply timing
 
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&timing, start, stop);
-    std::cout << "Multiply matrices: " << timing / 1000 << std::endl;
+    std::cout << "Multiply: " << timing / 1000 << std::endl;
 
     ///----------------------------------------------------------------
-    TPZFMatrix<REAL> vec(2 * nindexes, 1);
-    cudaMemcpy(&vec(0, 0), dresult, 2 * nindexes * sizeof(double), cudaMemcpyDeviceToHost);
-    vec.Print(std::cout);
     ///COMPUTE SIGMA---------------------------------------------------
     cudaEventRecord(start); //start sigma timing
+
     dim3 dimGrid(ceil((npts_tot / 2) / 32.0), 1, 1);
     dim3 dimBlock(32, 1, 1);
     ComputeSigmaKernel << < dimGrid, dimBlock >> > (npts_tot, dweight, dresult, dsigma);
     cudaDeviceSynchronize();
+
     cudaEventRecord(stop); //stop sigma timing
 
     cudaEventSynchronize(stop);
@@ -153,24 +158,14 @@ void TPZSolveMatrix::SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE> &
 
     ///MULTIPLY TRANSPOSE----------------------------------------------
     cudaEventRecord(start); //start transpose timing
+
     double alpha_mt = 1.0;
     double beta_mt = 0.;
 
-    for (int64_t iel = 0; iel < nelem; iel++) {
-        int64_t pos = fMatrixPosition[iel];
-        int64_t rows = fRowSizes[iel];
-        int64_t cols = fColSizes[iel];
-        int64_t cont_rows = fRowFirstIndex[iel];
-        int64_t cont_cols = fColFirstIndex[iel];
+    cublasDgemmStridedBatched(handle_cublas, CUBLAS_OP_T, CUBLAS_OP_N, cols, 1, rows, &alpha_m, dstorage, rows, rows*cols, &dsigma[0], rows, rows*1, &beta_m, &dnodal_forces_vec[0], cols, cols*1, nelem);
 
-        //Nodal forces in x direction
-        cublasDgemv(handle_cublas, CUBLAS_OP_T, rows, cols, &alpha_mt, &dstorage[pos], rows, &dsigma[cont_rows], 1,
-                    &beta_mt, &dnodal_forces_vec[cont_cols], 1);
+    cublasDgemmStridedBatched(handle_cublas, CUBLAS_OP_T, CUBLAS_OP_N, cols, 1, rows, &alpha_m, dstorage, rows, rows*cols, &dsigma[npts_tot], rows, rows*1, &beta_m,  &dnodal_forces_vec[npts_tot / 2], cols, cols*1, nelem);
 
-        //Nodal forces in y direction
-        cublasDgemv(handle_cublas, CUBLAS_OP_T, rows, cols, &alpha_mt, &dstorage[pos], rows,
-                    &dsigma[cont_rows + npts_tot], 1, &beta_mt, &dnodal_forces_vec[cont_cols + npts_tot / 2], 1);
-    }
     cudaEventRecord(stop); //stop transpose timing
 
     cudaEventSynchronize(stop);
@@ -178,10 +173,19 @@ void TPZSolveMatrix::SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE> &
     std::cout << "Multiply Transpose: " << timing / 1000 << std::endl;
     ///----------------------------------------------------------------
 
+    ///SCATTER OPERATION-----------------------------------------------
+    cudaEventRecord(start); //start scatter timing
+    cusparseDsctr(handle_cusparse, nindexes, dnodal_forces_vec, &dindexescolor[0], &dnodal_forces_global[0], CUSPARSE_INDEX_BASE_ZERO);
+
+    cudaEventRecord(stop); //stop scatter timing
+
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&timing, start, stop);
+    std::cout << "Scatter opration: " << timing / 1000 << std::endl;
+    ///----------------------------------------------------------------
+
     ///ASSEMBLE--------------------------------------------------------
     cudaEventRecord(start); //start assemble timing
-    cusparseDsctr(handle_cusparse, nindexes, dnodal_forces_vec, &dindexescolor[0], &dnodal_forces_global[0],
-                  CUSPARSE_INDEX_BASE_ZERO);
 
     int64_t colorassemb = ncolor / 2;
     double alpha = 1.;
@@ -196,6 +200,7 @@ void TPZSolveMatrix::SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE> &
     }
 
     nodal_forces_global.Resize(neq, 1);
+
     cudaEventRecord(stop); //stop assemble timing
 
     cudaEventSynchronize(stop);
@@ -207,6 +212,8 @@ void TPZSolveMatrix::SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE> &
     cudaMemcpy(&nodal_forces_global(0, 0), dnodal_forces_global, neq * sizeof(double), cudaMemcpyDeviceToHost);
 
     ///Free device memory
+    cudaEventRecord(start); //start free memory timing
+
     cusparseDestroy(handle_cusparse);
     cublasDestroy(handle_cublas);
     cudaFree(dglobal_solution);
@@ -219,8 +226,16 @@ void TPZSolveMatrix::SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE> &
     cudaFree(dnodal_forces_vec);
     cudaFree(dindexescolor);
     cudaFree(dnodal_forces_global);
+
+    cudaEventRecord(stop); //stop free memory timing
+
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&timing, start, stop);
+    std::cout << "Free memory: " << timing / 1000 << std::endl;
+
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
+
 }
 
 void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const {
@@ -395,5 +410,5 @@ void TPZSolveMatrix::ColoredAssemble(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMa
     nodal_forces_global.Resize(neq, 1);
     std::clock_t stop = clock();
     REAL time = REAL(stop - start) / CLOCKS_PER_SEC;
-    std::cout << "Sigma: " << std::setprecision(5) << std::fixed << time << std::endl;
+    std::cout << "Assemble: " << std::setprecision(5) << std::fixed << time << std::endl;
 }
