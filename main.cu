@@ -35,6 +35,14 @@ TPZCompMesh *cmesh_mat_2D(TPZGeoMesh *gmesh, int pOrder);
 void sol_teste(TPZCompMesh *cmesh);
 
 
+#ifdef USING_TBB
+std::ofstream timing("timingtbb.txt");
+#elif USING_CUDA
+std::ofstream timing("timingcuda.txt");
+#else
+std::ofstream timing("timing.txt");
+#endif
+
 int main(int argc, char *argv[]) {
 #ifdef USING_TBB
     timing << "--------------------USING TBB--------------------"<< std::endl;
@@ -47,9 +55,11 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < 1; i++) {
         //// ------------------------ DATA INPUT ------------------------------
         //// NUMBER OF ELEMENTS IN X AND Y DIRECTIONS
-        int nelem_x = 2;
-        int nelem_y = 2;
+        int nelem_x = atoi(argv[1]);
+        int nelem_y = atoi(argv[1]);
 
+        timing << "-------------------------------------------------" << std::endl;
+        timing << "MESH SIZE: " << nelem_x << "x" << nelem_y << std::endl;
         std::cout << "-------------------------------------------------" << std::endl;
         std::cout << "MESH SIZE: " << nelem_x << "x" << nelem_y << std::endl;
 
@@ -388,45 +398,61 @@ void sol_teste(TPZCompMesh *cmesh) {
 
     TPZFMatrix<REAL> coef_sol = cmesh->Solution();
     int neq = cmesh->NEquations();
-    TPZFMatrix<REAL> nodal_forces_global1(neq, 1, 0.);
+    TPZFMatrix<REAL> nodal_forces_global1(neq, 1, 0.);    
     TPZFMatrix<REAL> nodal_forces_global2(neq, 1, 0.);
     TPZFMatrix<REAL> nodal_forces_global3(neq, 1, 0.);
     TPZFMatrix<REAL> result;
     TPZFMatrix<REAL> sigma;
     TPZFMatrix<REAL> nodal_forces_vec;
 
-#ifdef USING_CUDA
+
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;
+//    std::clock_t begingpu = clock();
+//    SolMat->SolveWithCUDA(cmesh, coef_sol, weight, nodal_forces_global3);
     SolMat->AllocateMemory(cmesh);
     SolMat->MultiplyCUDA(coef_sol, result);
     SolMat->ComputeSigmaCUDA(weight, result, sigma);
     SolMat->MultiplyTransposeCUDA(sigma, nodal_forces_vec);
     SolMat->ColoredAssembleCUDA(nodal_forces_vec, nodal_forces_global3);
     SolMat->FreeMemory();
-#endif
+
+//    std::clock_t endgpu = clock();
+
 
     std::cout << "\n\nSOLVING WITH CPU" << std::endl;
+    std::clock_t  start, stop;
+
+//    std::clock_t begincpu = clock();
+
+ 
     SolMat->Multiply(coef_sol, result);
     SolMat->ComputeSigma(weight, result, sigma);
     SolMat->MultiplyTranspose(sigma, nodal_forces_vec);
     SolMat->ColoredAssemble(nodal_forces_vec, nodal_forces_global2);
 
-    //Compare assembles
+//    std::clock_t endcpu = clock();
+
     SolMat->TraditionalAssemble(nodal_forces_vec, nodal_forces_global1); // ok
 
-    int rescpu = Norm(nodal_forces_global1 - nodal_forces_global2);
+
+
+//    REAL elapsed_secs_gpu = REAL(endgpu - begingpu) / CLOCKS_PER_SEC;
+//    REAL elapsed_secs_cpu = REAL(endcpu - begincpu) / CLOCKS_PER_SEC;
+//    timing << "\nTime elapsed (GPU): " << std::setprecision(5) << std::fixed << elapsed_secs_gpu << " s" << std::endl;
+//    timing << "\nTime elapsed (CPU): " << std::setprecision(5) << std::fixed << elapsed_secs_cpu << " s" << std::endl;
+
+int rescpu = Norm(nodal_forces_global1 - nodal_forces_global2);
+int resgpu = Norm(nodal_forces_global1 - nodal_forces_global3);
+
     if(rescpu == 0){
         std::cout << "\nAssemble done in the CPU is ok." << std::endl;
     } else {
         std::cout << "\nAssemble done in the CPU is not ok." << std::endl;
     }
-
-#ifdef USING_CUDA
-    int resgpu = Norm(nodal_forces_global1 - nodal_forces_global3);
+    
     if(resgpu == 0){
         std::cout << "\nAssemble done in the GPU is ok." << std::endl;
     } else {
         std::cout << "\nAssemble done in the GPU is not ok." << std::endl;
     }
-#endif
 }

@@ -13,12 +13,6 @@
 using namespace tbb;
 #endif
 
-void TPZSolveMatrix::SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE>  &global_solution, TPZStack<REAL> &weight, TPZFMatrix<REAL> &nodal_forces_global) const
-{
-    return;
-}
-
-
 void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const
 {
 int64_t nelem = fRowSizes.size();
@@ -199,6 +193,7 @@ void TPZSolveMatrix::ColoringElements(TPZCompMesh * cmesh) const
                 continue;
             }
             fElemColor[iel] = contcolor;
+            //cel->Reference()->SetMaterialId(contcolor);
 
             for (icon = 0; icon < ncon; icon++) {
                 connects_vec[connectlist[icon]] = 1;
@@ -241,4 +236,36 @@ void TPZSolveMatrix::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFM
         colorassemb = ncolor/2;
     }
     nodal_forces_global.Resize(neq, 1);
+}
+
+void TPZSolveMatrix::AllocateMemory(TPZCompMesh *cmesh){
+    return;
+}
+
+void TPZSolveMatrix::FreeMemory(){
+    return;
+}
+
+void TPZSolveMatrix::cuSparseHandle(){
+    return;
+}
+
+void TPZSolveMatrix::cuBlasHandle(){
+    return;
+}
+
+void TPZSolveMatrix::MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const{
+    return;
+}
+
+void TPZSolveMatrix::ComputeSigmaCUDA(TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<REAL> &sigma){
+    return;
+}
+
+void TPZSolveMatrix::MultiplyTransposeCUDA(TPZFMatrix<STATE> &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec){
+    return;
+}
+
+void TPZSolveMatrix::ColoredAssembleCUDA(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global){
+    return;
 }

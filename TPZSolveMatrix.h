@@ -11,11 +11,14 @@
 #include <mkl.h>
 #include "pzinterpolationspace.h"
 #include "pzcmesh.h"
-
 #ifdef USING_MKL
-
 #include "mkl.h"
-
+#endif
+#ifdef USING_CUDA
+#include <cuda.h>
+#include <cublas_v2.h>
+#include <cusparse.h>
+#include "mkl.h"
 #endif
 
 class TPZSolveMatrix : public TPZMatrix<STATE> {
@@ -29,6 +32,8 @@ public:
     TPZSolveMatrix(int64_t rows, int64_t cols, TPZVec<int64_t> rowsizes, TPZVec<int64_t> colsizes) : TPZMatrix(rows,
                                                                                                                cols) {
         SetParameters(rowsizes, colsizes);
+        cuSparseHandle();
+        cuBlasHandle();
     }
 
 
@@ -42,12 +47,10 @@ public:
                                                  fMatrixPosition(copy.fMatrixPosition),
                                                  fRowFirstIndex(copy.fRowFirstIndex),
                                                  fElemColor(copy.fElemColor), fIndexesColor(copy.fIndexesColor),
-                                                 fColFirstIndex(copy.fColFirstIndex), dfStorage(copy.dfStorage),
-                                                 dfColSizes(copy.dfColSizes), dfRowSizes(copy.dfRowSizes),
-                                                 dfIndexes(copy.dfIndexes),
-                                                 dfMatrixPosition(copy.dfMatrixPosition),
-                                                 dfRowFirstIndex(copy.dfRowFirstIndex),
-                                                 dfColFirstIndex(copy.dfColFirstIndex) {
+                                                 fColFirstIndex(copy.fColFirstIndex), dglobal_solution(copy.dglobal_solution),
+                                                 dindexes(copy.dindexes), dstorage(copy.dstorage), dexpandsolution(copy.dexpandsolution),
+                                                 dresult(copy.dresult), dweight(copy.dweight), dsigma(copy.dsigma), dnodal_forces_vec(copy.dnodal_forces_vec),
+                                                 dindexescolor(copy.dindexescolor), dnodal_forces_global(copy.dnodal_forces_global) {
 
     }
 
@@ -62,13 +65,16 @@ public:
         fMatrixPosition = copy.fMatrixPosition;
         fRowFirstIndex = copy.fRowFirstIndex;
         fColFirstIndex = copy.fColFirstIndex;
-        dfStorage = copy.dfStorage;
-        dfColSizes = copy.dfColSizes;
-        dfRowSizes = copy.dfRowSizes;
-        dfIndexes = copy.dfIndexes;
-        dfMatrixPosition = copy.dfMatrixPosition;
-        dfRowFirstIndex = copy.dfRowFirstIndex;
-        dfColFirstIndex = copy.dfColFirstIndex;
+        dglobal_solution = copy.dglobal_solution;
+        dindexes = copy.dindexes;
+        dstorage = copy.dstorage;
+        dexpandsolution = copy.dexpandsolution;
+        dresult = copy.dresult;
+        dweight = copy.dweight;
+        dsigma = copy.dsigma;
+        dnodal_forces_vec = copy.dnodal_forces_vec;
+        dindexescolor = copy.dindexescolor;
+        dnodal_forces_global = copy.dnodal_forces_global;
 
         return *this;
     }
@@ -118,8 +124,24 @@ public:
 
     /** @brief Solve procedure */
 
-    void SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE> &global_solution, TPZStack<REAL> &weight,
-                       TPZFMatrix<REAL> &nodal_forces_global) const;
+    //void SolveWithCUDA(TPZCompMesh *cmesh, const TPZFMatrix<STATE> &global_solution, TPZStack<REAL> &weight, TPZFMatrix<REAL> &nodal_forces_global) const;
+    void AllocateMemory(TPZCompMesh *cmesh);
+ 
+    void FreeMemory();
+
+    void cuSparseHandle();
+
+    void cuBlasHandle();
+
+    void MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
+
+    void ComputeSigmaCUDA(TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<REAL> &sigma);
+
+    void MultiplyTransposeCUDA(TPZFMatrix<STATE> &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec);
+
+    void ColoredAssembleCUDA(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global);
+
+
 
     void Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
 
@@ -163,13 +185,23 @@ protected:
     TPZVec<int64_t> fColFirstIndex;
 
 /// Parameters stored on device
-    double *dfStorage;
-    int *dfRowSizes;
-    int *dfColSizes;
-    int *dfIndexes;
-    int *dfMatrixPosition;
-    int *dfRowFirstIndex;
-    int *dfColFirstIndex;
+    double *dglobal_solution;
+    int *dindexes;
+    double *dstorage;
+    double *dexpandsolution;
+    double *dresult;
+    double *dweight;
+    double *dsigma;
+    double *dnodal_forces_vec;
+    int *dindexescolor;
+    double *dnodal_forces_global;
+
+//Libraries handles
+#ifdef USING_CUDA
+    cusparseHandle_t handle_cusparse;
+    cublasHandle_t handle_cublas;
+#endif
+
 };
 
 #endif /* TPZSolveMatrix_h */
