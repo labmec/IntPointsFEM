@@ -1,10 +1,10 @@
-/**
- * @file
- * @brief Contains the TPZSolveMatrix class which implements a solution based on a matrix procedure.
- */
+//
+// Created by natalia on 18/10/18.
+//
 
-#ifndef TPZSolveMatrix_h
-#define TPZSolveMatrix_h
+#ifndef INTEGRATIONPOINTSEXPERIMENT_TPZSOLVEVECTOR_H
+#define INTEGRATIONPOINTSEXPERIMENT_TPZSOLVEVECTOR_H
+
 
 #include "pzmatrix.h"
 #include "pzfmatrix.h"
@@ -21,15 +21,15 @@
 #include "mkl.h"
 #endif
 
-class TPZSolveMatrix : public TPZMatrix<STATE> {
+class TPZSolveVector : public TPZMatrix<STATE> {
 
 public:
 
-    TPZSolveMatrix() : TPZMatrix<STATE>(), fStorage(), fIndexes(), fColSizes(), fRowSizes(), fMatrixPosition() {
+    TPZSolveVector() : TPZMatrix<STATE>(), fIndexes(), fColSizes(), fRowSizes(), fMatrixPosition(), fStorageVec() {
 
     }
 
-    TPZSolveMatrix(int64_t rows, int64_t cols, TPZVec<int64_t> rowsizes, TPZVec<int64_t> colsizes) : TPZMatrix(rows,
+    TPZSolveVector(int64_t rows, int64_t cols, TPZVec<int64_t> rowsizes, TPZVec<int64_t> colsizes) : TPZMatrix(rows,
                                                                                                                cols) {
         SetParameters(rowsizes, colsizes);
         cuSparseHandle();
@@ -37,26 +37,26 @@ public:
     }
 
 
-    ~TPZSolveMatrix() {
+    ~TPZSolveVector() {
 
     }
 
-    TPZSolveMatrix(const TPZSolveMatrix &copy) : TPZMatrix<STATE>(copy),
-                                                 fStorage(copy.fStorage), fIndexes(copy.fIndexes),
+    TPZSolveVector(const TPZSolveVector &copy) : TPZMatrix<STATE>(copy),
+                                                 fStorageVec(copy.fStorageVec), fIndexes(copy.fIndexes),
                                                  fColSizes(copy.fColSizes), fRowSizes(copy.fRowSizes),
                                                  fMatrixPosition(copy.fMatrixPosition),
                                                  fRowFirstIndex(copy.fRowFirstIndex),
                                                  fElemColor(copy.fElemColor), fIndexesColor(copy.fIndexesColor),
                                                  fColFirstIndex(copy.fColFirstIndex), dglobal_solution(copy.dglobal_solution),
-                                                 dindexes(copy.dindexes), dstorage(copy.dstorage), dstoragevec(copy.dstoragevec), dexpandsolution(copy.dexpandsolution),
+                                                 dindexes(copy.dindexes), dstoragevec(copy.dstoragevec), dexpandsolution(copy.dexpandsolution),
                                                  dresult(copy.dresult), dweight(copy.dweight), dsigma(copy.dsigma), dnodal_forces_vec(copy.dnodal_forces_vec),
                                                  dindexescolor(copy.dindexescolor), dnodal_forces_global(copy.dnodal_forces_global) {
 
     }
 
-    TPZSolveMatrix &operator=(const TPZSolveMatrix &copy) {
+    TPZSolveVector &operator=(const TPZSolveVector &copy) {
         TPZMatrix::operator=(copy);
-        fStorage = copy.fStorage;
+        fStorageVec = copy.fStorageVec;
         fIndexes = copy.fIndexes;
         fColSizes = copy.fColSizes;
         fRowSizes = copy.fRowSizes;
@@ -67,7 +67,6 @@ public:
         fColFirstIndex = copy.fColFirstIndex;
         dglobal_solution = copy.dglobal_solution;
         dindexes = copy.dindexes;
-        dstorage = copy.dstorage;
         dstoragevec = copy.dstoragevec;
         dexpandsolution = copy.dexpandsolution;
         dresult = copy.dresult;
@@ -81,7 +80,7 @@ public:
     }
 
     TPZMatrix<STATE> *Clone() const {
-        return new TPZSolveMatrix(*this);
+        return new TPZSolveVector(*this);
     }
 
     void SetParameters(TPZVec<int64_t> rowsize, TPZVec<int64_t> colsize) {
@@ -105,7 +104,7 @@ public:
             fRowFirstIndex[iel + 1] = fRowFirstIndex[iel] + fRowSizes[iel];
             fColFirstIndex[iel + 1] = fColFirstIndex[iel] + fColSizes[iel];
         }
-        fStorage.resize(fMatrixPosition[nelem]);
+        fStorageVec.resize(fMatrixPosition[nelem]);
         fElemColor.resize(nelem);
         fElemColor.Fill(-1);
     }
@@ -116,8 +115,17 @@ public:
         int64_t pos = fMatrixPosition[iel];
         int64_t nelem = fRowSizes.size();
 
-        TPZFMatrix<REAL> elmatloc(rows, cols, &fStorage[pos], rows*cols);
-        elmatloc = elmat;
+        int cont = 0;
+        for (int i = 0; i < cols; i++) {
+            for (int j = 0; j < cols; j++) {
+                int k = (j + i) % cols;
+                int id1 = iel + j*nelem + cont;
+                int id2 = iel + j*nelem + cont + nelem*cols;
+                fStorageVec[id1] =  elmat(j, k); //primeira metade da matriz
+                fStorageVec[id2] =  elmat(j + rows/2, k); //segunda metade da matriz
+            }
+            cont += 2*cols*nelem;
+        }
     }
 
     void SetIndexes(TPZVec<MKL_INT> indexes) {
@@ -131,7 +139,7 @@ public:
 
     //USING CUDA
     void AllocateMemory(TPZCompMesh *cmesh);
- 
+
     void FreeMemory();
 
     void cuSparseHandle();
@@ -139,23 +147,9 @@ public:
     void cuBlasHandle();
 
 
-    void MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
-
-    void ComputeSigmaCUDA(TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<REAL> &sigma);
-
-    void MultiplyTransposeCUDA(TPZFMatrix<STATE> &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec);
-
-    void ColoredAssembleCUDA(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global);
-
-
-
     void Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
 
-    void ComputeSigma(TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<REAL> &sigma);
-
-    void MultiplyTranspose(TPZFMatrix<STATE> &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec);
-
-    void ColoredAssemble(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global);
+    void MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
 
 
     void TraditionalAssemble(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const;
@@ -165,7 +159,7 @@ public:
 protected:
 
 /// vector containing the matrix coefficients
-    TPZVec<REAL> fStorage;
+    TPZVec<REAL> fStorageVec;
 
 /// number of rows of each block matrix
     TPZVec<int64_t> fRowSizes;
@@ -194,7 +188,6 @@ protected:
 /// Parameters stored on device
     double *dglobal_solution;
     int *dindexes;
-    double *dstorage;
     double *dstoragevec;
     double *dexpandsolution;
     double *dresult;
@@ -212,4 +205,5 @@ protected:
 
 };
 
-#endif /* TPZSolveMatrix_h */
+
+#endif //INTEGRATIONPOINTSEXPERIMENT_TPZSOLVEVECTOR_H

@@ -1,4 +1,4 @@
-#include "TPZSolveMatrix.h"
+#include "TPZSolveVector.h"
 #include "pzmatrix.h"
 #include <mkl.h>
 #include <stdlib.h>
@@ -40,15 +40,15 @@ void TPZSolveMatrix::AllocateMemory(TPZCompMesh *cmesh) {
 //    cudaEventRecord(start);
 
     int nelem = fRowSizes.size();
-    int nindexes = fIndexes.size();
+    int nindexes = fIndexes.size()/2; //numero real de indices(sem duplicar)
     int neq = cmesh->NEquations();
     int npts_tot = fRow;
     int64_t ncolor = *std::max_element(fElemColor.begin(), fElemColor.end()) + 1;
 
     cudaMalloc(&dglobal_solution, neq * sizeof(double));
-    cudaMalloc(&dindexes, nindexes * sizeof(int));
-    cudaMalloc(&dstorage, fColSizes[0]*fRowSizes[0] * sizeof(double));
-    cudaMalloc(&dexpandsolution, nindexes * sizeof(double));
+    cudaMalloc(&dindexes, 2*nindexes * sizeof(int)); //2* pq esta duplicado
+    cudaMalloc(&dstoragevec, nelem*fColSizes[0]*fRowSizes[0] * sizeof(double));
+    cudaMalloc(&dexpandsolution, 2*nindexes * sizeof(double)); //sol duplicada
     cudaMalloc(&dresult, 2 * nindexes * sizeof(double));
     cudaMalloc(&dweight, npts_tot/2 * sizeof(double));
     cudaMalloc(&dsigma, 2 * npts_tot * sizeof(double));
@@ -142,7 +142,7 @@ void TPZSolveMatrix::MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZF
 
     result.Resize(2 * nindexes, 1);
     result.Zero();
-    
+
     cusparseDgthr(handle_cusparse, nindexes, dglobal_solution, &dexpandsolution[0], &dindexes[0], CUSPARSE_INDEX_BASE_ZERO);
 
 //    cudaEventRecord(stop);
@@ -424,6 +424,61 @@ void TPZSolveMatrix::ColoredAssemble(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMa
     stop = clock();
     std::cout << "Assemble: " << REAL(stop - start) / CLOCKS_PER_SEC << std::endl;
 
+}
+
+
+void TPZSolveMatrix::MultiplyVectors(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const {
+    int64_t n_globalsol = fIndexes.size()/2; //o vetor de indices esta duplicado
+    int64_t nelem = fRowSizes.size();
+    int rows = fRowSizes[0];
+    int cols = fColSizes[0];
+
+    TPZFMatrix<REAL> expandsolution(2*n_globalsol,1); //vetor solucao duplicado
+
+    cblas_dgthr(2*n_globalsol, global_solution, &expandsolution(0,0), &fIndexes[0]);
+
+    result.Resize(2*n_globalsol,1);
+    result.Zero();
+
+    for (int i = 0; i < cols; i++) {
+        cblas_dsbmv(CblasColMajor, CblasUpper, nelem * rows / 2, 0, 1., &fStorageVec[i * nelem * rows], 1, &expandsolution(i * nelem, 0), 1, 1., &result(0,0), 1);
+        cblas_dsbmv(CblasColMajor, CblasUpper, nelem * rows / 2, 0, 1., &fStorageVec[i * nelem * rows + nelem * rows / 2], 1, &expandsolution(i * nelem, 0), 1, 1., &result(nelem * rows / 2,0), 1);
+
+        cblas_dsbmv(CblasColMajor, CblasUpper, nelem * rows / 2, 0, 1., &fStorageVec[i * nelem * rows], 1, &expandsolution(i * nelem + n_globalsol, 0), 1, 1., &result(n_globalsol,0), 1);
+        cblas_dsbmv(CblasColMajor, CblasUpper, nelem * rows / 2, 0, 1., &fStorageVec[i * nelem * rows + nelem * rows / 2], 1, &expandsolution(i * nelem + n_globalsol, 0), 1, 1., &result(n_globalsol + nelem * rows / 2,0), 1);
+
+    }
+}
+
+void TPZSolveMatrix::MultiplyVectorsCUDA(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const{
+    int64_t n_globalsol = fIndexes.size()/2; //o vetor de indices esta duplicado
+    int64_t nelem = fRowSizes.size();
+    int rows = fRowSizes[0];
+    int cols = fColSizes[0];
+
+    cudaMemcpy(dindexes, &fIndexes[0], 2*n_globalsol * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(dglobal_solution, &global_solution[0], global_solution.Rows() * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(dstoragevec, &fStorageVec[0], nelem*fColSizes[0]*fRowSizes[0] * sizeof(double), cudaMemcpyHostToDevice);
+
+    cusparseDgthr(handle_cusparse, 2*n_globalsol, dglobal_solution, &dexpandsolution[0], &dindexes[0], CUSPARSE_INDEX_BASE_ZERO);
+
+    result.Resize(2*n_globalsol,1);
+    result.Zero();
+
+    cudaMemcpy(dresult, &result(0,0), 2*n_globalsol * sizeof(double), cudaMemcpyHostToDevice);
+
+    double alpha = 1.;
+    double beta = 1.;
+
+    for (int i = 0; i < cols; i++) {
+        cublasDsbmv(handle_cublas, CUBLAS_FILL_MODE_LOWER, nelem * rows / 2, 0, &alpha, &dstoragevec[i * nelem * rows], 1, &dexpandsolution[i * nelem], 1, &beta, &dresult[0], 1);
+        cublasDsbmv(handle_cublas, CUBLAS_FILL_MODE_LOWER, nelem * rows / 2, 0, &alpha, &dstoragevec[i * nelem * rows + nelem * rows / 2], 1, &dexpandsolution[i * nelem], 1, &beta, &dresult[nelem * rows / 2], 1);
+
+        cublasDsbmv(handle_cublas, CUBLAS_FILL_MODE_LOWER, nelem * rows / 2, 0, &alpha, &dstoragevec[i * nelem * rows], 1, &dexpandsolution[i * nelem + n_globalsol], 1, &beta, &dresult[n_globalsol], 1);
+        cublasDsbmv(handle_cublas, CUBLAS_FILL_MODE_LOWER, nelem * rows / 2, 0, &alpha, &dstoragevec[i * nelem * rows + nelem * rows / 2], 1, &dexpandsolution[i * nelem + n_globalsol], 1, &beta, &dresult[n_globalsol + nelem * rows / 2], 1);
+    }
+
+    cudaMemcpy(&result(0, 0), dresult, 2 * n_globalsol * sizeof(double), cudaMemcpyDeviceToHost);
 }
 
 void TPZSolveMatrix::TraditionalAssemble(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const {

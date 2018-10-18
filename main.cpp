@@ -21,6 +21,7 @@
 #include "TPZSSpStructMatrix.h"
 
 #include "TPZSolveMatrix.h"
+#include "TPZSolveVector.h"
 
 #ifdef USING_TBB
 #include "tbb/parallel_for_each.h"
@@ -313,7 +314,7 @@ void SolVector(TPZCompMesh *cmesh) {
         nf_tot += nf;
     }
 
-    TPZSolveMatrix *SolMat = new TPZSolveMatrix(dim_mesh * npts_tot, nf_tot, rowsizes, colsizes);
+    TPZSolveVector *SolVec = new TPZSolveVector(dim_mesh * npts_tot, nf_tot, rowsizes, colsizes);
 //// -------------------------------------------------------------------------------
 
 //// DPHI MATRIX FOR EACH ELEMENT, WEIGHT AND INDEXES VECTORS-----------------------
@@ -353,7 +354,7 @@ void SolVector(TPZCompMesh *cmesh) {
                     elmatrix(inpts * dim + idim, inf) = dphix(idim, inf);
             }
         }
-        SolMat->SetElementMatrix(iel, elmatrix);
+        SolVec->SetElementMatrix(iel, elmatrix);
 
         //Indexes vector
         int64_t ncon = cel->NConnects();
@@ -380,8 +381,8 @@ void SolVector(TPZCompMesh *cmesh) {
         }
         cont++;
     }
-    SolMat->SetIndexes(indexes);
-    SolMat->ColoringElements(cmesh);
+    SolVec->SetIndexes(indexes);
+    SolVec->ColoringElements(cmesh);
 
     TPZFMatrix<REAL> coef_sol = cmesh->Solution();
     int neq = cmesh->NEquations();
@@ -394,13 +395,12 @@ void SolVector(TPZCompMesh *cmesh) {
 
 #ifdef USING_CUDA
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;
-    SolMat->MultiplyVectorsCUDA(coef_sol,result);
+    SolMat->MultiplyCUDA(coef_sol,result);
 
 #endif
 
     std::cout << "\n\nSOLVING WITH CPU" << std::endl;
-    SolMat->MultiplyVectors(coef_sol, result);
-
+    SolVec->Multiply(coef_sol, result);
 
 //    //Check result
 //    SolMat->TraditionalAssemble(nodal_forces_vec, nodal_forces_global1); // ok
