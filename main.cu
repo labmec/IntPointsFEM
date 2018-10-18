@@ -42,6 +42,7 @@ int main(int argc, char *argv[]) {
         //// ------------------------ DATA INPUT ------------------------------
         //// NUMBER OF ELEMENTS IN X AND Y DIRECTIONS
         int nelem_x = atoi(argv[1]);
+        int nelem_y = atoi(argv[1]);
 
         std::cout << "-------------------------------------------------" << std::endl;
         std::cout << "MESH SIZE: " << nelem_x << "x" << nelem_y << std::endl;

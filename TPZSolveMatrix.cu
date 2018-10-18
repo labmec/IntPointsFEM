@@ -82,7 +82,7 @@ void TPZSolveMatrix::FreeMemory() {
     cudaFree(dindexescolor);
     cudaFree(dnodal_forces_global);
 
-    cublasDestroy(handle_cusblas);
+    cublasDestroy(handle_cublas);
     cusparseDestroy(handle_cusparse);
 
 //    cudaEventRecord(stop);
