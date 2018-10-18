@@ -14,7 +14,7 @@
 #ifdef USING_MKL
 #include "mkl.h"
 #endif
-#ifdef USING_CUDA
+#ifdef __CUDACC__
 #include <cuda.h>
 #include <cublas_v2.h>
 #include <cusparse.h>
@@ -231,7 +231,7 @@ protected:
     double *dnodal_forces_global;
 
 //Libraries handles
-#ifdef USING_CUDA
+#ifdef __CUDACC__
     cusparseHandle_t handle_cusparse;
     cublasHandle_t handle_cublas;
 #endif

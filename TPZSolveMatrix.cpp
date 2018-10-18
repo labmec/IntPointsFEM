@@ -255,7 +255,6 @@ void TPZSolveMatrix::MultiplyVectors(const TPZFMatrix<STATE> &global_solution, T
         cblas_dsbmv(CblasColMajor, CblasUpper, nelem * rows / 2, 0, 1., &fStorageVec[i * nelem * rows + nelem * rows / 2], 1, &expandsolution(i * nelem + n_globalsol, 0), 1, 1., &result(n_globalsol + nelem * rows / 2,0), 1);
 
     }
-
 }
 
 

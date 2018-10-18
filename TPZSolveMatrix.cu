@@ -466,15 +466,21 @@ void TPZSolveMatrix::MultiplyVectorsCUDA(const TPZFMatrix<STATE> &global_solutio
     result.Resize(2*n_globalsol,1);
     result.Zero();
 
+    cudaMemcpy(dresult, &result(0,0), 2*n_globalsol * sizeof(double), cudaMemcpyHostToDevice);
+
+    double alpha = 1.;
+    double beta = 1.;
+
     for (int i = 0; i < cols; i++) {
-        cublasDsbmv(handle_cublas, CUBLAS_FILL_MODE_UPPER, nelem * rows / 2, 0, 1., &dstoragevec[i * nelem * rows], 1, &dexpandsolution[i * nelem], 1, 1., &dresult[0], 1);
-        cublasDsbmv(handle_cublas, CUBLAS_FILL_MODE_UPPER, nelem * rows / 2, 0, 1., &dstoragevec[i * nelem * rows + nelem * rows / 2], 1, &dexpandsolution[i * nelem], 1, 1., &dresult[nelem * rows / 2], 1);
+        cublasDsbmv(handle_cublas, CUBLAS_FILL_MODE_LOWER, nelem * rows / 2, 0, &alpha, &dstoragevec[i * nelem * rows], 1, &dexpandsolution[i * nelem], 1, &beta, &dresult[0], 1);
+        cublasDsbmv(handle_cublas, CUBLAS_FILL_MODE_LOWER, nelem * rows / 2, 0, &alpha, &dstoragevec[i * nelem * rows + nelem * rows / 2], 1, &dexpandsolution[i * nelem], 1, &beta, &dresult[nelem * rows / 2], 1);
 
-        cublasDsbmv(handle_cublas, CUBLAS_FILL_MODE_UPPER, nelem * rows / 2, 0, 1., &dstoragevec[i * nelem * rows], 1, &dexpandsolution[i * nelem + n_globalsol], 1, 1., &dresult[n_globalsol], 1);
-        cublasDsbmv(handle_cublas, CUBLAS_FILL_MODE_UPPER, nelem * rows / 2, 0, 1., &dstoragevec[i * nelem * rows + nelem * rows / 2], 1, &dexpandsolution[i * nelem + n_globalsol], 1, 1., &dresult[n_globalsol + nelem * rows / 2], 1);
+        cublasDsbmv(handle_cublas, CUBLAS_FILL_MODE_LOWER, nelem * rows / 2, 0, &alpha, &dstoragevec[i * nelem * rows], 1, &dexpandsolution[i * nelem + n_globalsol], 1, &beta, &dresult[n_globalsol], 1);
+        cublasDsbmv(handle_cublas, CUBLAS_FILL_MODE_LOWER, nelem * rows / 2, 0, &alpha, &dstoragevec[i * nelem * rows + nelem * rows / 2], 1, &dexpandsolution[i * nelem + n_globalsol], 1, &beta, &dresult[n_globalsol + nelem * rows / 2], 1);
     }
-}
 
+    cudaMemcpy(&result(0, 0), dresult, 2 * n_globalsol * sizeof(double), cudaMemcpyDeviceToHost);
+}
 
 void TPZSolveMatrix::TraditionalAssemble(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const {
     for (int64_t ir = 0; ir < fRow; ir++) {

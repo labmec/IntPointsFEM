@@ -32,34 +32,17 @@ TPZCompMesh *cmesh_2D(TPZGeoMesh *gmesh, int pOrder);
 
 TPZCompMesh *cmesh_mat_2D(TPZGeoMesh *gmesh, int pOrder);
 
-void sol_teste(TPZCompMesh *cmesh);
+void SolMatrix(TPZCompMesh *cmesh);
 
+void SolVector(TPZCompMesh *cmesh);
 
-#ifdef USING_TBB
-std::ofstream timing("timingtbb.txt");
-#elif USING_CUDA
-std::ofstream timing("timingcuda.txt");
-#else
-std::ofstream timing("timing.txt");
-#endif
 
 int main(int argc, char *argv[]) {
-#ifdef USING_TBB
-    timing << "--------------------USING TBB--------------------"<< std::endl;
-    std::cout << "--------------------USING TBB--------------------" << std::endl;
-#elif USING_CUDA
-    timing << "--------------------USING CUDA-------------------"  << std::endl;
-    std::cout << "--------------------USING CUDA-------------------" << std::endl;
-#endif
-
     for (int i = 0; i < 1; i++) {
         //// ------------------------ DATA INPUT ------------------------------
         //// NUMBER OF ELEMENTS IN X AND Y DIRECTIONS
         int nelem_x = atoi(argv[1]);
-        int nelem_y = atoi(argv[1]);
 
-        timing << "-------------------------------------------------" << std::endl;
-        timing << "MESH SIZE: " << nelem_x << "x" << nelem_y << std::endl;
         std::cout << "-------------------------------------------------" << std::endl;
         std::cout << "MESH SIZE: " << nelem_x << "x" << nelem_y << std::endl;
 
@@ -67,7 +50,7 @@ int main(int argc, char *argv[]) {
         REAL len = 1;
 
 //// COMPUTATIONAL MESH ORDER
-        int pOrder = 2;
+        int pOrder = 1;
 
 //// SUBDIVISIONS OF THE ELEMENTS
         int ndivide = 0;
@@ -127,7 +110,8 @@ int main(int argc, char *argv[]) {
         an.DefineGraphMesh(2, scalarnames, vecnames, namefile + "ElasticitySolutions.vtk");
         an.PostProcess(0);
 
-        sol_teste(cmesh);
+        SolMatrix(cmesh);
+        SolVector(cmesh);
     }
     return 0;
 }
@@ -279,7 +263,166 @@ TPZCompMesh *cmesh_mat_2D(TPZGeoMesh *gmesh, int pOrder) {
     return cmesh;
 }
 
-void sol_teste(TPZCompMesh *cmesh) {
+void SolVector(TPZCompMesh *cmesh) {
+
+    int dim_mesh = (cmesh->Reference())->Dimension(); // Mesh dimension
+    int64_t nelem_c = cmesh->NElements(); // Number of computational elements
+    std::vector<int64_t> cel_indexes;
+
+//// -------------------------------------------------------------------------------
+//// NUMBER OF DOMAIN GEOMETRIC ELEMENTS
+    for (int64_t i = 0; i < nelem_c; i++) {
+        TPZCompEl *cel = cmesh->Element(i);
+        if (!cel) continue;
+        TPZGeoEl *gel = cmesh->Element(i)->Reference();
+        if (!gel || gel->Dimension() != dim_mesh) continue;
+        cel_indexes.push_back(cel->Index());
+    }
+//// -------------------------------------------------------------------------------
+
+    if (cel_indexes.size() == 0) {
+        DebugStop();
+    }
+
+//// ROWSIZES AND COLSIZES VECTORS--------------------------------------------------
+    int64_t nelem = cel_indexes.size(); // Number of domain geometric elements
+    TPZVec<int64_t> rowsizes(nelem);
+    TPZVec<int64_t> colsizes(nelem);
+
+    int64_t npts_tot = 0;
+    int64_t nf_tot = 0;
+
+    for (auto iel : cel_indexes) {
+        //Verification
+        TPZCompEl *cel = cmesh->Element(iel);
+
+        //Integration rule
+        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement * >(cel);
+        if (!cel_inter) DebugStop();
+        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
+
+        int64_t npts = int_rule->NPoints(); // number of integration points of the element
+        int64_t dim = cel_inter->Dimension(); //dimension of the element
+        int64_t nf = cel_inter->NShapeF(); // number of shape functions of the element
+
+        rowsizes[iel] = dim * npts;
+        colsizes[iel] = nf;
+
+        npts_tot += npts;
+        nf_tot += nf;
+    }
+
+    TPZSolveMatrix *SolMat = new TPZSolveMatrix(dim_mesh * npts_tot, nf_tot, rowsizes, colsizes);
+//// -------------------------------------------------------------------------------
+
+//// DPHI MATRIX FOR EACH ELEMENT, WEIGHT AND INDEXES VECTORS-----------------------
+    TPZFMatrix<REAL> elmatrix;
+    TPZStack<REAL> weight;
+    TPZManVector<MKL_INT> indexes(2*dim_mesh * nf_tot);
+    int cont = 0;
+    for (auto iel : cel_indexes) {
+        int64_t cont1 = 0;
+        int64_t cont2 = 0;
+        //Verification
+        TPZCompEl *cel = cmesh->Element(iel);
+
+        //Integration rule
+        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement * >(cel);
+        if (!cel_inter) DebugStop();
+        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
+
+        int64_t npts = int_rule->NPoints(); // number of integration points of the element
+        int64_t dim = cel_inter->Dimension(); //dimension of the element
+        int64_t nf = cel_inter->NShapeF(); // number of shape functions of the element
+
+        TPZMaterialData data;
+        cel_inter->InitMaterialData(data);
+
+        elmatrix.Resize(dim * npts, nf);
+        for (int64_t inpts = 0; inpts < npts; inpts++) {
+            TPZManVector<REAL> qsi(dim, 1);
+            REAL w;
+            int_rule->Point(inpts, qsi, w);
+            cel_inter->ComputeRequiredData(data, qsi);
+            weight.Push(w * std::abs(data.detjac)); //weight = w * detjac
+
+            TPZFMatrix<REAL> &dphix = data.dphix;
+            for (int inf = 0; inf < nf; inf++) {
+                for (int idim = 0; idim < dim; idim++)
+                    elmatrix(inpts * dim + idim, inf) = dphix(idim, inf);
+            }
+        }
+        SolMat->SetElementMatrix(iel, elmatrix);
+
+        //Indexes vector
+        int64_t ncon = cel->NConnects();
+        for (int64_t icon = 0; icon < ncon; icon++) {
+            int64_t id = cel->ConnectIndex(icon);
+            TPZConnect &df = cmesh->ConnectVec()[id];
+            int64_t conid = df.SequenceNumber();
+            if (df.NElConnected() == 0 || conid < 0 || cmesh->Block().Size(conid) == 0) continue;
+            else {
+                int64_t pos = cmesh->Block().Position(conid);
+                int64_t nsize = cmesh->Block().Size(conid);
+                for (int64_t isize = 0; isize < nsize; isize++) {
+                    if (isize % 2 == 0) {
+                        indexes[cont1*nelem + cont] = pos + isize;
+                        indexes[cont1*nelem + nf_tot + cont] = pos + isize; //para indices duplicados
+                        cont1++;
+                    } else {
+                        indexes[cont2*nelem + 2*nf_tot + cont] = pos + isize; //2*nf_tot para indices duplicados
+                        indexes[cont2*nelem + 3*nf_tot + cont] = pos + isize; //para indices duplicados
+                        cont2++;
+                    }
+                }
+            }
+        }
+        cont++;
+    }
+    SolMat->SetIndexes(indexes);
+    SolMat->ColoringElements(cmesh);
+
+    TPZFMatrix<REAL> coef_sol = cmesh->Solution();
+    int neq = cmesh->NEquations();
+    TPZFMatrix<REAL> nodal_forces_global1(neq, 1, 0.);
+    TPZFMatrix<REAL> nodal_forces_global2(neq, 1, 0.);
+    TPZFMatrix<REAL> nodal_forces_global3(neq, 1, 0.);
+    TPZFMatrix<REAL> result;
+    TPZFMatrix<REAL> sigma;
+    TPZFMatrix<REAL> nodal_forces_vec;
+
+#ifdef __CUDACC__
+    std::cout << "\n\nSOLVING WITH GPU" << std::endl;
+    SolMat->AllocateMemory(cmesh);
+    SolMat->MultiplyVectorsCUDA(coef_sol,result);
+    SolMat->FreeMemory();
+
+#endif
+
+    std::cout << "\n\nSOLVING WITH CPU" << std::endl;
+    SolMat->MultiplyVectors(coef_sol, result);
+
+
+//    //Check result
+//    SolMat->TraditionalAssemble(nodal_forces_vec, nodal_forces_global1); // ok
+//    int rescpu = Norm(nodal_forces_global1 - nodal_forces_global2);
+//    if(rescpu == 0){
+//        std::cout << "\nAssemble done in the CPU is ok." << std::endl;
+//    } else {
+//        std::cout << "\nAssemble done in the CPU is not ok." << std::endl;
+//    }
+//
+//#ifdef USING_CUDA
+//    int resgpu = Norm(nodal_forces_global1 - nodal_forces_global3);
+//    if(resgpu == 0){
+//        std::cout << "\nAssemble done in the GPU is ok." << std::endl;
+//    } else {
+//        std::cout << "\nAssemble done in the GPU is not ok." << std::endl;
+//    }
+//#endif
+}
+
+void SolMatrix(TPZCompMesh *cmesh) {
 
     int dim_mesh = (cmesh->Reference())->Dimension(); // Mesh dimension
     int64_t nelem_c = cmesh->NElements(); // Number of computational elements
@@ -398,7 +541,7 @@ void sol_teste(TPZCompMesh *cmesh) {
 
     TPZFMatrix<REAL> coef_sol = cmesh->Solution();
     int neq = cmesh->NEquations();
-    TPZFMatrix<REAL> nodal_forces_global1(neq, 1, 0.);    
+    TPZFMatrix<REAL> nodal_forces_global1(neq, 1, 0.);
     TPZFMatrix<REAL> nodal_forces_global2(neq, 1, 0.);
     TPZFMatrix<REAL> nodal_forces_global3(neq, 1, 0.);
     TPZFMatrix<REAL> result;
@@ -406,53 +549,37 @@ void sol_teste(TPZCompMesh *cmesh) {
     TPZFMatrix<REAL> nodal_forces_vec;
 
 
+    #ifdef __CUDACC__
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;
-//    std::clock_t begingpu = clock();
-//    SolMat->SolveWithCUDA(cmesh, coef_sol, weight, nodal_forces_global3);
     SolMat->AllocateMemory(cmesh);
     SolMat->MultiplyCUDA(coef_sol, result);
     SolMat->ComputeSigmaCUDA(weight, result, sigma);
     SolMat->MultiplyTransposeCUDA(sigma, nodal_forces_vec);
     SolMat->ColoredAssembleCUDA(nodal_forces_vec, nodal_forces_global3);
     SolMat->FreeMemory();
-
-//    std::clock_t endgpu = clock();
-
+    #endif
 
     std::cout << "\n\nSOLVING WITH CPU" << std::endl;
-    std::clock_t  start, stop;
-
-//    std::clock_t begincpu = clock();
-
- 
     SolMat->Multiply(coef_sol, result);
     SolMat->ComputeSigma(weight, result, sigma);
     SolMat->MultiplyTranspose(sigma, nodal_forces_vec);
     SolMat->ColoredAssemble(nodal_forces_vec, nodal_forces_global2);
 
-//    std::clock_t endcpu = clock();
-
+    //Check Result
     SolMat->TraditionalAssemble(nodal_forces_vec, nodal_forces_global1); // ok
-
-
-
-//    REAL elapsed_secs_gpu = REAL(endgpu - begingpu) / CLOCKS_PER_SEC;
-//    REAL elapsed_secs_cpu = REAL(endcpu - begincpu) / CLOCKS_PER_SEC;
-//    timing << "\nTime elapsed (GPU): " << std::setprecision(5) << std::fixed << elapsed_secs_gpu << " s" << std::endl;
-//    timing << "\nTime elapsed (CPU): " << std::setprecision(5) << std::fixed << elapsed_secs_cpu << " s" << std::endl;
-
-int rescpu = Norm(nodal_forces_global1 - nodal_forces_global2);
-int resgpu = Norm(nodal_forces_global1 - nodal_forces_global3);
-
+    int rescpu = Norm(nodal_forces_global1 - nodal_forces_global2);
     if(rescpu == 0){
         std::cout << "\nAssemble done in the CPU is ok." << std::endl;
     } else {
         std::cout << "\nAssemble done in the CPU is not ok." << std::endl;
     }
-    
+
+    #ifdef __CUDACC__
+    int resgpu = Norm(nodal_forces_global1 - nodal_forces_global3);
     if(resgpu == 0){
         std::cout << "\nAssemble done in the GPU is ok." << std::endl;
     } else {
         std::cout << "\nAssemble done in the GPU is not ok." << std::endl;
     }
+    #endif
 }
