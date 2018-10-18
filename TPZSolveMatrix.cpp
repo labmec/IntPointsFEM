@@ -13,8 +13,7 @@
 using namespace tbb;
 #endif
 
-void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const
-{
+void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const {
 int64_t nelem = fRowSizes.size();
 
 int64_t n_globalsol = fIndexes.size();
@@ -71,8 +70,7 @@ for (int64_t iel=0; iel<nelem; iel++) {
 #endif
 }
 
-void TPZSolveMatrix::ComputeSigma( TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<STATE> &sigma)
-{
+void TPZSolveMatrix::ComputeSigma( TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<STATE> &sigma) {
 REAL E = 200000000.;
 REAL nu =0.30;
 int npts_tot = fRow;
@@ -98,8 +96,7 @@ for (int64_t ipts=0; ipts< npts_tot/2; ipts++) {
 #endif
 }
 
-void TPZSolveMatrix::MultiplyTranspose(TPZFMatrix<STATE>  &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec)
-{
+void TPZSolveMatrix::MultiplyTranspose(TPZFMatrix<STATE>  &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec) {
 int64_t nelem = fRowSizes.size();
 int64_t npts_tot = fRow;
 nodal_forces_vec.Resize(npts_tot,1);
@@ -148,23 +145,43 @@ for (int64_t iel = 0; iel < nelem; iel++) {
 #endif
 }
 
-void TPZSolveMatrix::TraditionalAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const
-{
+void TPZSolveMatrix::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) {
+    int64_t ncolor = *std::max_element(fElemColor.begin(), fElemColor.end())+1;
+    int64_t sz = fIndexes.size();
+    int64_t neq = nodal_forces_global.Rows();
+    nodal_forces_global.Resize(neq*ncolor,1);
+
+
+    cblas_dsctr(sz, nodal_forces_vec, &fIndexesColor[0], &nodal_forces_global(0,0));
+
+    int64_t colorassemb = ncolor / 2.;
+    while (colorassemb > 0) {
+
+        int64_t firsteq = (ncolor - colorassemb) * neq;
+        cblas_daxpy(firsteq, 1., &nodal_forces_global(firsteq, 0), 1., &nodal_forces_global(0, 0), 1.);
+
+        ncolor -= colorassemb;
+        colorassemb = ncolor/2;
+    }
+    nodal_forces_global.Resize(neq, 1);
+}
+
+
+void TPZSolveMatrix::TraditionalAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const {
 #ifdef USING_TBB
-parallel_for(size_t(0),size_t(fRow),size_t(1),[&](size_t ir)
+    parallel_for(size_t(0),size_t(fRow),size_t(1),[&](size_t ir)
              {
                  nodal_forces_global(fIndexes[ir], 0) += nodal_forces_vec(ir, 0);
              }
 );
 #else
-for (int64_t ir=0; ir<fRow; ir++) {
-    nodal_forces_global(fIndexes[ir], 0) += nodal_forces_vec(ir, 0);
-}
+    for (int64_t ir=0; ir<fRow; ir++) {
+        nodal_forces_global(fIndexes[ir], 0) += nodal_forces_vec(ir, 0);
+    }
 #endif
 }
 
-void TPZSolveMatrix::ColoringElements(TPZCompMesh * cmesh) const
-{
+void TPZSolveMatrix::ColoringElements(TPZCompMesh * cmesh) const {
     int64_t nelem_c = cmesh->NElements();
     int64_t nconnects = cmesh->NConnects();
     TPZVec<int64_t> connects_vec(nconnects,0);
@@ -216,27 +233,31 @@ void TPZSolveMatrix::ColoringElements(TPZCompMesh * cmesh) const
     }
 }
 
-void TPZSolveMatrix::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global)
-{
-    int64_t ncolor = *std::max_element(fElemColor.begin(), fElemColor.end())+1;
-    int64_t sz = fIndexes.size();
-    int64_t neq = nodal_forces_global.Rows();
-    nodal_forces_global.Resize(neq*ncolor,1);
 
+void TPZSolveMatrix::MultiplyVectors(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const {
+    int64_t n_globalsol = fIndexes.size()/2; //o vetor de indices esta duplicado
+    int64_t nelem = fRowSizes.size();
+    int rows = fRowSizes[0];
+    int cols = fColSizes[0];
 
-    cblas_dsctr(sz, nodal_forces_vec, &fIndexesColor[0], &nodal_forces_global(0,0));
+    TPZFMatrix<REAL> expandsolution(2*n_globalsol,1); //vetor solucao duplicado
 
-    int64_t colorassemb = ncolor / 2.;
-    while (colorassemb > 0) {
+    cblas_dgthr(2*n_globalsol, global_solution, &expandsolution(0,0), &fIndexes[0]);
 
-        int64_t firsteq = (ncolor - colorassemb) * neq;
-        cblas_daxpy(firsteq, 1., &nodal_forces_global(firsteq, 0), 1., &nodal_forces_global(0, 0), 1.);
+    result.Resize(2*n_globalsol,1);
+    result.Zero();
 
-        ncolor -= colorassemb;
-        colorassemb = ncolor/2;
+    for (int i = 0; i < cols; i++) {
+        cblas_dsbmv(CblasColMajor, CblasUpper, nelem * rows / 2, 0, 1., &fStorageVec[i * nelem * rows], 1, &expandsolution(i * nelem, 0), 1, 1., &result(0,0), 1);
+        cblas_dsbmv(CblasColMajor, CblasUpper, nelem * rows / 2, 0, 1., &fStorageVec[i * nelem * rows + nelem * rows / 2], 1, &expandsolution(i * nelem, 0), 1, 1., &result(nelem * rows / 2,0), 1);
+
+        cblas_dsbmv(CblasColMajor, CblasUpper, nelem * rows / 2, 0, 1., &fStorageVec[i * nelem * rows], 1, &expandsolution(i * nelem + n_globalsol, 0), 1, 1., &result(n_globalsol,0), 1);
+        cblas_dsbmv(CblasColMajor, CblasUpper, nelem * rows / 2, 0, 1., &fStorageVec[i * nelem * rows + nelem * rows / 2], 1, &expandsolution(i * nelem + n_globalsol, 0), 1, 1., &result(n_globalsol + nelem * rows / 2,0), 1);
+
     }
-    nodal_forces_global.Resize(neq, 1);
+
 }
+
 
 void TPZSolveMatrix::AllocateMemory(TPZCompMesh *cmesh){
     return;
@@ -267,5 +288,10 @@ void TPZSolveMatrix::MultiplyTransposeCUDA(TPZFMatrix<STATE> &intpoint_solution,
 }
 
 void TPZSolveMatrix::ColoredAssembleCUDA(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global){
+    return;
+}
+
+
+void TPZSolveMatrix::MultiplyVectorsCUDA(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const {
     return;
 }
