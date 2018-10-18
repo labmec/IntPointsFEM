@@ -149,7 +149,7 @@ if(USING_CUDA)
 	set(CUDA_NVCC_FLAGS -gencode arch=compute_35,code=sm_35)	
 
 	file(GLOB cu *.cu)
-    list(REMOVE_ITEM sources ${CMAKE_CURRENT_SOURCE_DIR}/TPZSolveMatrix.cpp ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp)
+    list(REMOVE_ITEM sources ${CMAKE_CURRENT_SOURCE_DIR}/TPZSolveMatrix.cpp ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp ${CMAKE_CURRENT_SOURCE_DIR}/TPZSolveVector.cpp)
 	set(main_SRCS ${sources} ${headers} ${cu})
 else()
 	set(main_SRCS ${sources} ${headers})

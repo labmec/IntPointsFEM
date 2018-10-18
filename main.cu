@@ -395,12 +395,13 @@ void SolVector(TPZCompMesh *cmesh) {
 
 #ifdef __CUDACC__
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;
-    SolMat->MultiplyVectorsCUDA(coef_sol,result);
-
+    SolVec->AllocateMemory(cmesh);
+    SolVec->MultiplyCUDA(coef_sol,result);
+    SolVec->FreeMemory();
 #endif
 
     std::cout << "\n\nSOLVING WITH CPU" << std::endl;
-    SolVec->MultiplyVectors(coef_sol, result);
+    SolVec->Multiply(coef_sol, result);
 
 //    //Check result
 //    SolMat->TraditionalAssemble(nodal_forces_vec, nodal_forces_global1); // ok
