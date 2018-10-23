@@ -19,6 +19,7 @@
 #include <cublas_v2.h>
 #include <cusparse.h>
 #include "mkl.h"
+#include <thrust/device_vector.h>
 #endif
 
 class TPZSolveVector : public TPZMatrix<STATE> {
@@ -121,12 +122,21 @@ public:
                 int k = (j + i) % cols;
                 int id1 = iel + j*nelem + cont;
                 int id2 = iel + j*nelem + cont + nelem*cols;
+//                int id1 = iel + j*nelem + cont;
+//                int id2 = iel + j*nelem + cont + nelem*cols*rows/2;
+//                int id1 = iel + j + cont;
+//                int id2 = iel + j + cont + cols*rows/2;
+              	storage[id1] = elmat(j, k);
+		storage[id2] = elmat(j + rows/2, k);		
                 fStorageVec[id1] =  elmat(j, k); //primeira metade da matriz
                 fStorageVec[id2] =  elmat(j + rows/2, k); //segunda metade da matriz
             }
             cont += 2*cols*nelem;
-        }
-    }
+//            cont += cols*nelem;
+//              cont += cols;
+            }
+	}
+
 
     void SetIndexes(TPZVec<MKL_INT> indexes) {
         int64_t indsize = indexes.size();
@@ -189,6 +199,8 @@ protected:
     double *dglobal_solution;
     int *dindexes;
     double *dstoragevec;
+    thrust::device_vector<double> storage;
+
     double *dexpandsolution;
     double *dresult;
     double *dweight;

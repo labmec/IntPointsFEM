@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
         REAL len = 1;
 
 //// COMPUTATIONAL MESH ORDER
-        int pOrder = 1;
+        int pOrder = 2;
 
 //// SUBDIVISIONS OF THE ELEMENTS
         int ndivide = 0;
@@ -112,7 +112,7 @@ int main(int argc, char *argv[]) {
         an.DefineGraphMesh(2, scalarnames, vecnames, namefile + "ElasticitySolutions.vtk");
         an.PostProcess(0);
 
-        SolMatrix(cmesh);
+        //SolMatrix(cmesh);
         SolVector(cmesh);
     }
     return 0;
@@ -397,6 +397,7 @@ void SolVector(TPZCompMesh *cmesh) {
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;
     SolVec->AllocateMemory(cmesh);
     SolVec->MultiplyCUDA(coef_sol,result);
+    
     SolVec->FreeMemory();
 #endif
 
