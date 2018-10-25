@@ -112,7 +112,7 @@ int main(int argc, char *argv[]) {
         an.DefineGraphMesh(2, scalarnames, vecnames, namefile + "ElasticitySolutions.vtk");
         an.PostProcess(0);
 
-        SolMatrix(cmesh);
+        //SolMatrix(cmesh);
         SolVector(cmesh);
     }
     return 0;
@@ -402,6 +402,8 @@ void SolVector(TPZCompMesh *cmesh) {
 
     std::cout << "\n\nSOLVING WITH CPU" << std::endl;
     SolVec->Multiply(coef_sol, result);
+    SolVec->ComputeSigma(weight, result, sigma);
+    SolVec->MultiplyTranspose(sigma,nodal_forces_vec);
 
 //    //Check result
 //    SolMat->TraditionalAssemble(nodal_forces_vec, nodal_forces_global1); // ok

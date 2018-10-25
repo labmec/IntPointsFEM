@@ -42,8 +42,8 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < 1; i++) {
         //// ------------------------ DATA INPUT ------------------------------
         //// NUMBER OF ELEMENTS IN X AND Y DIRECTIONS
-        int nelem_x = 2;
-        int nelem_y = 2;
+        int nelem_x = 1;
+        int nelem_y = 1;
 
         std::cout << "-------------------------------------------------" << std::endl;
         std::cout << "MESH SIZE: " << nelem_x << "x" << nelem_y << std::endl;
@@ -112,7 +112,7 @@ int main(int argc, char *argv[]) {
         an.DefineGraphMesh(2, scalarnames, vecnames, namefile + "ElasticitySolutions.vtk");
         an.PostProcess(0);
 
-        SolMatrix(cmesh);
+        //SolMatrix(cmesh);
         SolVector(cmesh);
     }
     return 0;
@@ -402,7 +402,8 @@ void SolVector(TPZCompMesh *cmesh) {
 
     std::cout << "\n\nSOLVING WITH CPU" << std::endl;
     SolVec->Multiply(coef_sol, result);
-    result.Print(std::cout);
+    SolVec->ComputeSigma(weight, result, sigma);
+    SolVec->MultiplyTranspose(sigma,nodal_forces_vec);
 
 //    //Check result
 //    SolMat->TraditionalAssemble(nodal_forces_vec, nodal_forces_global1); // ok

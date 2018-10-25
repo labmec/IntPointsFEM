@@ -29,8 +29,7 @@ public:
 
     }
 
-    TPZSolveVector(int64_t rows, int64_t cols, TPZVec<int64_t> rowsizes, TPZVec<int64_t> colsizes) : TPZMatrix(rows,
-                                                                                                               cols) {
+    TPZSolveVector(int64_t rows, int64_t cols, TPZVec<int64_t> rowsizes, TPZVec<int64_t> colsizes) : TPZMatrix(rows, cols) {
         SetParameters(rowsizes, colsizes);
         cuSparseHandle();
         cuBlasHandle();
@@ -119,14 +118,21 @@ public:
         for (int i = 0; i < cols; i++) {
             for (int j = 0; j < cols; j++) {
                 int k = (j + i) % cols;
-                int id1 = iel + j*nelem + cont;
-                int id2 = iel + j*nelem + cont + nelem*cols;
-                fStorageVec[id1] =  elmat(j, k); //primeira metade da matriz
-                fStorageVec[id2] =  elmat(j + rows/2, k); //segunda metade da matriz
+                int id1 = iel + j * nelem + cont; //cols
+                int id2 = iel + j * nelem + cont + nelem * cols;
+//                    int id1 = iel + j * nelem + cont; //elem mat
+//                    int id2 = iel + j * nelem + cont + nelem * cols * rows / 2;
+//                    int id1 = iel + j + cont; // 1 matrix (iel = 0)
+//                    int id2 = iel + j + cont + cols * rows / 2;
+                fStorageVec[id1] = elmat(j, k); //primeira metade da matriz
+                fStorageVec[id2] = elmat(j + rows / 2, k); //segunda metade da matriz
             }
-            cont += 2*cols*nelem;
+            cont += 2 * cols * nelem;
+//            cont += cols * nelem;
+//            cont += cols;
         }
     }
+
 
     void SetIndexes(TPZVec<MKL_INT> indexes) {
         int64_t indsize = indexes.size();
@@ -148,6 +154,10 @@ public:
 
 
     void Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
+
+    void ComputeSigma( TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<STATE> &sigma);
+
+    void MultiplyTranspose(TPZFMatrix<STATE>  &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec);
 
     void MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
 
