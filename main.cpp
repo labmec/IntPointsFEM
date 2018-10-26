@@ -68,49 +68,49 @@ int main(int argc, char *argv[]) {
 
 //// Creating the computational mesh
         TPZCompMesh *cmesh = cmesh_2D(gmesh, pOrder);
-        TPZCompMesh *cmesh_d = cmesh_mat_2D(gmesh, pOrder);
+//        TPZCompMesh *cmesh_d = cmesh_mat_2D(gmesh, pOrder);
 
 //// Defining the analysis
         bool optimizeBandwidth = true;
         int n_threads = 16;
         TPZAnalysis an(cmesh, optimizeBandwidth);
-        TPZAnalysis an_d(cmesh_d, optimizeBandwidth);
+//        TPZAnalysis an_d(cmesh_d, optimizeBandwidth);
 #ifdef USING_MKL
         TPZSymetricSpStructMatrix strskyl(cmesh);
-        TPZSymetricSpStructMatrix strskyl_d(cmesh_d);
+//        TPZSymetricSpStructMatrix strskyl_d(cmesh_d);
 #else
         TPZSkylineStructMatrix strskyl(cmesh);
         TPZSkylineStructMatrix strskyl_d(cmesh_d);
 #endif
         strskyl.SetNumThreads(n_threads);
-        strskyl_d.SetNumThreads(n_threads);
+//        strskyl_d.SetNumThreads(n_threads);
         an.SetStructuralMatrix(strskyl);
-        an_d.SetStructuralMatrix(strskyl_d);
+//        an_d.SetStructuralMatrix(strskyl_d);
 
 //// Solve
         TPZStepSolver<STATE> *direct = new TPZStepSolver<STATE>;
         direct->SetDirect(ECholesky);
         an.SetSolver(*direct);
-        an_d.SetSolver(*direct);
+//        an_d.SetSolver(*direct);
         delete direct;
         an.Assemble();
         an.Solve();
 
 // Computing global K
-        an_d.Assemble();
+//        an_d.Assemble();
         TPZFMatrix<STATE> res_d;
 // Computing K u
-        an_d.Solver().Matrix()->Multiply(an.Solution(), res_d);
+ //       an_d.Solver().Matrix()->Multiply(an.Solution(), res_d);
 //Print Rhs without boundary conditions
 //res_d.Print("ku = ",std::cout,EMathematicaInput);
 
 //// Post processing in Paraview
-        TPZManVector<std::string> scalarnames(2), vecnames(1);
-        scalarnames[0] = "SigmaX";
-        scalarnames[1] = "SigmaY";
-        vecnames[0] = "Displacement";
-        an.DefineGraphMesh(2, scalarnames, vecnames, namefile + "ElasticitySolutions.vtk");
-        an.PostProcess(0);
+//        TPZManVector<std::string> scalarnames(2), vecnames(1);
+//        scalarnames[0] = "SigmaX";
+//        scalarnames[1] = "SigmaY";
+//        vecnames[0] = "Displacement";
+//        an.DefineGraphMesh(2, scalarnames, vecnames, namefile + "ElasticitySolutions.vtk");
+//        an.PostProcess(0);
 
         SolMatrix(cmesh);
         SolVector(cmesh);
@@ -393,10 +393,12 @@ void SolVector(TPZCompMesh *cmesh) {
     TPZFMatrix<REAL> sigma;
     TPZFMatrix<REAL> nodal_forces_vec;
 
-#ifdef USING_CUDA
+#ifdef __CUDACC__
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;
-    SolMat->MultiplyCUDA(coef_sol,result);
-    result.Print(std::cout);
+    SolVec->AllocateMemory(cmesh);
+    SolVec->MultiplyCUDA(coef_sol,result);
+
+    SolVec->FreeMemory();
 
 #endif
 
@@ -406,14 +408,14 @@ void SolVector(TPZCompMesh *cmesh) {
     SolVec->MultiplyTranspose(sigma,nodal_forces_vec);
     SolVec->ColoredAssemble(nodal_forces_vec,nodal_forces_global1);
 
-//    //Check result
-//    SolMat->TraditionalAssemble(nodal_forces_vec, nodal_forces_global1); // ok
-//    int rescpu = Norm(nodal_forces_global1 - nodal_forces_global2);
-//    if(rescpu == 0){
-//        std::cout << "\nAssemble done in the CPU is ok." << std::endl;
-//    } else {
-//        std::cout << "\nAssemble done in the CPU is not ok." << std::endl;
-//    }
+    //Check result
+    SolVec->TraditionalAssemble(nodal_forces_vec, nodal_forces_global1); // ok
+    int rescpu = Norm(nodal_forces_global1 - nodal_forces_global2);
+    if(rescpu == 0){
+        std::cout << "\nAssemble done in the CPU is ok." << std::endl;
+    } else {
+        std::cout << "\nAssemble done in the CPU is not ok." << std::endl;
+    }
 //
 //#ifdef USING_CUDA
 //    int resgpu = Norm(nodal_forces_global1 - nodal_forces_global3);
@@ -552,7 +554,7 @@ void SolMatrix(TPZCompMesh *cmesh) {
     TPZFMatrix<REAL> nodal_forces_vec;
 
 
-    #ifdef USING_CUDA
+    #ifdef __CUDACC__
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;
     SolMat->AllocateMemory(cmesh);
     SolMat->MultiplyCUDA(coef_sol, result);
@@ -577,7 +579,7 @@ void SolMatrix(TPZCompMesh *cmesh) {
         std::cout << "\nAssemble done in the CPU is not ok." << std::endl;
     }
 
-    #ifdef USING_CUDA
+    #ifdef __CUDACC__
     int resgpu = Norm(nodal_forces_global1 - nodal_forces_global3);
     if(resgpu == 0){
         std::cout << "\nAssemble done in the GPU is ok." << std::endl;

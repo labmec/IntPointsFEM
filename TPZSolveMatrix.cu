@@ -41,7 +41,7 @@ void TPZSolveMatrix::AllocateMemory(TPZCompMesh *cmesh) {
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
-//    cudaEventRecord(start);
+    cudaEventRecord(start);
 
     int nelem = fRowSizes.size();
     int nindexes = fIndexes.size();
@@ -51,18 +51,7 @@ void TPZSolveMatrix::AllocateMemory(TPZCompMesh *cmesh) {
 
     cudaMalloc(&dglobal_solution, neq * sizeof(double));
     cudaMalloc(&dindexes, nindexes * sizeof(int));
-
-    cudaEventRecord(start);
-
     cudaMalloc(&dstorage, nelem*fColSizes[0]*fRowSizes[0] * sizeof(double));
-
-    cudaEventRecord(stop);
-    cudaEventSynchronize(stop);
-    float milliseconds = 0;
-    cudaEventElapsedTime(&milliseconds, start, stop);
-    std::cout << "Allocate: " << milliseconds/1000 << std::endl;
-
-
     cudaMalloc(&dexpandsolution, nindexes * sizeof(double));
     cudaMalloc(&dresult, 2 * nindexes * sizeof(double));
     cudaMalloc(&dweight, npts_tot/2 * sizeof(double));
@@ -71,11 +60,11 @@ void TPZSolveMatrix::AllocateMemory(TPZCompMesh *cmesh) {
     cudaMalloc(&dindexescolor, nindexes * sizeof(int));
     cudaMalloc(&dnodal_forces_global, ncolor * neq * sizeof(double));
 
-//    cudaEventRecord(stop);
-//    cudaEventSynchronize(stop);
-//    float milliseconds = 0;
-//    cudaEventElapsedTime(&milliseconds, start, stop);
-//    std::cout << "Allocate: " << milliseconds/1000 << std::endl;
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    float milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << "Allocate: " << milliseconds/1000 << std::endl;
 
 }
 
@@ -83,20 +72,11 @@ void TPZSolveMatrix::FreeMemory() {
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
-//    cudaEventRecord(start);
+    cudaEventRecord(start);
 
     cudaFree(dglobal_solution);
     cudaFree(dindexes);
-
-    cudaEventRecord(start);
     cudaFree(dstorage);
-    cudaEventRecord(stop);
-    cudaEventSynchronize(stop);
-    float milliseconds = 0;
-    cudaEventElapsedTime(&milliseconds, start, stop);
-    std::cout << "Free: " << milliseconds/1000 << std::endl;
-  
-
     cudaFree(dexpandsolution);
     cudaFree(dresult);
     cudaFree(dweight);
@@ -108,11 +88,11 @@ void TPZSolveMatrix::FreeMemory() {
     cublasDestroy(handle_cublas);
     cusparseDestroy(handle_cusparse);
 
-//    cudaEventRecord(stop);
-//    cudaEventSynchronize(stop);
-//    float milliseconds = 0;
-//    cudaEventElapsedTime(&milliseconds, start, stop);
-//    std::cout << "Free: " << milliseconds/1000 << std::endl;
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    float milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << "Free: " << milliseconds/1000 << std::endl;
 
 }
 
@@ -128,7 +108,7 @@ void TPZSolveMatrix::cuSparseHandle() {
     cudaEventSynchronize(stop);
     float milliseconds = 0;
     cudaEventElapsedTime(&milliseconds, start, stop);
-//    std::cout << "cuSPARSE: " << milliseconds/1000 << std::endl;
+    std::cout << "cuSPARSE: " << milliseconds/1000 << std::endl;
 
 }
 
@@ -144,7 +124,7 @@ void TPZSolveMatrix::cuBlasHandle() {
     cudaEventSynchronize(stop);
     float milliseconds = 0;
     cudaEventElapsedTime(&milliseconds, start, stop);
-//    std::cout << "cuBLAS: " << milliseconds/1000 << std::endl;
+    std::cout << "cuBLAS: " << milliseconds/1000 << std::endl;
 }
 
 
@@ -159,6 +139,26 @@ void TPZSolveMatrix::MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZF
     float milliseconds = 0;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
+
+    cudaEventRecord(start);
+
+    cudaMemcpy(dindexes, &fIndexes[0], nindexes * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(dglobal_solution, &global_solution[0], global_solution.Rows() * sizeof(double), cudaMemcpyHostToDevice);
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << "Copy: " << milliseconds/1000 << std::endl;
+
+    cusparseDgthr(handle_cusparse, nindexes, dglobal_solution, &dexpandsolution[0], &dindexes[0], CUSPARSE_INDEX_BASE_ZERO);
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << "Gather: " << milliseconds/1000 << std::endl;
+
     cudaEventRecord(start);
 
     cudaMemcpy(dstorage, &fStorage[0], nelem*fColSizes[0]*fRowSizes[0] * sizeof(double), cudaMemcpyHostToDevice);
@@ -167,21 +167,6 @@ void TPZSolveMatrix::MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZF
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&milliseconds, start, stop);
     std::cout << "Copy: " << milliseconds/1000 << std::endl;
-
-    cudaEventRecord(start);
-
-    cudaMemcpy(dindexes, &fIndexes[0], nindexes * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(dglobal_solution, &global_solution[0], global_solution.Rows() * sizeof(double), cudaMemcpyHostToDevice);
-
-  
-    cusparseDgthr(handle_cusparse, nindexes, dglobal_solution, &dexpandsolution[0], &dindexes[0], CUSPARSE_INDEX_BASE_ZERO);
-
-    cudaEventRecord(stop);
-    cudaEventSynchronize(stop);
-    milliseconds = 0;
-    cudaEventElapsedTime(&milliseconds, start, stop);
-//    std::cout << "Gather: " << milliseconds/1000 << std::endl;
-
 
     cudaEventRecord(start);
 
@@ -232,7 +217,7 @@ void TPZSolveMatrix::ComputeSigmaCUDA(TPZStack<REAL> &weight, TPZFMatrix<REAL> &
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&milliseconds, start, stop);
-//    std::cout << "Copy: " << milliseconds/1000 << std::endl;
+    std::cout << "Copy: " << milliseconds/1000 << std::endl;
 
     cudaEventRecord(start);
 
@@ -245,7 +230,7 @@ void TPZSolveMatrix::ComputeSigmaCUDA(TPZStack<REAL> &weight, TPZFMatrix<REAL> &
     cudaEventSynchronize(stop);
     milliseconds = 0;
     cudaEventElapsedTime(&milliseconds, start, stop);
-//    std::cout << "Sigma: " << milliseconds/1000 << std::endl;
+    std::cout << "Sigma: " << milliseconds/1000 << std::endl;
 
     cudaEventRecord(start);
 
@@ -254,7 +239,7 @@ void TPZSolveMatrix::ComputeSigmaCUDA(TPZStack<REAL> &weight, TPZFMatrix<REAL> &
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&milliseconds, start, stop);
-//    std::cout << "Copy: " << milliseconds/1000 << std::endl;
+    std::cout << "Copy: " << milliseconds/1000 << std::endl;
 
 }
 
@@ -284,7 +269,7 @@ void TPZSolveMatrix::MultiplyTransposeCUDA(TPZFMatrix<STATE> &sigma, TPZFMatrix<
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&milliseconds, start, stop);
-//    std::cout << "Transpose: " << milliseconds/1000 << std::endl;
+    std::cout << "Transpose: " << milliseconds/1000 << std::endl;
 
     cudaEventRecord(start);
 
@@ -293,7 +278,7 @@ void TPZSolveMatrix::MultiplyTransposeCUDA(TPZFMatrix<STATE> &sigma, TPZFMatrix<
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&milliseconds, start, stop);
-//    std::cout << "Copy: " << milliseconds/1000 << std::endl;
+    std::cout << "Copy: " << milliseconds/1000 << std::endl;
 }
 
 void TPZSolveMatrix::ColoredAssembleCUDA(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) {
@@ -317,7 +302,7 @@ void TPZSolveMatrix::ColoredAssembleCUDA(TPZFMatrix<STATE> &nodal_forces_vec, TP
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&milliseconds, start, stop);
-//    std::cout << "Copy: " << milliseconds/1000 << std::endl;
+    std::cout << "Copy: " << milliseconds/1000 << std::endl;
 
     cudaEventRecord(start);
 
@@ -327,7 +312,7 @@ void TPZSolveMatrix::ColoredAssembleCUDA(TPZFMatrix<STATE> &nodal_forces_vec, TP
     cudaEventSynchronize(stop);
     milliseconds = 0;
     cudaEventElapsedTime(&milliseconds, start, stop);
-//    std::cout << "Scatter: " << milliseconds/1000 << std::endl;
+    std::cout << "Scatter: " << milliseconds/1000 << std::endl;
 
     cudaEventRecord(start);
 
@@ -349,7 +334,7 @@ void TPZSolveMatrix::ColoredAssembleCUDA(TPZFMatrix<STATE> &nodal_forces_vec, TP
     cudaEventSynchronize(stop);
     milliseconds = 0;
     cudaEventElapsedTime(&milliseconds, start, stop);
-//    std::cout << "Assemble: " << milliseconds/1000 << std::endl;
+    std::cout << "Assemble: " << milliseconds/1000 << std::endl;
 
     cudaEventRecord(start);
 
@@ -358,7 +343,7 @@ void TPZSolveMatrix::ColoredAssembleCUDA(TPZFMatrix<STATE> &nodal_forces_vec, TP
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&milliseconds, start, stop);
-//    std::cout << "Copy: " << milliseconds/1000 << std::endl;
+    std::cout << "Copy: " << milliseconds/1000 << std::endl;
 }
 
 
@@ -379,7 +364,7 @@ void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatr
     cblas_dgthr(nindexes, global_solution, &expandsolution[0], &fIndexes[0]);
     t2 = high_resolution_clock::now();
     time_span = duration_cast<duration<double>>(t2 - t1);
-//    std::cout << "Gather: " << time_span.count() << std::endl;
+    std::cout << "Gather: " << time_span.count() << std::endl;
 
     t1 = high_resolution_clock::now();
     for (int64_t iel = 0; iel < nelem; iel++) {
@@ -428,7 +413,7 @@ void TPZSolveMatrix::ComputeSigma(TPZStack<REAL> &weight, TPZFMatrix<REAL> &resu
     }
     t2 = high_resolution_clock::now();
     time_span = duration_cast<duration<double>>(t2 - t1);
-//    std::cout << "Sigma: " << time_span.count() << std::endl;
+    std::cout << "Sigma: " << time_span.count() << std::endl;
 
 
 }
@@ -465,7 +450,7 @@ void TPZSolveMatrix::MultiplyTranspose(TPZFMatrix<STATE> &intpoint_solution, TPZ
     }
     t2 = high_resolution_clock::now();
     time_span = duration_cast<duration<double>>(t2 - t1);
-//    std::cout << "Transpose: " << time_span.count() << std::endl;
+    std::cout << "Transpose: " << time_span.count() << std::endl;
 
 
 }
@@ -486,7 +471,7 @@ void TPZSolveMatrix::ColoredAssemble(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMa
 
     t2 = high_resolution_clock::now();
     time_span = duration_cast<duration<double>>(t2 - t1);
-//    std::cout << "Scatter: " << time_span.count() << std::endl;
+    std::cout << "Scatter: " << time_span.count() << std::endl;
 
 
     t1 = high_resolution_clock::now();
@@ -504,7 +489,7 @@ void TPZSolveMatrix::ColoredAssemble(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMa
     nodal_forces_global.Resize(neq, 1);
     t2 = high_resolution_clock::now();
     time_span = duration_cast<duration<double>>(t2 - t1);
-//    std::cout << "Assemble: " << time_span.count() << std::endl;
+    std::cout << "Assemble: " << time_span.count() << std::endl;
 
 
 }
