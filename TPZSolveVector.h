@@ -138,7 +138,7 @@ public:
         int64_t indsize = indexes.size();
         fIndexes.resize(indsize);
         fIndexes = indexes;
-        fIndexesColor.resize(indsize);
+        fIndexesColor.resize(indsize/2);
     }
 
     /** @brief Solve procedure */
@@ -155,9 +155,11 @@ public:
 
     void Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
 
-    void ComputeSigma( TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<STATE> &sigma);
+    void ComputeSigma( TPZVec<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<STATE> &sigma);
 
     void MultiplyTranspose(TPZFMatrix<STATE>  &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec);
+
+    void ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global);
 
     void MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
 

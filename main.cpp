@@ -42,8 +42,8 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < 1; i++) {
         //// ------------------------ DATA INPUT ------------------------------
         //// NUMBER OF ELEMENTS IN X AND Y DIRECTIONS
-        int nelem_x = 1;
-        int nelem_y = 1;
+        int nelem_x = 2;
+        int nelem_y = 2;
 
         std::cout << "-------------------------------------------------" << std::endl;
         std::cout << "MESH SIZE: " << nelem_x << "x" << nelem_y << std::endl;
@@ -112,7 +112,7 @@ int main(int argc, char *argv[]) {
         an.DefineGraphMesh(2, scalarnames, vecnames, namefile + "ElasticitySolutions.vtk");
         an.PostProcess(0);
 
-        //SolMatrix(cmesh);
+        SolMatrix(cmesh);
         SolVector(cmesh);
     }
     return 0;
@@ -319,7 +319,7 @@ void SolVector(TPZCompMesh *cmesh) {
 
 //// DPHI MATRIX FOR EACH ELEMENT, WEIGHT AND INDEXES VECTORS-----------------------
     TPZFMatrix<REAL> elmatrix;
-    TPZStack<REAL> weight;
+    TPZVec<REAL> weight(npts_tot);
     TPZManVector<MKL_INT> indexes(2*dim_mesh * nf_tot);
     int cont = 0;
     for (auto iel : cel_indexes) {
@@ -346,7 +346,7 @@ void SolVector(TPZCompMesh *cmesh) {
             REAL w;
             int_rule->Point(inpts, qsi, w);
             cel_inter->ComputeRequiredData(data, qsi);
-            weight.Push(w * std::abs(data.detjac)); //weight = w * detjac
+            weight[iel + nelem*inpts] = w * std::abs(data.detjac);
 
             TPZFMatrix<REAL> &dphix = data.dphix;
             for (int inf = 0; inf < nf; inf++) {
@@ -404,6 +404,7 @@ void SolVector(TPZCompMesh *cmesh) {
     SolVec->Multiply(coef_sol, result);
     SolVec->ComputeSigma(weight, result, sigma);
     SolVec->MultiplyTranspose(sigma,nodal_forces_vec);
+    SolVec->ColoredAssemble(nodal_forces_vec,nodal_forces_global1);
 
 //    //Check result
 //    SolMat->TraditionalAssemble(nodal_forces_vec, nodal_forces_global1); // ok

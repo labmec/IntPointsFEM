@@ -28,7 +28,7 @@ __global__ void multvec(int n, double *a, double *b, double *c) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (i < n) {
-        c[i] += a[i]*b[i];
+        c[i] + = a[i]*b[i];
     }
 }
 
@@ -358,7 +358,7 @@ void TPZSolveVector::MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZF
 
 }
 
-void TPZSolveVector::ComputeSigma( TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<STATE> &sigma) {
+void TPZSolveVector::ComputeSigma( TPZVec<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<STATE> &sigma) {
     return;
 }
 
