@@ -370,21 +370,21 @@ void TPZSolveVector::ComputeSigma( TPZVec<REAL> &weight, TPZFMatrix<REAL> &resul
         //sigma xx
         cblas_daxpy(nelem, nu, &result((2*ipts + npts_el + 1)*nelem ,0), 1, &aux(0,0), 1);
         cblas_daxpy(nelem, 1, &result(2*ipts*nelem ,0), 1, &aux(0,0), 1);
-        multvec(nelem, &weight[ipts*nelem], &aux(0,0), &sigma(2*ipts*nelem,0));
+        multvec_cpu(nelem, &weight[ipts*nelem], &aux(0,0), &sigma(2*ipts*nelem,0));
         cblas_dscal (nelem, E/(1.-nu*nu), &sigma(2*ipts*nelem,0), 1);
         aux.Zero();
 
         //sigma yy
         cblas_daxpy(nelem, nu, &result(2*ipts*nelem,0), 1, &aux(0,0), 1);
         cblas_daxpy(nelem, 1, &result((2*ipts + npts_el + 1)*nelem,0), 1, &aux(0,0), 1);
-        multvec(nelem, &weight[ipts*nelem], &aux(0,0), &sigma((2*ipts+npts_el+1)*nelem,0));
+        multvec_cpu(nelem, &weight[ipts*nelem], &aux(0,0), &sigma((2*ipts+npts_el+1)*nelem,0));
         cblas_dscal (nelem, E/(1.-nu*nu), &sigma((2*ipts+npts_el+1)*nelem,0), 1);
         aux.Zero();
 
         //sigma xy
         cblas_daxpy(nelem, 1, &result((2*ipts + 1)*nelem,0), 1, &aux(0,0), 1);
         cblas_daxpy(nelem, 1, &result((2*ipts + npts_el)*nelem,0), 1, &aux(0,0), 1);
-        multvec(nelem, &weight[ipts*nelem], &aux(0,0), &sigma((2*ipts+1)*nelem,0));
+        multvec_cpu(nelem, &weight[ipts*nelem], &aux(0,0), &sigma((2*ipts+1)*nelem,0));
         cblas_dscal (nelem, E/(1.-nu*nu)*(1.-nu), &sigma((2*ipts+1)*nelem,0), 1);
         aux.Zero();
 
