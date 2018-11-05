@@ -163,6 +163,12 @@ public:
 
     void MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
 
+    void ComputeSigmaCUDA( TPZVec<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<STATE> &sigma);
+
+    void MultiplyTransposeCUDA(TPZFMatrix<STATE>  &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec);
+
+    void ColoredAssembleCUDA(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global);
+
 
     void TraditionalAssemble(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const;
 

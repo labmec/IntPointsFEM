@@ -115,7 +115,7 @@ void TPZSolveVector::MultiplyTranspose(TPZFMatrix<STATE>  &sigma, TPZFMatrix<STA
     TPZFMatrix<REAL> sigx(fRow, 1, &sigma(0, 0), fRow);
     TPZFMatrix<REAL> sigx_2(2 * fRow);
     sigx_2.AddSub(0, 0, sigx);
-    sigx_2.AddSub(fRow, 0, fRow);
+    sigx_2.AddSub(fRow, 0, sigx);
 
     TPZFMatrix<REAL> sigy(fRow, 1, &sigma(fRow, 0), fRow);
     TPZFMatrix<REAL> sigy_2(2 * fRow);
@@ -128,18 +128,18 @@ void TPZSolveVector::MultiplyTranspose(TPZFMatrix<STATE>  &sigma, TPZFMatrix<STA
 
     for (int i = 0; i < cols; i++) {
         //Fx
-        cblas_dsbmv(CblasColMajor, CblasUpper, (cols-i)*nelem, 0, 1., &fStorageVec[(((cols-i)%cols)*rows + i)*nelem], 1, &sigx_2(i * nelem, 0), 1, 1., &nodal_forces_vec(0, 0), 1);
-        cblas_dsbmv(CblasColMajor, CblasUpper, i*nelem, 0, 1., &fStorageVec[((cols-i)%cols)*rows*nelem], 1, &sigx_2(0, 0), 1, 1., &nodal_forces_vec(nelem*((cols - i)%cols), 0), 1);
+        multvec((cols-i)*nelem, &fStorageVec[(((cols-i)%cols)*rows + i)*nelem], &sigx_2(i * nelem, 0), &nodal_forces_vec(0, 0));
+        multvec(i*nelem, &fStorageVec[((cols-i)%cols)*rows*nelem], &sigx_2(0, 0), &nodal_forces_vec(nelem*((cols - i)%cols), 0));
 
-        cblas_dsbmv(CblasColMajor, CblasUpper, (cols-i)*nelem, 0, 1., &fStorageVec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem], 1, &sigx_2(i * nelem + cols*nelem, 0), 1, 1., &nodal_forces_vec(0, 0), 1);
-        cblas_dsbmv(CblasColMajor, CblasUpper, i*nelem, 0, 1., &fStorageVec[((cols-i)%cols)*rows*nelem + cols*nelem], 1, &sigx_2(cols*nelem, 0), 1, 1., &nodal_forces_vec(nelem*((cols - i)%cols), 0), 1);
+        multvec((cols-i)*nelem, &fStorageVec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem], &sigx_2(i * nelem + cols*nelem, 0), &nodal_forces_vec(0, 0));
+        multvec(i*nelem, &fStorageVec[((cols-i)%cols)*rows*nelem + cols*nelem], &sigx_2(cols*nelem, 0), &nodal_forces_vec(nelem*((cols - i)%cols), 0));
 
         //Fy
-        cblas_dsbmv(CblasColMajor, CblasUpper, (cols-i)*nelem, 0, 1., &fStorageVec[(((cols-i)%cols)*rows + i)*nelem], 1, &sigy_2(i * nelem, 0), 1, 1., &nodal_forces_vec(npts_tot/2, 0), 1);
-        cblas_dsbmv(CblasColMajor, CblasUpper, i*nelem, 0, 1., &fStorageVec[((cols-i)%cols)*rows*nelem], 1, &sigy_2(0, 0), 1, 1., &nodal_forces_vec(npts_tot/2 + nelem*((cols - i)%cols), 0), 1);
+        multvec((cols-i)*nelem, &fStorageVec[(((cols-i)%cols)*rows + i)*nelem], &sigy_2(i * nelem, 0),  &nodal_forces_vec(npts_tot/2, 0));
+        multvec(i*nelem, &fStorageVec[((cols-i)%cols)*rows*nelem], &sigy_2(0, 0), &nodal_forces_vec(npts_tot/2 + nelem*((cols - i)%cols), 0));
 
-        cblas_dsbmv(CblasColMajor, CblasUpper, (cols-i)*nelem, 0, 1., &fStorageVec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem], 1, &sigy_2(i * nelem + cols*nelem, 0), 1, 1., &nodal_forces_vec(npts_tot/2, 0), 1);
-        cblas_dsbmv(CblasColMajor, CblasUpper, i*nelem, 0, 1., &fStorageVec[((cols-i)%cols)*rows*nelem + cols*nelem], 1, &sigy_2(cols*nelem, 0), 1, 1., &nodal_forces_vec(npts_tot/2 + nelem*((cols - i)%cols), 0), 1);
+        multvec((cols-i)*nelem, &fStorageVec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem], &sigy_2(i * nelem + cols*nelem, 0), &nodal_forces_vec(npts_tot/2, 0));
+        multvec(i*nelem, &fStorageVec[((cols-i)%cols)*rows*nelem + cols*nelem], &sigy_2(cols*nelem, 0), &nodal_forces_vec(npts_tot/2 + nelem*((cols - i)%cols), 0));
     }
 }
 
@@ -168,6 +168,17 @@ void TPZSolveVector::MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZF
     return;
 }
 
+void TPZSolveVector::ComputeSigmaCUDA( TPZVec<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<STATE> &sigma){
+    return;
+}
+
+void TPZSolveVector::MultiplyTransposeCUDA(TPZFMatrix<STATE>  &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec){
+    return;
+}
+
+void TPZSolveVector::ColoredAssembleCUDA(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global){
+    return;
+}
 
 void TPZSolveVector::AllocateMemory(TPZCompMesh *cmesh){
     return;
@@ -187,17 +198,13 @@ void TPZSolveVector::cuBlasHandle(){
 
 
 void TPZSolveVector::TraditionalAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const {
-#ifdef USING_TBB
-    parallel_for(size_t(0),size_t(fRow),size_t(1),[&](size_t ir)
-             {
-                 nodal_forces_global(fIndexes[ir], 0) += nodal_forces_vec(ir, 0);
-             }
-);
-#else
-    for (int64_t ir=0; ir<fRow; ir++) {
+    std::cout << fIndexes << std::endl;
+    nodal_forces_vec.Print(std::cout);
+    for (int64_t ir=0; ir<fRow/2; ir++) {
         nodal_forces_global(fIndexes[ir], 0) += nodal_forces_vec(ir, 0);
+        nodal_forces_global(fIndexes[ir+fRow], 0) += nodal_forces_vec(ir+fRow/2, 0);
     }
-#endif
+    nodal_forces_global.Print(std::cout);
 }
 
 void TPZSolveVector::ColoringElements(TPZCompMesh * cmesh) const {

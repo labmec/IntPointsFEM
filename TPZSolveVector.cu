@@ -36,7 +36,6 @@ void multvec_cpu(int n, double *a, double *b, double *c){
     for (int i = 0; i < n; i++) {
         c[i] += a[i]*b[i];
     }
-
 }
 
 struct saxpy_functor : public thrust::binary_function<double,double,double>
@@ -56,7 +55,7 @@ void TPZSolveVector::AllocateMemory(TPZCompMesh *cmesh) {
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
-//    cudaEventRecord(start);
+    cudaEventRecord(start);
 
     int nelem = fRowSizes.size();
     int nindexes = fIndexes.size()/2; //numero real de indices(sem duplicar)
@@ -66,16 +65,7 @@ void TPZSolveVector::AllocateMemory(TPZCompMesh *cmesh) {
 
     cudaMalloc(&dglobal_solution, neq * sizeof(double));
     cudaMalloc(&dindexes, 2*nindexes * sizeof(int)); //2* pq esta duplicado
-
-    cudaEventRecord(start);
     cudaMalloc(&dstoragevec, nelem*fColSizes[0]*fRowSizes[0] * sizeof(double));
-    cudaEventRecord(stop);
-    cudaEventSynchronize(stop);
-    float milliseconds = 0;
-    cudaEventElapsedTime(&milliseconds, start, stop);
-    std::cout << "Allocate: " << milliseconds/1000 << std::endl;
-
-
     cudaMalloc(&dexpandsolution, 2*nindexes * sizeof(double)); //sol duplicada
     cudaMalloc(&dresult, 2 * nindexes * sizeof(double));
     cudaMalloc(&dweight, npts_tot/2 * sizeof(double));
@@ -84,11 +74,11 @@ void TPZSolveVector::AllocateMemory(TPZCompMesh *cmesh) {
     cudaMalloc(&dindexescolor, nindexes * sizeof(int));
     cudaMalloc(&dnodal_forces_global, ncolor * neq * sizeof(double));
 
-//    cudaEventRecord(stop);
-//    cudaEventSynchronize(stop);
-//    float milliseconds = 0;
-//    cudaEventElapsedTime(&milliseconds, start, stop);
-//    std::cout << "Allocate: " << milliseconds/1000 << std::endl;
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    float milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << "Allocate: " << milliseconds/1000 << std::endl;
 
 }
 
@@ -96,20 +86,11 @@ void TPZSolveVector::FreeMemory() {
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
-//    cudaEventRecord(start);
+    cudaEventRecord(start);
 
     cudaFree(dglobal_solution);
     cudaFree(dindexes);
-
-    cudaEventRecord(start);
     cudaFree(dstoragevec);
-    cudaEventRecord(stop);
-    cudaEventSynchronize(stop);
-    float milliseconds = 0;
-    cudaEventElapsedTime(&milliseconds, start, stop);
-    std::cout << "Free: " << milliseconds/1000 << std::endl;
-
-
     cudaFree(dexpandsolution);
     cudaFree(dresult);
     cudaFree(dweight);
@@ -121,11 +102,11 @@ void TPZSolveVector::FreeMemory() {
     cublasDestroy(handle_cublas);
     cusparseDestroy(handle_cusparse);
 
-//    cudaEventRecord(stop);
-//    cudaEventSynchronize(stop);
-//    float milliseconds = 0;
-//    cudaEventElapsedTime(&milliseconds, start, stop);
-//   std::cout << "Free: " << milliseconds/1000 << std::endl;
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    float milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << "Free: " << milliseconds/1000 << std::endl;
 
 }
 
@@ -141,7 +122,7 @@ void TPZSolveVector::cuSparseHandle() {
     cudaEventSynchronize(stop);
     float milliseconds = 0;
     cudaEventElapsedTime(&milliseconds, start, stop);
-//    std::cout << "cuSPARSE: " << milliseconds/1000 << std::endl;
+    std::cout << "cuSPARSE: " << milliseconds/1000 << std::endl;
 
 }
 
@@ -157,24 +138,30 @@ void TPZSolveVector::cuBlasHandle() {
     cudaEventSynchronize(stop);
     float milliseconds = 0;
     cudaEventElapsedTime(&milliseconds, start, stop);
-//    std::cout << "cuBLAS: " << milliseconds/1000 << std::endl;
+    std::cout << "cuBLAS: " << milliseconds/1000 << std::endl;
 }
 
 
 void TPZSolveVector::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const {
+    high_resolution_clock::time_point t1, t2;
+    duration<double> time_span;
+
     int64_t n_globalsol = fIndexes.size()/2; //o vetor de indices esta duplicado
     int64_t nelem = fRowSizes.size();
     int rows = fRowSizes[0];
     int cols = fColSizes[0];
-
     TPZFMatrix<REAL> expandsolution(2*n_globalsol,1); //vetor solucao duplicado
-
-    cblas_dgthr(2*n_globalsol, global_solution, &expandsolution(0,0), &fIndexes[0]);
-
     result.Resize(2*n_globalsol,1);
     result.Zero();
 
-    high_resolution_clock::time_point t1 = high_resolution_clock::now();
+    t1 = high_resolution_clock::now();
+    cblas_dgthr(2*n_globalsol, global_solution, &expandsolution(0,0), &fIndexes[0]);
+
+    t2 = high_resolution_clock::now();
+    time_span = duration_cast<duration<double>>(t2 - t1);
+    std::cout << "Gather: " << time_span.count() << std::endl;
+
+    t1 = high_resolution_clock::now();
 
     //Usando o metodo criado
         for (int i = 0; i < cols; i++) {
@@ -185,55 +172,27 @@ void TPZSolveVector::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatr
             multvec_cpu(nelem * rows / 2, &fStorageVec[i * nelem * rows + nelem * rows / 2], &expandsolution(i * nelem + n_globalsol, 0), &result(n_globalsol + nelem * rows / 2,0));
     }
 
-    //Usando dsbmv (multiplicacao matriz-vetor com matriz de banda 0)
-//    for (int i = 0; i < cols; i++) {
-//        cblas_dsbmv(CblasColMajor, CblasUpper, nelem * rows / 2, 0, 1., &fStorageVec[i * nelem * rows], 1, &expandsolution(i * nelem, 0), 1, 1., &result(0,0), 1);
-//        cblas_dsbmv(CblasColMajor, CblasUpper, nelem * rows / 2, 0, 1., &fStorageVec[i * nelem * rows + nelem * rows / 2], 1, &expandsolution(i * nelem, 0), 1, 1., &result(nelem * rows / 2,0), 1);
-//
-//        cblas_dsbmv(CblasColMajor, CblasUpper, nelem * rows / 2, 0, 1., &fStorageVec[i * nelem * rows], 1, &expandsolution(i * nelem + n_globalsol, 0), 1, 1., &result(n_globalsol,0), 1);
-//        cblas_dsbmv(CblasColMajor, CblasUpper, nelem * rows / 2, 0, 1., &fStorageVec[i * nelem * rows + nelem * rows / 2], 1, &expandsolution(i * nelem + n_globalsol, 0), 1, 1., &result(n_globalsol + nelem * rows / 2,0), 1);
-//
-//    }
-
-//    TPZVec<int64_t> solpos(rows*cols/2);
-//    for (int i = 0; i < cols; i++) {
-//        for (int j = 0; j < cols; j++) {
-//            solpos[i*cols + j] = nelem * ((j + i) % cols);
-//        }
-//    }
-//
-    //Usando daxpy (multiplicacao escalar-vetor) obs: apenas 1 matriz para todos os elementos
-//    for (int i = 0; i < rows * cols / 2; i++) {
-//        cblas_daxpy(nelem, fStorageVec[i], &expandsolution(solpos[i],0), 1, &result((i%cols)*nelem,0), 1);
-//        cblas_daxpy(nelem, fStorageVec[i + rows*cols/2], &expandsolution(solpos[i],0), 1, &result((i%cols)*nelem + nelem*rows/2,0), 1);
-//
-//        cblas_daxpy(nelem, fStorageVec[i], &expandsolution(solpos[i] + n_globalsol,0), 1, &result((i%cols)*nelem + n_globalsol,0), 1);
-//        cblas_daxpy(nelem, fStorageVec[i + rows*cols/2], &expandsolution(solpos[i] + n_globalsol,0), 1, &result((i%cols)*nelem + n_globalsol + nelem*rows/2,0), 1);
-//    }
-
-  high_resolution_clock::time_point t2 = high_resolution_clock::now();
-
-  duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
-
+  t2 = high_resolution_clock::now();
+  time_span = duration_cast<duration<double>>(t2 - t1);
   std::cout << "Multiply: " << time_span.count() << std::endl;
-
 }
 
 void TPZSolveVector::MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const{
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
-    cudaEventRecord(start);
 
     int64_t n_globalsol = fIndexes.size()/2; //o vetor de indices esta duplicado
     int64_t nelem = fRowSizes.size();
     int rows = fRowSizes[0];
     int cols = fColSizes[0];
-
     result.Resize(2*n_globalsol,1);
     result.Zero();
 
-    cudaMemcpy(dstoragevec, &fStorageVec[0], nelem*fColSizes[0]*fRowSizes[0] * sizeof(double), cudaMemcpyHostToDevice);
+    cudaEventRecord(start);
+
+    cudaMemcpy(dindexes, &fIndexes[0], 2*n_globalsol * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(dglobal_solution, &global_solution[0], global_solution.Rows() * sizeof(double), cudaMemcpyHostToDevice);
 
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
@@ -241,103 +200,44 @@ void TPZSolveVector::MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZF
     cudaEventElapsedTime(&milliseconds, start, stop);
     std::cout << "Copy: " << milliseconds/1000 << std::endl;
 
-    cudaMemcpy(dindexes, &fIndexes[0], 2*n_globalsol * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(dglobal_solution, &global_solution[0], global_solution.Rows() * sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(dresult, &result(0,0), 2*n_globalsol * sizeof(double), cudaMemcpyHostToDevice);
+    cudaEventRecord(start);
 
     cusparseDgthr(handle_cusparse, 2*n_globalsol, dglobal_solution, &dexpandsolution[0], &dindexes[0], CUSPARSE_INDEX_BASE_ZERO);
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << "Gather: " << milliseconds/1000 << std::endl;
+
+    cudaEventRecord(start);
+
+    cudaMemcpy(dstoragevec, &fStorageVec[0], nelem*fColSizes[0]*fRowSizes[0] * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(dresult, &result(0,0), 2*n_globalsol * sizeof(double), cudaMemcpyHostToDevice);
+
+    cudaEventSynchronize(stop);
+    float milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << "Copy: " << milliseconds/1000 << std::endl;
 
     double alpha = 1.;
     double beta = 1.;
 
     cudaEventRecord(start);
 
-    //Multiplicacao vetor-vetor:
-    //Usando dsbmv (multiplicacao matriz-vetor com matriz de banda 0)
-//    for (int i = 0; i < cols; i++) {
-//        //du
-//        cublasDsbmv(handle_cublas, CUBLAS_FILL_MODE_LOWER, nelem * rows / 2, 0, &alpha, &dstoragevec[i * nelem * rows], 1, &dexpandsolution[i * nelem], 1, &beta, &dresult[0], 1);
-//        cublasDsbmv(handle_cublas, CUBLAS_FILL_MODE_LOWER, nelem * rows / 2, 0, &alpha, &dstoragevec[i * nelem * rows + nelem * rows / 2], 1, &dexpandsolution[i * nelem], 1, &beta, &dresult[nelem * rows / 2], 1);
-//
-//        //dv
-//        cublasDsbmv(handle_cublas, CUBLAS_FILL_MODE_LOWER, nelem * rows / 2, 0, &alpha, &dstoragevec[i * nelem * rows], 1, &dexpandsolution[i * nelem + n_globalsol], 1, &beta, &dresult[n_globalsol], 1);
-//        cublasDsbmv(handle_cublas, CUBLAS_FILL_MODE_LOWER, nelem * rows / 2, 0, &alpha, &dstoragevec[i * nelem * rows + nelem * rows / 2], 1, &dexpandsolution[i * nelem + n_globalsol], 1, &beta, &dresult[n_globalsol + nelem * rows / 2], 1);
-//    }
-
     //Usando o metodo criado
-//    dim3 dimGrid(ceil((nelem * rows / 2) / 128.0), 1, 1);
-//    dim3 dimBlock(128, 1, 1);
-//    for (int i = 0; i < cols; i++) {
-//        //du
-//        multvec<<<dimGrid, dimBlock>>>(nelem * rows / 2, &dstoragevec[i * nelem * rows], &dexpandsolution[i * nelem], &dresult[0]);
-//        multvec<<<dimGrid, dimBlock>>>(nelem * rows / 2, &dstoragevec[i * nelem * rows + nelem * rows / 2], &dexpandsolution[i * nelem], &dresult[nelem * rows / 2]);
-//
-//        //dv
-//        multvec<<<dimGrid, dimBlock>>>(nelem * rows / 2, &dstoragevec[i * nelem * rows], &dexpandsolution[i * nelem + n_globalsol], &dresult[n_globalsol]);
-//        multvec<<<dimGrid, dimBlock>>>(nelem * rows / 2, &dstoragevec[i * nelem * rows + nelem * rows / 2], &dexpandsolution[i * nelem + n_globalsol], &dresult[n_globalsol + nelem * rows / 2]);
-//    }
-//    cudaDeviceSynchronize();
-
-//    TPZVec<int64_t> solpos(rows*cols/2);
-//    for (int i = 0; i < cols; i++) {
-//        for (int j = 0; j < cols; j++) {
-//            solpos[i*cols + j] = nelem * ((j + i) % cols);
-//        }
-//    }
-//
-//    //Usando daxpy (multiplicacao escalar-vetor) obs: apenas 1 matriz para todos os elementos
-//    for(int i = 0; i < rows*cols/2; i++){
-//        double al1 = fStorageVec[i];
-//        double al2 = fStorageVec[i+rows*cols/2];
-//        //du
-//        cublasDaxpy(handle_cublas, nelem, &al1, &dexpandsolution[solpos[i]], 1., &dresult[(i%cols)*nelem], 1.);
-//        cublasDaxpy(handle_cublas, nelem, &al2, &dexpandsolution[solpos[i]], 1., &dresult[(i%cols)*nelem + nelem*rows/2], 1.);
-//
-//        //dv
-//        cublasDaxpy(handle_cublas, nelem, &al1, &dexpandsolution[solpos[i] + n_globalsol], 1., &dresult[(i%cols)*nelem + n_globalsol], 1.);
-//        cublasDaxpy(handle_cublas, nelem, &al2, &dexpandsolution[solpos[i] + n_globalsol], 1., &dresult[(i%cols)*nelem + n_globalsol + nelem*rows/2], 1.);
-//    }
-
-//    double *dsolx;
-//    double *dsoly;
-//    cudaMalloc(&dsolx, rows*cols*nelem * sizeof(double));
-//    cudaMalloc(&dsoly, rows*cols*nelem * sizeof(double));
-//
-//    //Usando Ddgmm (multiplicacao de matriz diagonal-matriz)
-//    for (int i = 0; i < cols; i++) {
-//        //du
-//        cublasDdgmm(handle_cublas, CUBLAS_SIDE_LEFT, nelem*rows/2, 1, &dstoragevec[i * nelem * rows], nelem*rows/2, &dexpandsolution[i * nelem], 1, &dsolx[i * nelem * rows], nelem*rows/2);
-//    	cublasDdgmm(handle_cublas, CUBLAS_SIDE_LEFT, nelem*rows/2, 1, &dstoragevec[i * nelem * rows + nelem*rows/2], nelem*rows/2, &dexpandsolution[i * nelem], 1, &dsolx[i * nelem * rows + nelem*rows/2], nelem*rows/2);
-//
-//        cublasDaxpy(handle_cublas, nelem * rows, &alpha, &dsolx[i * nelem * rows], 1., &dresult[0], 1.);
-//
-//        //dv
-//    	cublasDdgmm(handle_cublas, CUBLAS_SIDE_LEFT, nelem*rows/2, 1, &dstoragevec[i * nelem * rows], nelem*rows/2, &dexpandsolution[i * nelem + n_globalsol], 1, &dsoly[i * nelem * rows], nelem*rows/2);
-//    	cublasDdgmm(handle_cublas, CUBLAS_SIDE_LEFT, nelem*rows/2, 1, &dstoragevec[i * nelem * rows + nelem*rows/2], nelem*rows/2, &dexpandsolution[i * nelem + n_globalsol], 1, &dsoly[i * nelem * rows + nelem*rows/2], nelem*rows/2);
-//
-//        cublasDaxpy(handle_cublas, nelem * rows, &alpha, &dsoly[i * nelem * rows], 1., &dresult[n_globalsol], 1.);
-//    }
-
-    thrust::device_vector <double> exp(dexpandsolution, dexpandsolution + 2*n_globalsol);
-    thrust::device_vector <double> stor(dstoragevec, dstoragevec + nelem*rows*cols);
-    thrust::device_vector <double> solx(rows*cols*nelem);
-    thrust::device_vector <double> soly(rows*cols*nelem);
-    thrust::device_vector <double> res(dresult, dresult + 2*n_globalsol);
-
-    //Usando thrust (multiplicacao vetor-vetor)
+    dim3 dimGrid(ceil((nelem * rows / 2) / 128.0), 1, 1);
+    dim3 dimBlock(128, 1, 1);
     for (int i = 0; i < cols; i++) {
         //du
-		transform(&stor[i * nelem * rows], &stor[i * nelem * rows + nelem*rows/2], &exp[i*nelem], &solx[i*nelem*rows], thrust::multiplies<double>());
-        transform(&stor[i * nelem * rows + nelem*rows/2], &stor[i * nelem * rows + nelem*rows ], &exp[i*nelem], &solx[i*nelem*rows + nelem*rows/2], thrust::multiplies<double>());
-
-		transform(&solx[i * nelem * rows] , &solx[i * nelem * rows + nelem * rows], &res[0], &res[0], saxpy_functor(1));
+        multvec<<<dimGrid, dimBlock>>>(nelem * rows / 2, &dstoragevec[i * nelem * rows], &dexpandsolution[i * nelem], &dresult[0]);
+        multvec<<<dimGrid, dimBlock>>>(nelem * rows / 2, &dstoragevec[i * nelem * rows + nelem * rows / 2], &dexpandsolution[i * nelem], &dresult[nelem * rows / 2]);
 
         //dv
-        transform(&stor[i * nelem * rows], &stor[i * nelem * rows + nelem*rows/2], &exp[i*nelem + n_globalsol], &soly[i*nelem*rows], thrust::multiplies<double>());
-        transform(&stor[i * nelem * rows + nelem*rows/2], &stor[i * nelem * rows + nelem*rows], &exp[i*nelem + n_globalsol], &soly[i*nelem*rows + nelem*rows/2], thrust::multiplies<double>());
-
-        transform(&soly[i * nelem * rows] , &soly[i * nelem * rows + nelem * rows], &res[n_globalsol], &res[n_globalsol], saxpy_functor(1));
+        multvec<<<dimGrid, dimBlock>>>(nelem * rows / 2, &dstoragevec[i * nelem * rows], &dexpandsolution[i * nelem + n_globalsol], &dresult[n_globalsol]);
+        multvec<<<dimGrid, dimBlock>>>(nelem * rows / 2, &dstoragevec[i * nelem * rows + nelem * rows / 2], &dexpandsolution[i * nelem + n_globalsol], &dresult[n_globalsol + nelem * rows / 2]);
     }
+    cudaDeviceSynchronize();
 
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
@@ -348,7 +248,6 @@ void TPZSolveVector::MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZF
     cudaEventRecord(start);
 
     cudaMemcpy(&result(0, 0), dresult, 2 * n_globalsol * sizeof(double), cudaMemcpyDeviceToHost);
-    thrust::copy(res.begin(), res.end(), &result(0,0));
 
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
@@ -359,12 +258,18 @@ void TPZSolveVector::MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZF
 }
 
 void TPZSolveVector::ComputeSigma( TPZVec<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<STATE> &sigma) {
+    high_resolution_clock::time_point t1, t2;
+    duration<double> time_span;
+
     REAL E = 200000000.;
     REAL nu =0.30;
     int nelem = fRowSizes.size();
     int npts_el = fRow/nelem;
-    TPZFMatrix<REAL> aux(nelem,1,0.);
+    TPZFMatrix<REAL> aux(nelem,1,0);
     sigma.Resize(2*fRow,1);
+    sigma.Zero();
+
+    t1 = high_resolution_clock::now();
 
     for (int64_t ipts=0; ipts< npts_el/2; ipts++) {
         //sigma xx
@@ -390,52 +295,256 @@ void TPZSolveVector::ComputeSigma( TPZVec<REAL> &weight, TPZFMatrix<REAL> &resul
 
         cblas_daxpy(nelem, 1, &sigma((2*ipts+1)*nelem,0), 1, &sigma((2*ipts+npts_el)*nelem,0), 1);
     }
+    t2 = high_resolution_clock::now();
+    time_span = duration_cast<duration<double>>(t2 - t1);
+    std::cout << "Sigma: " << time_span.count() << std::endl;
+}
+
+void TPZSolveVector::ComputeSigmaCUDA( TPZVec<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<STATE> &sigma) {
+    REAL E = 200000000.;
+    REAL nu =0.30;
+    double alpha = 1.;
+    double coef = E/(1.-nu*nu);
+    int nelem = fRowSizes.size();
+    int npts_el = fRow/nelem;
+    TPZFMatrix<REAL> aux(nelem,1,0.);
+    double *daux;
+    cudaMalloc(&daux, nelem*sizeof(double));
+    sigma.Resize(2*fRow,1);
+    sigma.Zero();
+
+    cudaEvent_t start, stop;
+    float milliseconds = 0;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start);
+
+    cudaMemcpy(dweight, &weight[0], weight.size() * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(daux, &aux(0,0), nelem * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(dsigma, &sigma(0,0), 2*fRow * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(dresult, &result(0,0), result.Rows() * sizeof(double), cudaMemcpyDeviceToHost);
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << "Copy: " << milliseconds/1000 << std::endl;
+
+    cudaEventRecord(start);
+    int rows = fRowSizes[0];
+    dim3 dimGrid(ceil(nelem / 128.0), 1, 1);
+    dim3 dimBlock(128, 1, 1);
+    for (int64_t ipts=0; ipts< npts_el/2; ipts++) {
+        //sigma xx
+        cublasDaxpy(handle_cublas, nelem, &nu, &dresult[(2*ipts + npts_el + 1)*nelem], 1., &daux[0], 1);
+        cublasDaxpy(handle_cublas, nelem, &alpha, &dresult[2*ipts*nelem], 1, &daux[0], 1);
+        multvec<<<dimGrid, dimBlock>>>(nelem, &dweight[ipts*nelem], &daux[0], &dsigma[2*ipts*nelem]);
+	    cublasDscal(handle_cublas, nelem, &coef, &dsigma[2*ipts*nelem], 1);
+        aux.Zero();
+        cudaMemcpy(daux, &aux(0,0), nelem * sizeof(double), cudaMemcpyHostToDevice);
+
+
+        //sigma yy
+        cublasDaxpy(handle_cublas, nelem, &nu, &dresult[2*ipts*nelem], 1., &daux[0], 1);
+        cublasDaxpy(handle_cublas, nelem, &alpha, &dresult[(2*ipts + npts_el + 1)*nelem], 1, &daux[0], 1);
+        multvec<<<dimGrid, dimBlock>>>(nelem, &dweight[ipts*nelem], &daux[0], &dsigma[(2*ipts+npts_el+1)*nelem]);
+        cublasDscal(handle_cublas, nelem,&coef, &dsigma[(2*ipts+npts_el+1)*nelem], 1);
+        aux.Zero();
+        cudaMemcpy(daux, &aux(0,0), nelem * sizeof(double), cudaMemcpyHostToDevice);
+
+        //sigma xy
+        cublasDaxpy(handle_cublas, nelem, &alpha, &dresult[(2*ipts + 1)*nelem], 1., &daux[0], 1);
+        cublasDaxpy(handle_cublas, nelem, &alpha, &dresult[(2*ipts + npts_el)*nelem], 1, &daux[0], 1);
+        multvec<<<dimGrid, dimBlock>>>(nelem, &dweight[ipts*nelem], &daux[0], &dsigma[(2*ipts+1)*nelem]);
+        cublasDscal(handle_cublas, nelem,&coef, &dsigma[(2*ipts+1)*nelem], 1);
+        aux.Zero();
+        cudaMemcpy(daux, &aux(0,0), nelem * sizeof(double), cudaMemcpyHostToDevice);
+
+        cublasDaxpy(handle_cublas, nelem, &alpha, &dsigma[(2*ipts+1)*nelem], 1., &dsigma[(2*ipts+npts_el)*nelem], 1);
+    }
+    cudaDeviceSynchronize();
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << "Sigma: " << milliseconds/1000 << std::endl;
+
+    cudaEventRecord(start);
+
+    cudaMemcpy(&sigma(0, 0), dsigma, 2 * fRow * sizeof(double), cudaMemcpyDeviceToHost);
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << "Copy: " << milliseconds/1000 << std::endl;
 }
 
 void TPZSolveVector::MultiplyTranspose(TPZFMatrix<STATE>  &sigma, TPZFMatrix<STATE> &nodal_forces_vec) {
+    high_resolution_clock::time_point t1, t2;
+    duration<double> time_span;
+
     int64_t npts_tot = fRow;
     nodal_forces_vec.Resize(npts_tot,1);
     nodal_forces_vec.Zero();
 
-    TPZFMatrix<REAL> sigx(fRow, 1, &sigma(0, 0), fRow);
-    TPZFMatrix<REAL> sigx_2(2 * fRow);
-    sigx_2.AddSub(0, 0, sigx);
-    sigx_2.AddSub(fRow, 0, fRow);
+    int cols = fColSizes[0];
+    int rows = fRowSizes[0];
+    int  nelem = fRowSizes.size();
+    t1 = high_resolution_clock::now();
 
-    TPZFMatrix<REAL> sigy(fRow, 1, &sigma(fRow, 0), fRow);
-    TPZFMatrix<REAL> sigy_2(2 * fRow);
-    sigy_2.AddSub(0, 0, sigy);
-    sigy_2.AddSub(fRow, 0, sigy);
+    for (int i = 0; i < cols; i++) {
+        //Fx
+        multvec_cpu((cols-i)*nelem, &fStorageVec[(((cols-i)%cols)*rows + i)*nelem], &sigma(i * nelem, 0), &nodal_forces_vec(0, 0));
+        multvec_cpu(i*nelem, &fStorageVec[((cols-i)%cols)*rows*nelem], &sigma(0, 0), &nodal_forces_vec(nelem*((cols - i)%cols), 0));
+
+        multvec_cpu((cols-i)*nelem, &fStorageVec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem], &sigma(i * nelem + cols*nelem, 0), &nodal_forces_vec(0, 0));
+        multvec_cpu(i*nelem, &fStorageVec[((cols-i)%cols)*rows*nelem + cols*nelem], &sigma(cols*nelem, 0), &nodal_forces_vec(nelem*((cols - i)%cols), 0));
+
+        //Fy
+        multvec_cpu((cols-i)*nelem, &fStorageVec[(((cols-i)%cols)*rows + i)*nelem], &sigma(i * nelem + fRow, 0),  &nodal_forces_vec(npts_tot/2, 0));
+        multvec_cpu(i*nelem, &fStorageVec[((cols-i)%cols)*rows*nelem], &sigma(fRow, 0), &nodal_forces_vec(npts_tot/2 + nelem*((cols - i)%cols), 0));
+
+        multvec_cpu((cols-i)*nelem, &fStorageVec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem], &sigma(i * nelem + cols*nelem + fRow, 0), &nodal_forces_vec(npts_tot/2, 0));
+        multvec_cpu(i*nelem, &fStorageVec[((cols-i)%cols)*rows*nelem + cols*nelem], &sigma(cols*nelem + fRow, 0), &nodal_forces_vec(npts_tot/2 + nelem*((cols - i)%cols), 0));
+    }
+    t2 = high_resolution_clock::now();
+    time_span = duration_cast<duration<double>>(t2 - t1);
+    std::cout << "Transpose: " << time_span.count() << std::endl;
+}
+
+void TPZSolveVector::MultiplyTransposeCUDA(TPZFMatrix<STATE>  &sigma, TPZFMatrix<STATE> &nodal_forces_vec) {
+    cudaEvent_t start, stop;
+    float milliseconds = 0;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    int64_t npts_tot = fRow;
+    nodal_forces_vec.Resize(npts_tot,1);
+    nodal_forces_vec.Zero();
 
     int cols = fColSizes[0];
     int rows = fRowSizes[0];
     int  nelem = fRowSizes.size();
 
+    dim3 dimBlock(128, 1, 1);
+
+    cudaEventRecord(start);
+    cudaMemcpy(dnodal_forces_vec, &nodal_forces_vec(0,0), npts_tot * sizeof(double), cudaMemcpyHostToDevice);
+
     for (int i = 0; i < cols; i++) {
         //Fx
-        cblas_dsbmv(CblasColMajor, CblasUpper, (cols-i)*nelem, 0, 1., &fStorageVec[(((cols-i)%cols)*rows + i)*nelem], 1, &sigx_2(i * nelem, 0), 1, 1., &nodal_forces_vec(0, 0), 1);
-        cblas_dsbmv(CblasColMajor, CblasUpper, i*nelem, 0, 1., &fStorageVec[((cols-i)%cols)*rows*nelem], 1, &sigx_2(0, 0), 1, 1., &nodal_forces_vec(nelem*((cols - i)%cols), 0), 1);
+        multvec<<<ceil(((cols-i)*nelem)/ 128.0), dimBlock>>>((cols-i)*nelem, &dstoragevec[(((cols-i)%cols)*rows + i)*nelem], &dsigma[i * nelem], &dnodal_forces_vec[0]);
+        multvec<<<ceil((i*nelem) / 128.0), dimBlock>>>(i*nelem, &dstoragevec[((cols-i)%cols)*rows*nelem], &dsigma[0], &dnodal_forces_vec[nelem*((cols - i)%cols)]);
 
-        cblas_dsbmv(CblasColMajor, CblasUpper, (cols-i)*nelem, 0, 1., &fStorageVec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem], 1, &sigx_2(i * nelem + cols*nelem, 0), 1, 1., &nodal_forces_vec(0, 0), 1);
-        cblas_dsbmv(CblasColMajor, CblasUpper, i*nelem, 0, 1., &fStorageVec[((cols-i)%cols)*rows*nelem + cols*nelem], 1, &sigx_2(cols*nelem, 0), 1, 1., &nodal_forces_vec(nelem*((cols - i)%cols), 0), 1);
+        multvec<<<ceil(((cols-i)*nelem)/ 128.0), dimBlock>>>((cols-i)*nelem, &dstoragevec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem], &dsigma[i * nelem + cols*nelem], &dnodal_forces_vec[0]);
+        multvec<<<ceil((i*nelem) / 128.0), dimBlock>>>(i*nelem, &dstoragevec[((cols-i)%cols)*rows*nelem + cols*nelem], &dsigma[cols*nelem], &dnodal_forces_vec[nelem*((cols - i)%cols)]);
 
         //Fy
-        cblas_dsbmv(CblasColMajor, CblasUpper, (cols-i)*nelem, 0, 1., &fStorageVec[(((cols-i)%cols)*rows + i)*nelem], 1, &sigy_2(i * nelem, 0), 1, 1., &nodal_forces_vec(npts_tot/2, 0), 1);
-        cblas_dsbmv(CblasColMajor, CblasUpper, i*nelem, 0, 1., &fStorageVec[((cols-i)%cols)*rows*nelem], 1, &sigy_2(0, 0), 1, 1., &nodal_forces_vec(npts_tot/2 + nelem*((cols - i)%cols), 0), 1);
+        multvec<<<ceil(((cols-i)*nelem)/ 128.0), dimBlock>>>((cols-i)*nelem, &dstoragevec[(((cols-i)%cols)*rows + i)*nelem], &dsigma[i * nelem + fRow],  &dnodal_forces_vec[npts_tot/2]);
+        multvec<<<ceil((i*nelem) / 128.0), dimBlock>>>(i*nelem, &dstoragevec[((cols-i)%cols)*rows*nelem], &dsigma[fRow], &dnodal_forces_vec[npts_tot/2 + nelem*((cols - i)%cols)]);
 
-        cblas_dsbmv(CblasColMajor, CblasUpper, (cols-i)*nelem, 0, 1., &fStorageVec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem], 1, &sigy_2(i * nelem + cols*nelem, 0), 1, 1., &nodal_forces_vec(npts_tot/2, 0), 1);
-        cblas_dsbmv(CblasColMajor, CblasUpper, i*nelem, 0, 1., &fStorageVec[((cols-i)%cols)*rows*nelem + cols*nelem], 1, &sigy_2(cols*nelem, 0), 1, 1., &nodal_forces_vec(npts_tot/2 + nelem*((cols - i)%cols), 0), 1);
+        multvec<<<ceil(((cols-i)*nelem)/ 128.0), dimBlock>>>((cols-i)*nelem, &dstoragevec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem], &dsigma[i * nelem + cols*nelem + fRow], &dnodal_forces_vec[npts_tot/2]);
+        multvec<<<ceil((i*nelem) / 128.0), dimBlock>>>(i*nelem, &dstoragevec[((cols-i)%cols)*rows*nelem + cols*nelem], &dsigma[cols*nelem + fRow], &dnodal_forces_vec[npts_tot/2 + nelem*((cols - i)%cols)]);
     }
+    cudaDeviceSynchronize();
+
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+        cudaEventElapsedTime(&milliseconds, start, stop);
+        std::cout << "Transpose: " << milliseconds/1000 << std::endl;
+
+    cudaEventRecord(start);
+    cudaMemcpy(&nodal_forces_vec(0, 0), dnodal_forces_vec, npts_tot * sizeof(double), cudaMemcpyDeviceToHost);
+
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+        cudaEventElapsedTime(&milliseconds, start, stop);
+        std::cout << "Copy: " << milliseconds/1000 << std::endl;
 }
 
+void TPZSolveVector::ColoredAssembleCUDA(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) {
+    int64_t ncolor = *std::max_element(fElemColor.begin(), fElemColor.end()) + 1;
+    int64_t nindexes = fIndexesColor.size();
+    int64_t neq = nodal_forces_global.Rows();
+    int64_t npts_tot = fRow;
+
+    nodal_forces_global.Resize(neq * ncolor, 1);
+    nodal_forces_global.Zero();
+
+    cudaEvent_t start, stop;
+    float milliseconds = 0;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start);
+
+    cudaMemcpy(dindexescolor, &fIndexesColor[0], nindexes * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(dnodal_forces_global, &nodal_forces_global(0, 0), ncolor * neq * sizeof(double), cudaMemcpyHostToDevice);
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << "Copy: " << milliseconds/1000 << std::endl;
+
+    cudaEventRecord(start);
+
+    cusparseDsctr(handle_cusparse, nindexes, dnodal_forces_vec, &dindexescolor[0], &dnodal_forces_global[0], CUSPARSE_INDEX_BASE_ZERO);
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << "Scatter: " << milliseconds/1000 << std::endl;
+
+    cudaEventRecord(start);
+
+    int64_t colorassemb = ncolor / 2;
+    double alpha = 1.;
+    while (colorassemb > 0) {
+
+        int64_t firsteq = (ncolor - colorassemb) * neq;
+
+        cublasDaxpy(handle_cublas, firsteq, &alpha, &dnodal_forces_global[firsteq], 1., &dnodal_forces_global[0], 1.);
+
+        ncolor -= colorassemb;
+        colorassemb = ncolor / 2;
+    }
+
+    nodal_forces_global.Resize(neq, 1);
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << "Assemble: " << milliseconds/1000 << std::endl;
+
+    cudaEventRecord(start);
+
+    cudaMemcpy(&nodal_forces_global(0, 0), dnodal_forces_global, neq * sizeof(double), cudaMemcpyDeviceToHost);
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << "Copy: " << milliseconds/1000 << std::endl;
+
+}
+
+
 void TPZSolveVector::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) {
+    high_resolution_clock::time_point t1, t2;
+    duration<double> time_span;
+
     int64_t ncolor = *std::max_element(fElemColor.begin(), fElemColor.end())+1;
     int64_t sz = fIndexesColor.size();
     int64_t neq = nodal_forces_global.Rows();
     nodal_forces_global.Resize(neq*ncolor,1);
 
+    t1 = high_resolution_clock::now();
+
     cblas_dsctr(sz, nodal_forces_vec, &fIndexesColor[0], &nodal_forces_global(0,0));
 
+    t2 = high_resolution_clock::now();
+    time_span = duration_cast<duration<double>>(t2 - t1);
+    std::cout << "Scatter: " << time_span.count() << std::endl;
+
+    t1 = high_resolution_clock::now();
     int64_t colorassemb = ncolor / 2.;
     while (colorassemb > 0) {
 
@@ -446,23 +555,29 @@ void TPZSolveVector::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFM
         colorassemb = ncolor/2;
     }
     nodal_forces_global.Resize(neq, 1);
+
+    t2 = high_resolution_clock::now();
+    time_span = duration_cast<duration<double>>(t2 - t1);
+    std::cout << "Scatter: " << time_span.count() << std::endl;
 }
 
 void TPZSolveVector::TraditionalAssemble(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const {
-    for (int64_t ir = 0; ir < fRow; ir++) {
+    for (int64_t ir=0; ir<fRow/2; ir++) {
         nodal_forces_global(fIndexes[ir], 0) += nodal_forces_vec(ir, 0);
+        nodal_forces_global(fIndexes[ir+fRow], 0) += nodal_forces_vec(ir+fRow/2, 0);
     }
 }
 
 void TPZSolveVector::ColoringElements(TPZCompMesh *cmesh) const {
     int64_t nelem_c = cmesh->NElements();
     int64_t nconnects = cmesh->NConnects();
-    TPZVec<int64_t> connects_vec(nconnects, 0);
+    TPZVec<int64_t> connects_vec(nconnects,0);
 
     int64_t contcolor = 0;
     bool needstocontinue = true;
 
-    while (needstocontinue) {
+    while (needstocontinue)
+    {
         needstocontinue = false;
         for (int64_t iel = 0; iel < nelem_c; iel++) {
             TPZCompEl *cel = cmesh->Element(iel);
@@ -482,6 +597,7 @@ void TPZSolveVector::ColoringElements(TPZCompMesh *cmesh) const {
                 continue;
             }
             fElemColor[iel] = contcolor;
+            //cel->Reference()->SetMaterialId(contcolor);
 
             for (icon = 0; icon < ncon; icon++) {
                 connects_vec[connectlist[icon]] = 1;
@@ -490,17 +606,22 @@ void TPZSolveVector::ColoringElements(TPZCompMesh *cmesh) const {
         contcolor++;
         connects_vec.Fill(0);
     }
+    int64_t ind = fIndexes.size()/2;
+    TPZVec<REAL> indexes(ind);
+
+    for (int i = 0; i < ind/2; i++) {
+        indexes[ind/2 + i] = fIndexes[ind+i];
+        indexes[i] = fIndexes[i];
+    }
 
     int64_t nelem = fRowSizes.size();
     int64_t neq = cmesh->NEquations();
     for (int64_t iel = 0; iel < nelem; iel++) {
         int64_t cols = fColSizes[iel];
-        int64_t cont_cols = fColFirstIndex[iel];
 
         for (int64_t icols = 0; icols < cols; icols++) {
-            fIndexesColor[cont_cols + icols] = fIndexes[cont_cols + icols] + fElemColor[iel] * neq;
-            fIndexesColor[cont_cols + fRow / 2 + icols] =
-                    fIndexes[cont_cols + fRow / 2 + icols] + fElemColor[iel] * neq;
+            fIndexesColor[iel + icols*nelem] = indexes[iel + icols*nelem] + fElemColor[iel]*neq;
+            fIndexesColor[iel + icols*nelem + fRow/2] = indexes[iel + icols*nelem + fRow/2] + fElemColor[iel]*neq;
         }
     }
 }

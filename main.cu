@@ -37,9 +37,7 @@ void SolMatrix(TPZCompMesh *cmesh);
 
 void SolVector(TPZCompMesh *cmesh);
 
-
 int main(int argc, char *argv[]) {
-    for (int i = 0; i < 1; i++) {
         //// ------------------------ DATA INPUT ------------------------------
         //// NUMBER OF ELEMENTS IN X AND Y DIRECTIONS
         int nelem_x = atoi(argv[1]);
@@ -93,12 +91,18 @@ int main(int argc, char *argv[]) {
         an.SetSolver(*direct);
 //        an_d.SetSolver(*direct);
         delete direct;
-//        an.Assemble();
-//        an.Solve();
+        an.Assemble();
+        an.Solve();
+
+//TPZFMatrix<REAL> sol = cmesh->Solution();
+//std::ofstream file("solution.txt");
+//for(int i = 0; i < sol.Rows(); i++){
+//file << sol(i,0) << std::endl;
+//}
 
 // Computing global K
 //        an_d.Assemble();
-        TPZFMatrix<STATE> res_d;
+//        TPZFMatrix<STATE> res_d;
 // Computing K u
  //       an_d.Solver().Matrix()->Multiply(an.Solution(), res_d);
 //Print Rhs without boundary conditions
@@ -112,9 +116,8 @@ int main(int argc, char *argv[]) {
 //        an.DefineGraphMesh(2, scalarnames, vecnames, namefile + "ElasticitySolutions.vtk");
 //        an.PostProcess(0);
 
-        SolMatrix(cmesh);
-//        SolVector(cmesh);
-    }
+//        SolMatrix(cmesh);
+        SolVector(cmesh);
     return 0;
 }
 
@@ -397,15 +400,18 @@ void SolVector(TPZCompMesh *cmesh) {
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;
     SolVec->AllocateMemory(cmesh);
     SolVec->MultiplyCUDA(coef_sol,result);
-    
+    SolVec->ComputeSigmaCUDA(weight, result, sigma);    
+    SolVec->MultiplyTransposeCUDA(sigma,nodal_forces_vec);
+    SolVec->ColoredAssembleCUDA(nodal_forces_vec,nodal_forces_global3);
     SolVec->FreeMemory();
+
 #endif
 
     std::cout << "\n\nSOLVING WITH CPU" << std::endl;
     SolVec->Multiply(coef_sol, result);
     SolVec->ComputeSigma(weight, result, sigma);
     SolVec->MultiplyTranspose(sigma,nodal_forces_vec);
-    SolVec->ColoredAssemble(nodal_forces_vec,nodal_forces_global1);
+    SolVec->ColoredAssemble(nodal_forces_vec,nodal_forces_global2);
 
     //Check result
     SolVec->TraditionalAssemble(nodal_forces_vec, nodal_forces_global1); // ok
@@ -415,15 +421,15 @@ void SolVector(TPZCompMesh *cmesh) {
     } else {
         std::cout << "\nAssemble done in the CPU is not ok." << std::endl;
     }
-//
-//#ifdef USING_CUDA
-//    int resgpu = Norm(nodal_forces_global1 - nodal_forces_global3);
-//    if(resgpu == 0){
-//        std::cout << "\nAssemble done in the GPU is ok." << std::endl;
-//    } else {
-//        std::cout << "\nAssemble done in the GPU is not ok." << std::endl;
-//    }
-//#endif
+
+#ifdef __CUDACC__
+    int resgpu = Norm(nodal_forces_global1 - nodal_forces_global3);
+    if(resgpu == 0){
+        std::cout << "\nAssemble done in the GPU is ok." << std::endl;
+    } else {
+        std::cout << "\nAssemble done in the GPU is not ok." << std::endl;
+    }
+#endif
 }
 
 void SolMatrix(TPZCompMesh *cmesh) {
@@ -543,7 +549,7 @@ void SolMatrix(TPZCompMesh *cmesh) {
     SolMat->SetIndexes(indexes);
     SolMat->ColoringElements(cmesh);
 
-    TPZFMatrix<REAL> coef_sol = cmesh->Solution();
+    //TPZFMatrix<REAL> coef_sol = cmesh->Solution();
     int neq = cmesh->NEquations();
     TPZFMatrix<REAL> nodal_forces_global1(neq, 1, 0.);
     TPZFMatrix<REAL> nodal_forces_global2(neq, 1, 0.);
@@ -552,6 +558,18 @@ void SolMatrix(TPZCompMesh *cmesh) {
     TPZFMatrix<REAL> sigma;
     TPZFMatrix<REAL> nodal_forces_vec;
 
+        std::ifstream input("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/solution.txt");
+        if(!input) {
+            std::cout  << "Failed to open file ";
+        }
+
+        TPZFMatrix<REAL> coef_sol(cmesh->NEquations(),1);
+        int k = 0;
+        double val;
+        while (input >> val) {
+            coef_sol(k,0) = val;
+            k++;
+        }
 
     #ifdef __CUDACC__
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;

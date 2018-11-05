@@ -42,8 +42,8 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < 1; i++) {
         //// ------------------------ DATA INPUT ------------------------------
         //// NUMBER OF ELEMENTS IN X AND Y DIRECTIONS
-        int nelem_x = 2;
-        int nelem_y = 2;
+        int nelem_x = 1;
+        int nelem_y = 1;
 
         std::cout << "-------------------------------------------------" << std::endl;
         std::cout << "MESH SIZE: " << nelem_x << "x" << nelem_y << std::endl;
@@ -98,7 +98,7 @@ int main(int argc, char *argv[]) {
 
 // Computing global K
 //        an_d.Assemble();
-        TPZFMatrix<STATE> res_d;
+//        TPZFMatrix<STATE> res_d;
 // Computing K u
  //       an_d.Solver().Matrix()->Multiply(an.Solution(), res_d);
 //Print Rhs without boundary conditions
@@ -397,7 +397,9 @@ void SolVector(TPZCompMesh *cmesh) {
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;
     SolVec->AllocateMemory(cmesh);
     SolVec->MultiplyCUDA(coef_sol,result);
-
+    SolVec->ComputeSigmaCUDA(weight, result, sigma);
+    SolVec->MultiplyTransposeCUDA(sigma,nodal_forces_vec);
+    SolVec->ColoredAssembleCUDA(nodal_forces_vec,nodal_forces_global3);
     SolVec->FreeMemory();
 
 #endif
@@ -406,7 +408,7 @@ void SolVector(TPZCompMesh *cmesh) {
     SolVec->Multiply(coef_sol, result);
     SolVec->ComputeSigma(weight, result, sigma);
     SolVec->MultiplyTranspose(sigma,nodal_forces_vec);
-    SolVec->ColoredAssemble(nodal_forces_vec,nodal_forces_global1);
+    SolVec->ColoredAssemble(nodal_forces_vec,nodal_forces_global2);
 
     //Check result
     SolVec->TraditionalAssemble(nodal_forces_vec, nodal_forces_global1); // ok
@@ -416,15 +418,15 @@ void SolVector(TPZCompMesh *cmesh) {
     } else {
         std::cout << "\nAssemble done in the CPU is not ok." << std::endl;
     }
-//
-//#ifdef USING_CUDA
-//    int resgpu = Norm(nodal_forces_global1 - nodal_forces_global3);
-//    if(resgpu == 0){
-//        std::cout << "\nAssemble done in the GPU is ok." << std::endl;
-//    } else {
-//        std::cout << "\nAssemble done in the GPU is not ok." << std::endl;
-//    }
-//#endif
+
+#ifdef USING_CUDA
+    int resgpu = Norm(nodal_forces_global1 - nodal_forces_global3);
+    if(resgpu == 0){
+        std::cout << "\nAssemble done in the GPU is ok." << std::endl;
+    } else {
+        std::cout << "\nAssemble done in the GPU is not ok." << std::endl;
+    }
+#endif
 }
 
 void SolMatrix(TPZCompMesh *cmesh) {
