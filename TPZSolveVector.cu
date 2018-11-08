@@ -20,9 +20,8 @@ using namespace std::chrono;
 
 #include <thrust/device_vector.h>
 #include <thrust/functional.h>
-#include <thrust/sequence.h>
-#include <thrust/fill.h>
 #include <thrust/transform.h>
+using namespace thrust::placeholders;
 
 __global__ void multvec(int n, double *a, double *b, double *c) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -141,44 +140,9 @@ void TPZSolveVector::cuBlasHandle() {
     std::cout << "cuBLAS: " << milliseconds/1000 << std::endl;
 }
 
-
-void TPZSolveVector::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const {
-    high_resolution_clock::time_point t1, t2;
-    duration<double> time_span;
-
-    int64_t n_globalsol = fIndexes.size()/2; //o vetor de indices esta duplicado
-    int64_t nelem = fRowSizes.size();
-    int rows = fRowSizes[0];
-    int cols = fColSizes[0];
-    TPZFMatrix<REAL> expandsolution(2*n_globalsol,1); //vetor solucao duplicado
-    result.Resize(2*n_globalsol,1);
-    result.Zero();
-
-    t1 = high_resolution_clock::now();
-    cblas_dgthr(2*n_globalsol, global_solution, &expandsolution(0,0), &fIndexes[0]);
-
-    t2 = high_resolution_clock::now();
-    time_span = duration_cast<duration<double>>(t2 - t1);
-    std::cout << "Gather: " << time_span.count() << std::endl;
-
-    t1 = high_resolution_clock::now();
-
-    //Usando o metodo criado
-        for (int i = 0; i < cols; i++) {
-            multvec_cpu(nelem * rows / 2, &fStorageVec[i * nelem * rows], &expandsolution(i * nelem, 0), &result(0,0));
-            multvec_cpu(nelem * rows / 2, &fStorageVec[i * nelem * rows + nelem * rows / 2], &expandsolution(i * nelem, 0), &result(nelem * rows / 2,0));
-
-            multvec_cpu(nelem * rows / 2, &fStorageVec[i * nelem * rows], &expandsolution(i * nelem + n_globalsol, 0), &result(n_globalsol,0));
-            multvec_cpu(nelem * rows / 2, &fStorageVec[i * nelem * rows + nelem * rows / 2], &expandsolution(i * nelem + n_globalsol, 0), &result(n_globalsol + nelem * rows / 2,0));
-    }
-
-  t2 = high_resolution_clock::now();
-  time_span = duration_cast<duration<double>>(t2 - t1);
-  std::cout << "Multiply: " << time_span.count() << std::endl;
-}
-
 void TPZSolveVector::MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const{
     cudaEvent_t start, stop;
+    float milliseconds = 0;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
@@ -196,7 +160,7 @@ void TPZSolveVector::MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZF
 
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
-    float milliseconds = 0;
+    milliseconds = 0;
     cudaEventElapsedTime(&milliseconds, start, stop);
     std::cout << "Copy: " << milliseconds/1000 << std::endl;
 
@@ -215,29 +179,36 @@ void TPZSolveVector::MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZF
     cudaMemcpy(dstoragevec, &fStorageVec[0], nelem*fColSizes[0]*fRowSizes[0] * sizeof(double), cudaMemcpyHostToDevice);
     cudaMemcpy(dresult, &result(0,0), 2*n_globalsol * sizeof(double), cudaMemcpyHostToDevice);
 
+    cudaEventRecord(stop);
     cudaEventSynchronize(stop);
-    float milliseconds = 0;
+    milliseconds = 0;
     cudaEventElapsedTime(&milliseconds, start, stop);
     std::cout << "Copy: " << milliseconds/1000 << std::endl;
 
-    double alpha = 1.;
-    double beta = 1.;
-
     cudaEventRecord(start);
+    double alpha = 1.;
+
+    thrust::device_ptr<double> tstorage = thrust::device_pointer_cast(dstoragevec);
+    thrust::device_ptr<double> texpand = thrust::device_pointer_cast(dexpandsolution);
+    thrust::device_ptr<double> tres = thrust::device_pointer_cast(dresult);
+
+    double *dsol;
+    cudaMalloc(&dsol, nelem * rows*sizeof(double));
+    thrust::device_ptr<double> tsol = thrust::device_pointer_cast(dsol);
 
     //Usando o metodo criado
-    dim3 dimGrid(ceil((nelem * rows / 2) / 128.0), 1, 1);
-    dim3 dimBlock(128, 1, 1);
     for (int i = 0; i < cols; i++) {
         //du
-        multvec<<<dimGrid, dimBlock>>>(nelem * rows / 2, &dstoragevec[i * nelem * rows], &dexpandsolution[i * nelem], &dresult[0]);
-        multvec<<<dimGrid, dimBlock>>>(nelem * rows / 2, &dstoragevec[i * nelem * rows + nelem * rows / 2], &dexpandsolution[i * nelem], &dresult[nelem * rows / 2]);
+	thrust::transform(&tstorage[i * nelem * rows], &tstorage[i * nelem * rows + nelem * rows / 2], &texpand[i * nelem], &tsol[0], thrust::multiplies<double>());
+	thrust::transform(&tstorage[i * nelem * rows + nelem * rows / 2], &tstorage[i * nelem * rows + nelem * rows / 2 + nelem * rows / 2], &texpand[i * nelem], &tsol[nelem * rows / 2], thrust::multiplies<double>());
+	thrust::transform(&tsol[0], &tsol[nelem * rows], &tres[0], &tres[0], thrust::plus<double>());
 
         //dv
-        multvec<<<dimGrid, dimBlock>>>(nelem * rows / 2, &dstoragevec[i * nelem * rows], &dexpandsolution[i * nelem + n_globalsol], &dresult[n_globalsol]);
-        multvec<<<dimGrid, dimBlock>>>(nelem * rows / 2, &dstoragevec[i * nelem * rows + nelem * rows / 2], &dexpandsolution[i * nelem + n_globalsol], &dresult[n_globalsol + nelem * rows / 2]);
+        thrust::transform(&tstorage[i * nelem * rows], &tstorage[i * nelem * rows + nelem * rows / 2], &texpand[i * nelem + n_globalsol], &tsol[0], thrust::multiplies<double>());
+        thrust::transform(&tstorage[i * nelem * rows + nelem * rows / 2], &tstorage[i * nelem * rows + nelem * rows / 2 + nelem * rows / 2], &texpand[i * nelem + n_globalsol], &tsol[nelem * rows / 2], thrust::multiplies<double>());
+        thrust::transform(&tsol[0], &tsol[nelem * rows], &tres[n_globalsol], &tres[n_globalsol], thrust::plus<double>());
+
     }
-    cudaDeviceSynchronize();
 
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
@@ -248,59 +219,20 @@ void TPZSolveVector::MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZF
     cudaEventRecord(start);
 
     cudaMemcpy(&result(0, 0), dresult, 2 * n_globalsol * sizeof(double), cudaMemcpyDeviceToHost);
-
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
     milliseconds = 0;
     cudaEventElapsedTime(&milliseconds, start, stop);
     std::cout << "Copy: " << milliseconds/1000 << std::endl;
-
-}
-
-void TPZSolveVector::ComputeSigma( TPZVec<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<STATE> &sigma) {
-    high_resolution_clock::time_point t1, t2;
-    duration<double> time_span;
-
-    REAL E = 200000000.;
-    REAL nu =0.30;
-    int nelem = fRowSizes.size();
-    int npts_el = fRow/nelem;
-    TPZFMatrix<REAL> aux(nelem,1,0);
-    sigma.Resize(2*fRow,1);
-    sigma.Zero();
-
-    t1 = high_resolution_clock::now();
-
-    for (int64_t ipts=0; ipts< npts_el/2; ipts++) {
-        //sigma xx
-        cblas_daxpy(nelem, nu, &result((2*ipts + npts_el + 1)*nelem ,0), 1, &aux(0,0), 1);
-        cblas_daxpy(nelem, 1, &result(2*ipts*nelem ,0), 1, &aux(0,0), 1);
-        multvec_cpu(nelem, &weight[ipts*nelem], &aux(0,0), &sigma(2*ipts*nelem,0));
-        cblas_dscal (nelem, E/(1.-nu*nu), &sigma(2*ipts*nelem,0), 1);
-        aux.Zero();
-
-        //sigma yy
-        cblas_daxpy(nelem, nu, &result(2*ipts*nelem,0), 1, &aux(0,0), 1);
-        cblas_daxpy(nelem, 1, &result((2*ipts + npts_el + 1)*nelem,0), 1, &aux(0,0), 1);
-        multvec_cpu(nelem, &weight[ipts*nelem], &aux(0,0), &sigma((2*ipts+npts_el+1)*nelem,0));
-        cblas_dscal (nelem, E/(1.-nu*nu), &sigma((2*ipts+npts_el+1)*nelem,0), 1);
-        aux.Zero();
-
-        //sigma xy
-        cblas_daxpy(nelem, 1, &result((2*ipts + 1)*nelem,0), 1, &aux(0,0), 1);
-        cblas_daxpy(nelem, 1, &result((2*ipts + npts_el)*nelem,0), 1, &aux(0,0), 1);
-        multvec_cpu(nelem, &weight[ipts*nelem], &aux(0,0), &sigma((2*ipts+1)*nelem,0));
-        cblas_dscal (nelem, E/(1.-nu*nu)*(1.-nu), &sigma((2*ipts+1)*nelem,0), 1);
-        aux.Zero();
-
-        cblas_daxpy(nelem, 1, &sigma((2*ipts+1)*nelem,0), 1, &sigma((2*ipts+npts_el)*nelem,0), 1);
-    }
-    t2 = high_resolution_clock::now();
-    time_span = duration_cast<duration<double>>(t2 - t1);
-    std::cout << "Sigma: " << time_span.count() << std::endl;
+cudaFree(dsol);
 }
 
 void TPZSolveVector::ComputeSigmaCUDA( TPZVec<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<STATE> &sigma) {
+    cudaEvent_t start, stop;
+    float milliseconds = 0;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
     REAL E = 200000000.;
     REAL nu =0.30;
     double alpha = 1.;
@@ -313,16 +245,11 @@ void TPZSolveVector::ComputeSigmaCUDA( TPZVec<REAL> &weight, TPZFMatrix<REAL> &r
     sigma.Resize(2*fRow,1);
     sigma.Zero();
 
-    cudaEvent_t start, stop;
-    float milliseconds = 0;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
     cudaEventRecord(start);
 
     cudaMemcpy(dweight, &weight[0], weight.size() * sizeof(double), cudaMemcpyHostToDevice);
     cudaMemcpy(daux, &aux(0,0), nelem * sizeof(double), cudaMemcpyHostToDevice);
     cudaMemcpy(dsigma, &sigma(0,0), 2*fRow * sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(dresult, &result(0,0), result.Rows() * sizeof(double), cudaMemcpyDeviceToHost);
 
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
@@ -331,35 +258,40 @@ void TPZSolveVector::ComputeSigmaCUDA( TPZVec<REAL> &weight, TPZFMatrix<REAL> &r
 
     cudaEventRecord(start);
     int rows = fRowSizes[0];
-    dim3 dimGrid(ceil(nelem / 128.0), 1, 1);
-    dim3 dimBlock(128, 1, 1);
+
+
+    thrust::device_ptr<double> tweight = thrust::device_pointer_cast(dweight);
+    thrust::device_ptr<double> taux = thrust::device_pointer_cast(daux);
+    thrust::device_ptr<double> tsigma = thrust::device_pointer_cast(dsigma);
+    thrust::device_ptr<double> tresult = thrust::device_pointer_cast(dresult);
+
     for (int64_t ipts=0; ipts< npts_el/2; ipts++) {
         //sigma xx
-        cublasDaxpy(handle_cublas, nelem, &nu, &dresult[(2*ipts + npts_el + 1)*nelem], 1., &daux[0], 1);
-        cublasDaxpy(handle_cublas, nelem, &alpha, &dresult[2*ipts*nelem], 1, &daux[0], 1);
-        multvec<<<dimGrid, dimBlock>>>(nelem, &dweight[ipts*nelem], &daux[0], &dsigma[2*ipts*nelem]);
-	    cublasDscal(handle_cublas, nelem, &coef, &dsigma[2*ipts*nelem], 1);
+        thrust::transform(&tresult[(2*ipts + npts_el + 1)*nelem], &tresult[(2*ipts + npts_el + 1)*nelem + nelem], &taux[0], &taux[0], saxpy_functor(nu));
+        thrust::transform(&tresult[2*ipts*nelem], &tresult[2*ipts*nelem + nelem], &taux[0], &taux[0], thrust::plus<double>());
+        thrust::transform(&tweight[ipts*nelem], &tweight[ipts*nelem + nelem], &taux[0], &tsigma[2*ipts*nelem], thrust::multiplies<double>());
+        cublasDscal(handle_cublas, nelem, &coef, &dsigma[2*ipts*nelem], 1);
         aux.Zero();
         cudaMemcpy(daux, &aux(0,0), nelem * sizeof(double), cudaMemcpyHostToDevice);
 
 
         //sigma yy
-        cublasDaxpy(handle_cublas, nelem, &nu, &dresult[2*ipts*nelem], 1., &daux[0], 1);
-        cublasDaxpy(handle_cublas, nelem, &alpha, &dresult[(2*ipts + npts_el + 1)*nelem], 1, &daux[0], 1);
-        multvec<<<dimGrid, dimBlock>>>(nelem, &dweight[ipts*nelem], &daux[0], &dsigma[(2*ipts+npts_el+1)*nelem]);
-        cublasDscal(handle_cublas, nelem,&coef, &dsigma[(2*ipts+npts_el+1)*nelem], 1);
+        thrust::transform(&tresult[2*ipts*nelem], &tresult[2*ipts*nelem + nelem], &taux[0], &taux[0], saxpy_functor(nu));
+        thrust::transform(&tresult[(2*ipts + npts_el + 1)*nelem], &tresult[(2*ipts + npts_el + 1)*nelem + nelem], &taux[0], &taux[0], thrust::plus<double>());
+        thrust::transform(&tweight[ipts*nelem], &tweight[ipts*nelem + nelem], &taux[0], &tsigma[(2*ipts+npts_el+1)*nelem], thrust::multiplies<double>());
+        cublasDscal(handle_cublas, nelem,&coef, &dsigma[(2*ipts+npts_el+1)*nelem], 1);        
         aux.Zero();
         cudaMemcpy(daux, &aux(0,0), nelem * sizeof(double), cudaMemcpyHostToDevice);
 
         //sigma xy
-        cublasDaxpy(handle_cublas, nelem, &alpha, &dresult[(2*ipts + 1)*nelem], 1., &daux[0], 1);
-        cublasDaxpy(handle_cublas, nelem, &alpha, &dresult[(2*ipts + npts_el)*nelem], 1, &daux[0], 1);
-        multvec<<<dimGrid, dimBlock>>>(nelem, &dweight[ipts*nelem], &daux[0], &dsigma[(2*ipts+1)*nelem]);
-        cublasDscal(handle_cublas, nelem,&coef, &dsigma[(2*ipts+1)*nelem], 1);
+        thrust::transform(&tresult[(2*ipts + 1)*nelem], &tresult[(2*ipts + 1)*nelem + nelem], &taux[0], &taux[0], thrust::plus<double>());
+        thrust::transform(&tresult[(2*ipts + npts_el)*nelem], &tresult[(2*ipts + npts_el)*nelem + nelem], &taux[0], &taux[0], thrust::plus<double>());
+        thrust::transform(&tweight[ipts*nelem], &tweight[ipts*nelem + nelem], &taux[0], &tsigma[(2*ipts+1)*nelem], thrust::multiplies<double>());
+	cublasDscal(handle_cublas, nelem,&coef, &dsigma[(2*ipts+1)*nelem], 1);
         aux.Zero();
         cudaMemcpy(daux, &aux(0,0), nelem * sizeof(double), cudaMemcpyHostToDevice);
 
-        cublasDaxpy(handle_cublas, nelem, &alpha, &dsigma[(2*ipts+1)*nelem], 1., &dsigma[(2*ipts+npts_el)*nelem], 1);
+        thrust::transform(&tsigma[(2*ipts+1)*nelem], &tsigma[(2*ipts+1)*nelem + nelem], &tsigma[(2*ipts+npts_el)*nelem], &tsigma[(2*ipts+npts_el)*nelem], thrust::plus<double>());
     }
     cudaDeviceSynchronize();
     cudaEventRecord(stop);
@@ -377,39 +309,6 @@ void TPZSolveVector::ComputeSigmaCUDA( TPZVec<REAL> &weight, TPZFMatrix<REAL> &r
     std::cout << "Copy: " << milliseconds/1000 << std::endl;
 }
 
-void TPZSolveVector::MultiplyTranspose(TPZFMatrix<STATE>  &sigma, TPZFMatrix<STATE> &nodal_forces_vec) {
-    high_resolution_clock::time_point t1, t2;
-    duration<double> time_span;
-
-    int64_t npts_tot = fRow;
-    nodal_forces_vec.Resize(npts_tot,1);
-    nodal_forces_vec.Zero();
-
-    int cols = fColSizes[0];
-    int rows = fRowSizes[0];
-    int  nelem = fRowSizes.size();
-    t1 = high_resolution_clock::now();
-
-    for (int i = 0; i < cols; i++) {
-        //Fx
-        multvec_cpu((cols-i)*nelem, &fStorageVec[(((cols-i)%cols)*rows + i)*nelem], &sigma(i * nelem, 0), &nodal_forces_vec(0, 0));
-        multvec_cpu(i*nelem, &fStorageVec[((cols-i)%cols)*rows*nelem], &sigma(0, 0), &nodal_forces_vec(nelem*((cols - i)%cols), 0));
-
-        multvec_cpu((cols-i)*nelem, &fStorageVec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem], &sigma(i * nelem + cols*nelem, 0), &nodal_forces_vec(0, 0));
-        multvec_cpu(i*nelem, &fStorageVec[((cols-i)%cols)*rows*nelem + cols*nelem], &sigma(cols*nelem, 0), &nodal_forces_vec(nelem*((cols - i)%cols), 0));
-
-        //Fy
-        multvec_cpu((cols-i)*nelem, &fStorageVec[(((cols-i)%cols)*rows + i)*nelem], &sigma(i * nelem + fRow, 0),  &nodal_forces_vec(npts_tot/2, 0));
-        multvec_cpu(i*nelem, &fStorageVec[((cols-i)%cols)*rows*nelem], &sigma(fRow, 0), &nodal_forces_vec(npts_tot/2 + nelem*((cols - i)%cols), 0));
-
-        multvec_cpu((cols-i)*nelem, &fStorageVec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem], &sigma(i * nelem + cols*nelem + fRow, 0), &nodal_forces_vec(npts_tot/2, 0));
-        multvec_cpu(i*nelem, &fStorageVec[((cols-i)%cols)*rows*nelem + cols*nelem], &sigma(cols*nelem + fRow, 0), &nodal_forces_vec(npts_tot/2 + nelem*((cols - i)%cols), 0));
-    }
-    t2 = high_resolution_clock::now();
-    time_span = duration_cast<duration<double>>(t2 - t1);
-    std::cout << "Transpose: " << time_span.count() << std::endl;
-}
-
 void TPZSolveVector::MultiplyTransposeCUDA(TPZFMatrix<STATE>  &sigma, TPZFMatrix<STATE> &nodal_forces_vec) {
     cudaEvent_t start, stop;
     float milliseconds = 0;
@@ -424,43 +323,71 @@ void TPZSolveVector::MultiplyTransposeCUDA(TPZFMatrix<STATE>  &sigma, TPZFMatrix
     int rows = fRowSizes[0];
     int  nelem = fRowSizes.size();
 
-    dim3 dimBlock(128, 1, 1);
 
     cudaEventRecord(start);
     cudaMemcpy(dnodal_forces_vec, &nodal_forces_vec(0,0), npts_tot * sizeof(double), cudaMemcpyHostToDevice);
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << "Copy: " << milliseconds/1000 << std::endl;
+
+
+    cudaEventRecord(start);
+
+    thrust::device_ptr<double> tstoragevec = thrust::device_pointer_cast(dstoragevec);
+    thrust::device_ptr<double> tsigma = thrust::device_pointer_cast(dsigma);
+    thrust::device_ptr<double> tnodal_forces_vec = thrust::device_pointer_cast(dnodal_forces_vec);
+
+    double alpha =1.;
+
+    double *dforce; //se for usar cuBLAS
+    cudaMalloc(&dforce, nelem*cols*sizeof(double));
+    thrust::device_ptr<double> tforce = thrust::device_pointer_cast(dforce);
 
     for (int i = 0; i < cols; i++) {
         //Fx
-        multvec<<<ceil(((cols-i)*nelem)/ 128.0), dimBlock>>>((cols-i)*nelem, &dstoragevec[(((cols-i)%cols)*rows + i)*nelem], &dsigma[i * nelem], &dnodal_forces_vec[0]);
-        multvec<<<ceil((i*nelem) / 128.0), dimBlock>>>(i*nelem, &dstoragevec[((cols-i)%cols)*rows*nelem], &dsigma[0], &dnodal_forces_vec[nelem*((cols - i)%cols)]);
+	thrust::transform(&tstoragevec[(((cols-i)%cols)*rows + i)*nelem], &tstoragevec[(((cols-i)%cols)*rows + i)*nelem + (cols-i)*nelem], &tsigma[i * nelem], &tforce[0], thrust::multiplies<double>());
+        thrust::transform(&tstoragevec[((cols-i)%cols)*rows*nelem], &tstoragevec[((cols-i)%cols)*rows*nelem + i*nelem], &tsigma[0], &tforce[nelem*((cols - i)%cols)], thrust::multiplies<double>());
+        thrust::transform(&tforce[0], &tforce[nelem * cols], &tnodal_forces_vec[0], &tnodal_forces_vec[0], thrust::plus<double>());
 
-        multvec<<<ceil(((cols-i)*nelem)/ 128.0), dimBlock>>>((cols-i)*nelem, &dstoragevec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem], &dsigma[i * nelem + cols*nelem], &dnodal_forces_vec[0]);
-        multvec<<<ceil((i*nelem) / 128.0), dimBlock>>>(i*nelem, &dstoragevec[((cols-i)%cols)*rows*nelem + cols*nelem], &dsigma[cols*nelem], &dnodal_forces_vec[nelem*((cols - i)%cols)]);
+        thrust::transform(&tstoragevec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem], &tstoragevec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem + (cols-i)*nelem], &tsigma[i * nelem + cols*nelem], &tforce[0], thrust::multiplies<double>());
+        thrust::transform(&tstoragevec[((cols-i)%cols)*rows*nelem + cols*nelem], &tstoragevec[((cols-i)%cols)*rows*nelem + cols*nelem + i*nelem], &tsigma[cols*nelem], &tforce[nelem*((cols - i)%cols)], thrust::multiplies<double>());
+        thrust::transform(&tforce[0], &tforce[nelem * cols], &tnodal_forces_vec[0], &tnodal_forces_vec[0], thrust::plus<double>());
+
 
         //Fy
-        multvec<<<ceil(((cols-i)*nelem)/ 128.0), dimBlock>>>((cols-i)*nelem, &dstoragevec[(((cols-i)%cols)*rows + i)*nelem], &dsigma[i * nelem + fRow],  &dnodal_forces_vec[npts_tot/2]);
-        multvec<<<ceil((i*nelem) / 128.0), dimBlock>>>(i*nelem, &dstoragevec[((cols-i)%cols)*rows*nelem], &dsigma[fRow], &dnodal_forces_vec[npts_tot/2 + nelem*((cols - i)%cols)]);
+  	thrust::transform(&tstoragevec[(((cols-i)%cols)*rows + i)*nelem], &tstoragevec[(((cols-i)%cols)*rows + i)*nelem + (cols-i)*nelem], &tsigma[i * nelem + fRow], &tforce[0], thrust::multiplies<double>());
+        thrust::transform(&tstoragevec[((cols-i)%cols)*rows*nelem], &tstoragevec[((cols-i)%cols)*rows*nelem + i*nelem], &tsigma[fRow], &tforce[nelem*((cols - i)%cols)], thrust::multiplies<double>());
+        thrust::transform(&tforce[0], &tforce[nelem * cols], &tnodal_forces_vec[npts_tot/2], &tnodal_forces_vec[npts_tot/2], thrust::plus<double>());
 
-        multvec<<<ceil(((cols-i)*nelem)/ 128.0), dimBlock>>>((cols-i)*nelem, &dstoragevec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem], &dsigma[i * nelem + cols*nelem + fRow], &dnodal_forces_vec[npts_tot/2]);
-        multvec<<<ceil((i*nelem) / 128.0), dimBlock>>>(i*nelem, &dstoragevec[((cols-i)%cols)*rows*nelem + cols*nelem], &dsigma[cols*nelem + fRow], &dnodal_forces_vec[npts_tot/2 + nelem*((cols - i)%cols)]);
+        thrust::transform(&tstoragevec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem], &tstoragevec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem + (cols-i)*nelem], &tsigma[i * nelem + cols*nelem + fRow], &tforce[0], thrust::multiplies<double>());
+        thrust::transform(&tstoragevec[((cols-i)%cols)*rows*nelem + cols*nelem], &tstoragevec[((cols-i)%cols)*rows*nelem + cols*nelem + i*nelem], &tsigma[cols*nelem + fRow], &tforce[nelem*((cols - i)%cols)], thrust::multiplies<double>());
+        thrust::transform(&tforce[0], &tforce[nelem * cols], &tnodal_forces_vec[npts_tot/2], &tnodal_forces_vec[npts_tot/2], thrust::plus<double>());
+
     }
     cudaDeviceSynchronize();
 
-        cudaEventRecord(stop);
-        cudaEventSynchronize(stop);
-        cudaEventElapsedTime(&milliseconds, start, stop);
-        std::cout << "Transpose: " << milliseconds/1000 << std::endl;
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << "Transpose: " << milliseconds/1000 << std::endl;
 
     cudaEventRecord(start);
     cudaMemcpy(&nodal_forces_vec(0, 0), dnodal_forces_vec, npts_tot * sizeof(double), cudaMemcpyDeviceToHost);
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << "Copy: " << milliseconds/1000 << std::endl;
+cudaFree(dforce);
 
-        cudaEventRecord(stop);
-        cudaEventSynchronize(stop);
-        cudaEventElapsedTime(&milliseconds, start, stop);
-        std::cout << "Copy: " << milliseconds/1000 << std::endl;
 }
 
 void TPZSolveVector::ColoredAssembleCUDA(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) {
+    cudaEvent_t start, stop;
+    float milliseconds = 0;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
     int64_t ncolor = *std::max_element(fElemColor.begin(), fElemColor.end()) + 1;
     int64_t nindexes = fIndexesColor.size();
     int64_t neq = nodal_forces_global.Rows();
@@ -469,10 +396,6 @@ void TPZSolveVector::ColoredAssembleCUDA(TPZFMatrix<STATE>  &nodal_forces_vec, T
     nodal_forces_global.Resize(neq * ncolor, 1);
     nodal_forces_global.Zero();
 
-    cudaEvent_t start, stop;
-    float milliseconds = 0;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
     cudaEventRecord(start);
 
     cudaMemcpy(dindexescolor, &fIndexesColor[0], nindexes * sizeof(int), cudaMemcpyHostToDevice);
@@ -495,13 +418,17 @@ void TPZSolveVector::ColoredAssembleCUDA(TPZFMatrix<STATE>  &nodal_forces_vec, T
 
     cudaEventRecord(start);
 
+    thrust::device_ptr<double> tnodal_forces_global = thrust::device_pointer_cast(dnodal_forces_global);
+
     int64_t colorassemb = ncolor / 2;
     double alpha = 1.;
     while (colorassemb > 0) {
 
         int64_t firsteq = (ncolor - colorassemb) * neq;
 
-        cublasDaxpy(handle_cublas, firsteq, &alpha, &dnodal_forces_global[firsteq], 1., &dnodal_forces_global[0], 1.);
+        thrust::transform(&tnodal_forces_global[firsteq], &tnodal_forces_global[firsteq + firsteq], &tnodal_forces_global[0], &tnodal_forces_global[0], thrust::plus<double>());
+
+//        cublasDaxpy(handle_cublas, firsteq, &alpha, &dnodal_forces_global[firsteq], 1., &dnodal_forces_global[0], 1.);
 
         ncolor -= colorassemb;
         colorassemb = ncolor / 2;
@@ -524,6 +451,135 @@ void TPZSolveVector::ColoredAssembleCUDA(TPZFMatrix<STATE>  &nodal_forces_vec, T
     cudaEventElapsedTime(&milliseconds, start, stop);
     std::cout << "Copy: " << milliseconds/1000 << std::endl;
 
+}
+
+void TPZSolveVector::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const {
+    high_resolution_clock::time_point t1, t2;
+    duration<double> time_span;
+
+    int64_t n_globalsol = fIndexes.size()/2; //o vetor de indices esta duplicado
+    int64_t nelem = fRowSizes.size();
+    int rows = fRowSizes[0];
+    int cols = fColSizes[0];
+    TPZFMatrix<REAL> expandsolution(2*n_globalsol,1); //vetor solucao duplicado
+    result.Resize(2*n_globalsol,1);
+    result.Zero();
+
+    t1 = high_resolution_clock::now();
+    cblas_dgthr(2*n_globalsol, global_solution, &expandsolution(0,0), &fIndexes[0]);
+
+    t2 = high_resolution_clock::now();
+    time_span = duration_cast<duration<double>>(t2 - t1);
+    std::cout << "Gather: " << time_span.count() << std::endl;
+
+    t1 = high_resolution_clock::now();
+
+TPZVec<REAL> sol(nelem * rows,0);
+
+        for (int i = 0; i < cols; i++) {
+        std::transform(&fStorageVec[i * nelem * rows], &fStorageVec[i * nelem * rows + nelem * rows / 2], &expandsolution(i * nelem,0), &sol[0], std::multiplies<double>());
+        std::transform(&fStorageVec[i * nelem * rows + nelem * rows / 2], &fStorageVec[i * nelem * rows + nelem * rows / 2 + nelem * rows / 2], &expandsolution[i * nelem], &sol[nelem * rows / 2], std::multiplies<double>());
+        std::transform(&sol[0], &sol[nelem * rows], &result(0, 0), &result(0, 0), std::plus<double>());
+
+        //dv
+        std::transform(&fStorageVec[i * nelem * rows], &fStorageVec[i * nelem * rows + nelem * rows / 2], &expandsolution[i * nelem + n_globalsol], &sol[0], std::multiplies<double>());
+        std::transform(&fStorageVec[i * nelem * rows + nelem * rows / 2], &fStorageVec[i * nelem * rows + nelem * rows / 2 + nelem * rows / 2], &expandsolution[i * nelem + n_globalsol], &sol[nelem * rows / 2], std::multiplies<double>());
+        std::transform(&sol[0], &sol[nelem * rows], &result(n_globalsol, 0), &result(n_globalsol, 0), std::plus<double>());
+    }
+  t2 = high_resolution_clock::now();
+  time_span = duration_cast<duration<double>>(t2 - t1);
+  std::cout << "Multiply: " << time_span.count() << std::endl;
+}
+
+void TPZSolveVector::ComputeSigma( TPZVec<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<STATE> &sigma) {
+    high_resolution_clock::time_point t1, t2;
+    duration<double> time_span;
+
+    REAL E = 200000000.;
+    REAL nu =0.30;
+    int nelem = fRowSizes.size();
+    int npts_el = fRow/nelem;
+    TPZFMatrix<REAL> aux(nelem,1,0);
+    sigma.Resize(2*fRow,1);
+    sigma.Zero();
+    t1 = high_resolution_clock::now();
+
+    for (int64_t ipts=0; ipts< npts_el/2; ipts++) {
+        //sigma xx
+        cblas_daxpy(nelem, nu, &result((2*ipts + npts_el + 1)*nelem ,0), 1, &aux(0,0), 1);
+//        cblas_daxpy(nelem, 1, &result(2*ipts*nelem ,0), 1, &aux(0,0), 1);
+        std::transform(&result(2*ipts*nelem ,0), &result(2*ipts*nelem + nelem,0),  &aux(0,0),  &aux(0,0), std::plus<double>());
+        std::transform(&weight[ipts*nelem], &weight[ipts*nelem + nelem], &aux(0,0), &sigma(2*ipts*nelem,0), std::multiplies<double>());  
+        cblas_dscal (nelem, E/(1.-nu*nu), &sigma(2*ipts*nelem,0), 1);
+        aux.Zero();
+
+        //sigma yy
+        cblas_daxpy(nelem, nu, &result(2*ipts*nelem,0), 1, &aux(0,0), 1);
+        cblas_daxpy(nelem, 1, &result((2*ipts + npts_el + 1)*nelem,0), 1, &aux(0,0), 1);
+//        std::transform(&result((2*ipts + npts_el + 1)*nelem,0), &result((2*ipts + npts_el + 1)*nelem + nelem,0), &aux(0,0), &aux(0,0), std::plus<double>());
+        std::transform(&weight[ipts*nelem], &weight[ipts*nelem + nelem], &aux(0,0), &sigma((2*ipts+npts_el+1)*nelem,0), std::multiplies<double>());        
+        cblas_dscal (nelem, E/(1.-nu*nu), &sigma((2*ipts+npts_el+1)*nelem,0), 1);
+        aux.Zero();
+
+        //sigma xy
+        cblas_daxpy(nelem, 1, &result((2*ipts + 1)*nelem,0), 1, &aux(0,0), 1);
+//        cblas_daxpy(nelem, 1, &result((2*ipts + npts_el)*nelem,0), 1, &aux(0,0), 1);
+        std::transform(&result((2*ipts + npts_el)*nelem,0), &result((2*ipts + npts_el)*nelem + nelem,0),  &aux(0,0),  &aux(0,0), std::plus<double>());
+        std::transform(&weight[ipts*nelem], &weight[ipts*nelem + nelem], &aux(0,0), &sigma((2*ipts+1)*nelem,0), std::multiplies<double>());
+        cblas_dscal (nelem, E/(1.-nu*nu)*(1.-nu), &sigma((2*ipts+1)*nelem,0), 1);
+        aux.Zero();
+
+        cblas_daxpy(nelem, 1, &sigma((2*ipts+1)*nelem,0), 1, &sigma((2*ipts+npts_el)*nelem,0), 1);
+    }
+    t2 = high_resolution_clock::now();
+    time_span = duration_cast<duration<double>>(t2 - t1);
+    std::cout << "Sigma: " << time_span.count() << std::endl;
+}
+
+
+
+void TPZSolveVector::MultiplyTranspose(TPZFMatrix<STATE>  &sigma, TPZFMatrix<STATE> &nodal_forces_vec) {
+    high_resolution_clock::time_point t1, t2;
+    duration<double> time_span;
+
+    int64_t npts_tot = fRow;
+    nodal_forces_vec.Resize(npts_tot,1);
+    nodal_forces_vec.Zero();
+
+    int cols = fColSizes[0];
+    int rows = fRowSizes[0];
+    int  nelem = fRowSizes.size();
+    t1 = high_resolution_clock::now();
+
+TPZVec<REAL> force(cols*nelem);
+
+    for (int i = 0; i < cols; i++) {
+        //Fx
+	std::transform(&fStorageVec[(((cols-i)%cols)*rows + i)*nelem], &fStorageVec[(((cols-i)%cols)*rows + i)*nelem + (cols-i)*nelem], &sigma(i * nelem,0), &force[0], std::multiplies<double>());
+        std::transform(&fStorageVec[((cols-i)%cols)*rows*nelem], &fStorageVec[((cols-i)%cols)*rows*nelem + i*nelem], &sigma(0,0), &force[nelem*((cols - i)%cols)], std::multiplies<double>());
+        std::transform(&force[0], &force[cols*nelem],  &nodal_forces_vec(0,0), &nodal_forces_vec(0,0), std::plus<double>());
+//        cblas_daxpy(cols*nelem, 1, &force[0], 1, &nodal_forces_vec(0,0), 1);
+
+        std::transform(&fStorageVec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem], &fStorageVec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem + (cols-i)*nelem], &sigma(i * nelem + cols*nelem,0), &force[0], std::multiplies<double>());
+        std::transform(&fStorageVec[((cols-i)%cols)*rows*nelem + cols*nelem], &fStorageVec[((cols-i)%cols)*rows*nelem + cols*nelem + i*nelem], &sigma(cols*nelem,0), &force[nelem*((cols - i)%cols)], std::multiplies<double>());
+        std::transform(&force[0], &force[cols*nelem],  &nodal_forces_vec(0,0), &nodal_forces_vec(0,0), std::plus<double>());
+//        cblas_daxpy(cols*nelem, 1, &force[0], 1, &nodal_forces_vec(0,0), 1);
+
+        //Fy
+  	std::transform(&fStorageVec[(((cols-i)%cols)*rows + i)*nelem], &fStorageVec[(((cols-i)%cols)*rows + i)*nelem + (cols-i)*nelem], &sigma(i * nelem + fRow,0), &force[0], std::multiplies<double>());
+        std::transform(&fStorageVec[((cols-i)%cols)*rows*nelem], &fStorageVec[((cols-i)%cols)*rows*nelem + i*nelem], &sigma(fRow,0), &force[nelem*((cols - i)%cols)], std::multiplies<double>());
+        std::transform(&force[0], &force[cols*nelem],  &nodal_forces_vec(npts_tot/2,0), &nodal_forces_vec(npts_tot/2,0), std::plus<double>());
+//        cblas_daxpy(cols*nelem, 1, &force[0], 1, &nodal_forces_vec(npts_tot/2,0), 1);
+
+        std::transform(&fStorageVec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem], &fStorageVec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem + (cols-i)*nelem], &sigma(i * nelem + cols*nelem + fRow,0), &force[0], std::multiplies<double>());
+        std::transform(&fStorageVec[((cols-i)%cols)*rows*nelem + cols*nelem], &fStorageVec[((cols-i)%cols)*rows*nelem + cols*nelem + i*nelem], &sigma(cols*nelem + fRow,0), &force[nelem*((cols - i)%cols)], std::multiplies<double>());
+        std::transform(&force[0], &force[cols*nelem],  &nodal_forces_vec(npts_tot/2,0), &nodal_forces_vec(npts_tot/2,0), std::plus<double>());
+//        cblas_daxpy(cols*nelem, 1, &force[0], 1, &nodal_forces_vec(npts_tot/2,0), 1);
+    }
+
+    t2 = high_resolution_clock::now();
+    time_span = duration_cast<duration<double>>(t2 - t1);
+    std::cout << "Transpose: " << time_span.count() << std::endl;
 }
 
 
@@ -558,7 +614,7 @@ void TPZSolveVector::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFM
 
     t2 = high_resolution_clock::now();
     time_span = duration_cast<duration<double>>(t2 - t1);
-    std::cout << "Scatter: " << time_span.count() << std::endl;
+    std::cout << "Assemble: " << time_span.count() << std::endl;
 }
 
 void TPZSolveVector::TraditionalAssemble(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const {

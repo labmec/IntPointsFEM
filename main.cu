@@ -33,9 +33,9 @@ TPZCompMesh *cmesh_2D(TPZGeoMesh *gmesh, int pOrder);
 
 TPZCompMesh *cmesh_mat_2D(TPZGeoMesh *gmesh, int pOrder);
 
-void SolMatrix(TPZCompMesh *cmesh);
+void SolMatrix(TPZCompMesh *cmesh, TPZFMatrix<STATE> res_d);
 
-void SolVector(TPZCompMesh *cmesh);
+void SolVector(TPZCompMesh *cmesh, TPZFMatrix<STATE> res_d);
 
 int main(int argc, char *argv[]) {
         //// ------------------------ DATA INPUT ------------------------------
@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
         REAL len = 1;
 
 //// COMPUTATIONAL MESH ORDER
-        int pOrder = 1;
+        int pOrder = 2;
 
 //// SUBDIVISIONS OF THE ELEMENTS
         int ndivide = 0;
@@ -66,11 +66,11 @@ int main(int argc, char *argv[]) {
 
 //// Creating the computational mesh
         TPZCompMesh *cmesh = cmesh_2D(gmesh, pOrder);
-//        TPZCompMesh *cmesh_d = cmesh_mat_2D(gmesh, pOrder);
+        TPZCompMesh *cmesh_d = cmesh_mat_2D(gmesh, pOrder);
 
 //// Defining the analysis
         bool optimizeBandwidth = true;
-        int n_threads = 16;
+        int n_threads = 4;
         TPZAnalysis an(cmesh, optimizeBandwidth);
 //        TPZAnalysis an_d(cmesh_d, optimizeBandwidth);
 #ifdef USING_MKL
@@ -78,7 +78,7 @@ int main(int argc, char *argv[]) {
 //        TPZSymetricSpStructMatrix strskyl_d(cmesh_d);
 #else
         TPZSkylineStructMatrix strskyl(cmesh);
-        TPZSkylineStructMatrix strskyl_d(cmesh_d);
+//        TPZSkylineStructMatrix strskyl_d(cmesh_d);
 #endif
         strskyl.SetNumThreads(n_threads);
 //        strskyl_d.SetNumThreads(n_threads);
@@ -90,12 +90,29 @@ int main(int argc, char *argv[]) {
         direct->SetDirect(ECholesky);
         an.SetSolver(*direct);
 //        an_d.SetSolver(*direct);
+//        delete direct;
+
+
+        TPZFMatrix<STATE> res_d;
+
+if(nelem_x != 200 && nelem_x != 400 && nelem_x != 600 && nelem_x != 800 && nelem_x != 1000){
+        TPZAnalysis an_d(cmesh_d, optimizeBandwidth);
+        TPZSymetricSpStructMatrix strskyl_d(cmesh_d);
+        strskyl_d.SetNumThreads(n_threads);
+        an_d.SetStructuralMatrix(strskyl_d);
+        an_d.SetSolver(*direct);
+
         delete direct;
+
         an.Assemble();
         an.Solve();
 
+        an_d.Assemble();
+	an_d.Solver().Matrix()->Multiply(an.Solution(), res_d);
+}
+
 //TPZFMatrix<REAL> sol = cmesh->Solution();
-//std::ofstream file("solution.txt");
+//std::ofstream file("solution1000.txt");
 //for(int i = 0; i < sol.Rows(); i++){
 //file << sol(i,0) << std::endl;
 //}
@@ -104,7 +121,7 @@ int main(int argc, char *argv[]) {
 //        an_d.Assemble();
 //        TPZFMatrix<STATE> res_d;
 // Computing K u
- //       an_d.Solver().Matrix()->Multiply(an.Solution(), res_d);
+//       an_d.Solver().Matrix()->Multiply(an.Solution(), res_d);
 //Print Rhs without boundary conditions
 //res_d.Print("ku = ",std::cout,EMathematicaInput);
 
@@ -116,8 +133,17 @@ int main(int argc, char *argv[]) {
 //        an.DefineGraphMesh(2, scalarnames, vecnames, namefile + "ElasticitySolutions.vtk");
 //        an.PostProcess(0);
 
-//        SolMatrix(cmesh);
-        SolVector(cmesh);
+//std::ofstream file2("res1000.txt");
+//for(int i = 0; i < res_d.Rows(); i++){
+//file2 << res_d(i,0) << std::endl;
+//}
+
+
+
+std::cout << "\n\nSolveMatrix:" << std::endl;
+        SolMatrix(cmesh, res_d);
+std::cout << "\n\nSolveVector:" << std::endl;
+        SolVector(cmesh, res_d);
     return 0;
 }
 
@@ -268,7 +294,7 @@ TPZCompMesh *cmesh_mat_2D(TPZGeoMesh *gmesh, int pOrder) {
     return cmesh;
 }
 
-void SolVector(TPZCompMesh *cmesh) {
+void SolVector(TPZCompMesh *cmesh, TPZFMatrix<STATE> res_d) {
 
     int dim_mesh = (cmesh->Reference())->Dimension(); // Mesh dimension
     int64_t nelem_c = cmesh->NElements(); // Number of computational elements
@@ -387,7 +413,6 @@ void SolVector(TPZCompMesh *cmesh) {
     SolVec->SetIndexes(indexes);
     SolVec->ColoringElements(cmesh);
 
-    TPZFMatrix<REAL> coef_sol = cmesh->Solution();
     int neq = cmesh->NEquations();
     TPZFMatrix<REAL> nodal_forces_global1(neq, 1, 0.);
     TPZFMatrix<REAL> nodal_forces_global2(neq, 1, 0.);
@@ -396,13 +421,158 @@ void SolVector(TPZCompMesh *cmesh) {
     TPZFMatrix<REAL> sigma;
     TPZFMatrix<REAL> nodal_forces_vec;
 
+TPZFMatrix<REAL> coef_sol(neq,1);
+if (nelem == 40000){
+        std::ifstream input("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/solution200.txt");
+        if(!input) {
+            std::cout  << "Failed to open file ";
+        }
+
+        int k = 0;
+        double val;
+        while (input >> val) {
+            coef_sol(k,0) = val;
+            k++;
+        }
+
+        res_d.Resize(neq,1);
+        std::ifstream input2("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/res200.txt");
+        if(!input2) {
+            std::cout  << "Failed to open file ";
+        }
+
+        int l = 0;
+        double val2;
+        while (input2 >> val2) {
+            res_d(l,0) = val2;
+            l++;
+        }
+
+
+}
+else if (nelem == 160000){
+        std::ifstream input("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/solution400.txt");
+        if(!input) {
+            std::cout  << "Failed to open file ";
+        }
+
+        int k = 0;
+        double val;
+        while (input >> val) {
+            coef_sol(k,0) = val;
+            k++;
+        }
+
+        res_d.Resize(neq,1);
+        std::ifstream input2("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/res400.txt");
+        if(!input2) {
+            std::cout  << "Failed to open file ";
+        }
+
+        int l = 0;
+        double val2;
+        while (input2 >> val2) {
+            res_d(l,0) = val2;
+            l++;
+        }
+
+}
+
+else if (nelem == 360000){
+        std::ifstream input("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/solution600.txt");
+        if(!input) {
+            std::cout  << "Failed to open file ";
+        }
+
+        int k = 0;
+        double val;
+        while (input >> val) {
+            coef_sol(k,0) = val;
+            k++;
+        }
+
+        res_d.Resize(neq,1);
+        std::ifstream input2("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/res600.txt");
+        if(!input2) {
+            std::cout  << "Failed to open file ";
+        }
+
+        int l = 0;
+        double val2;
+        while (input2 >> val2) {
+            res_d(l,0) = val2;
+            l++;
+        }
+
+}
+else if (nelem == 640000){
+        std::ifstream input("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/solution800.txt");
+        if(!input) {
+            std::cout  << "Failed to open file ";
+        }
+
+        int k = 0;
+        double val;
+        while (input >> val) {
+            coef_sol(k,0) = val;
+            k++;
+        }
+
+        res_d.Resize(neq,1);
+        std::ifstream input2("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/res800.txt");
+        if(!input2) {
+            std::cout  << "Failed to open file ";
+        }
+
+        int l = 0;
+        double val2;
+        while (input2 >> val2) {
+            res_d(l,0) = val2;
+            l++;
+        }
+
+}
+else if (nelem == 1000000){
+        std::ifstream input("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/solution1000.txt");
+        if(!input) {
+            std::cout  << "Failed to open file ";
+        }
+
+        int k = 0;
+        double val;
+        while (input >> val) {
+            coef_sol(k,0) = val;
+            k++;
+        }
+
+        res_d.Resize(neq,1);
+        std::ifstream input2("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/res1000.txt");
+        if(!input2) {
+            std::cout  << "Failed to open file ";
+        }
+
+        int l = 0;
+        double val2;
+        while (input2 >> val2) {
+            res_d(l,0) = val2;
+            l++;
+        }
+
+}
+
+
+else {
+  coef_sol = cmesh->Solution();
+}
+
 #ifdef __CUDACC__
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;
     SolVec->AllocateMemory(cmesh);
     SolVec->MultiplyCUDA(coef_sol,result);
     SolVec->ComputeSigmaCUDA(weight, result, sigma);    
-    SolVec->MultiplyTransposeCUDA(sigma,nodal_forces_vec);
-    SolVec->ColoredAssembleCUDA(nodal_forces_vec,nodal_forces_global3);
+TPZFMatrix<REAL> nodal_forces_vec2;
+    SolVec->MultiplyTransposeCUDA(sigma,nodal_forces_vec2);
+    SolVec->ColoredAssembleCUDA(nodal_forces_vec2,nodal_forces_global3);
     SolVec->FreeMemory();
 
 #endif
@@ -414,25 +584,26 @@ void SolVector(TPZCompMesh *cmesh) {
     SolVec->ColoredAssemble(nodal_forces_vec,nodal_forces_global2);
 
     //Check result
-    SolVec->TraditionalAssemble(nodal_forces_vec, nodal_forces_global1); // ok
-    int rescpu = Norm(nodal_forces_global1 - nodal_forces_global2);
-    if(rescpu == 0){
-        std::cout << "\nAssemble done in the CPU is ok." << std::endl;
-    } else {
-        std::cout << "\nAssemble done in the CPU is not ok." << std::endl;
-    }
+//    SolVec->TraditionalAssemble(nodal_forces_vec, nodal_forces_global1); // ok
 
-#ifdef __CUDACC__
-    int resgpu = Norm(nodal_forces_global1 - nodal_forces_global3);
-    if(resgpu == 0){
-        std::cout << "\nAssemble done in the GPU is ok." << std::endl;
-    } else {
-        std::cout << "\nAssemble done in the GPU is not ok." << std::endl;
-    }
-#endif
+//    int rescpu = Norm(res_d - nodal_forces_global2);
+//    if(rescpu == 0){
+//        std::cout << "\nAssemble done in the CPU is ok." << std::endl;
+//    } else {
+//        std::cout << "\nAssemble done in the CPU is not ok." << std::endl;
+//    }
+//
+//#ifdef __CUDACC__
+//    int resgpu = Norm(res_d - nodal_forces_global3);
+//    if(resgpu == 0){
+//        std::cout << "\nAssemble done in the GPU is ok." << std::endl;
+//    } else {
+//        std::cout << "\nAssemble done in the GPU is not ok." << std::endl;
+//    }
+//#endif
 }
-
-void SolMatrix(TPZCompMesh *cmesh) {
+ 
+void SolMatrix(TPZCompMesh *cmesh, TPZFMatrix<STATE> res_d ) {
 
     int dim_mesh = (cmesh->Reference())->Dimension(); // Mesh dimension
     int64_t nelem_c = cmesh->NElements(); // Number of computational elements
@@ -549,7 +720,6 @@ void SolMatrix(TPZCompMesh *cmesh) {
     SolMat->SetIndexes(indexes);
     SolMat->ColoringElements(cmesh);
 
-    //TPZFMatrix<REAL> coef_sol = cmesh->Solution();
     int neq = cmesh->NEquations();
     TPZFMatrix<REAL> nodal_forces_global1(neq, 1, 0.);
     TPZFMatrix<REAL> nodal_forces_global2(neq, 1, 0.);
@@ -558,18 +728,148 @@ void SolMatrix(TPZCompMesh *cmesh) {
     TPZFMatrix<REAL> sigma;
     TPZFMatrix<REAL> nodal_forces_vec;
 
-        std::ifstream input("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/solution.txt");
+TPZFMatrix<REAL> coef_sol(neq,1);
+if (nelem == 40000){
+        std::ifstream input("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/solution200.txt");
         if(!input) {
             std::cout  << "Failed to open file ";
         }
 
-        TPZFMatrix<REAL> coef_sol(cmesh->NEquations(),1);
         int k = 0;
         double val;
         while (input >> val) {
             coef_sol(k,0) = val;
             k++;
         }
+
+        res_d.Resize(neq,1);
+        std::ifstream input2("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/res200.txt");
+        if(!input2) {
+            std::cout  << "Failed to open file ";
+        }
+
+        int l = 0;
+        double val2;
+        while (input2 >> val2) {
+            res_d(l,0) = val2;
+            l++;
+        }
+
+
+}
+else if (nelem == 160000){
+        std::ifstream input("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/solution400.txt");
+        if(!input) {
+            std::cout  << "Failed to open file ";
+        }
+
+        int k = 0;
+        double val;
+        while (input >> val) {
+            coef_sol(k,0) = val;
+            k++;
+        }
+
+        res_d.Resize(neq,1);
+        std::ifstream input2("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/res400.txt");
+        if(!input2) {
+            std::cout  << "Failed to open file ";
+        }
+
+        int l = 0;
+        double val2;
+        while (input2 >> val2) {
+            res_d(l,0) = val2;
+            l++;
+        }
+
+}
+else if (nelem == 360000){
+        std::ifstream input("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/solution600.txt");
+        if(!input) {
+            std::cout  << "Failed to open file ";
+        }
+
+        int k = 0;
+        double val;
+        while (input >> val) {
+            coef_sol(k,0) = val;
+            k++;
+        }
+
+        res_d.Resize(neq,1);
+        std::ifstream input2("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/res600.txt");
+        if(!input2) {
+            std::cout  << "Failed to open file ";
+        }
+
+        int l = 0;
+        double val2;
+        while (input2 >> val2) {
+            res_d(l,0) = val2;
+            l++;
+        }
+
+}
+else if (nelem == 640000){
+        std::ifstream input("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/solution800.txt");
+        if(!input) {
+            std::cout  << "Failed to open file ";
+        }
+
+        int k = 0;
+        double val;
+        while (input >> val) {
+            coef_sol(k,0) = val;
+            k++;
+        }
+
+        res_d.Resize(neq,1);
+        std::ifstream input2("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/res800.txt");
+        if(!input2) {
+            std::cout  << "Failed to open file ";
+        }
+
+        int l = 0;
+        double val2;
+        while (input2 >> val2) {
+            res_d(l,0) = val2;
+            l++;
+        }
+
+}
+else if (nelem == 1000000){
+        std::ifstream input("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/solution1000.txt");
+        if(!input) {
+            std::cout  << "Failed to open file ";
+        }
+
+        int k = 0;
+        double val;
+        while (input >> val) {
+            coef_sol(k,0) = val;
+            k++;
+        }
+
+        res_d.Resize(neq,1);
+        std::ifstream input2("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/res1000.txt");
+        if(!input2) {
+            std::cout  << "Failed to open file ";
+        }
+
+        int l = 0;
+        double val2;
+        while (input2 >> val2) {
+            res_d(l,0) = val2;
+            l++;
+        }
+
+}
+
+
+else {
+  coef_sol = cmesh->Solution();
+}
 
     #ifdef __CUDACC__
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;
@@ -588,8 +888,8 @@ void SolMatrix(TPZCompMesh *cmesh) {
     SolMat->ColoredAssemble(nodal_forces_vec, nodal_forces_global2);
 
     //Check Result
-    SolMat->TraditionalAssemble(nodal_forces_vec, nodal_forces_global1); // ok
-    int rescpu = Norm(nodal_forces_global1 - nodal_forces_global2);
+//    SolMat->TraditionalAssemble(nodal_forces_vec, nodal_forces_global1); // ok
+    int rescpu = Norm(res_d - nodal_forces_global2);
     if(rescpu == 0){
         std::cout << "\nAssemble done in the CPU is ok." << std::endl;
     } else {
@@ -597,7 +897,7 @@ void SolMatrix(TPZCompMesh *cmesh) {
     }
 
     #ifdef __CUDACC__
-    int resgpu = Norm(nodal_forces_global1 - nodal_forces_global3);
+    int resgpu = Norm(res_d - nodal_forces_global3);
     if(resgpu == 0){
         std::cout << "\nAssemble done in the GPU is ok." << std::endl;
     } else {
