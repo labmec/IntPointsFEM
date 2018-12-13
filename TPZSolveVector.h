@@ -120,16 +120,10 @@ public:
                 int k = (j + i) % cols;
                 int id1 = iel + j * nelem + cont; //cols
                 int id2 = iel + j * nelem + cont + nelem * cols;
-//                    int id1 = iel + j * nelem + cont; //elem mat
-//                    int id2 = iel + j * nelem + cont + nelem * cols * rows / 2;
-//                    int id1 = iel + j + cont; // 1 matrix (iel = 0)
-//                    int id2 = iel + j + cont + cols * rows / 2;
                 fStorageVec[id1] = elmat(j, k); //primeira metade da matriz
                 fStorageVec[id2] = elmat(j + rows / 2, k); //segunda metade da matriz
             }
             cont += 2 * cols * nelem;
-//            cont += cols * nelem;
-//            cont += cols;
         }
     }
 
@@ -138,7 +132,7 @@ public:
         int64_t indsize = indexes.size();
         fIndexes.resize(indsize);
         fIndexes = indexes;
-        fIndexesColor.resize(indsize/2);
+        fIndexesColor.resize(indsize);
     }
 
     /** @brief Solve procedure */

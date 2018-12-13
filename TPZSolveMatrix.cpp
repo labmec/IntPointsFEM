@@ -15,7 +15,6 @@ using namespace tbb;
 
 void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const {
 int64_t nelem = fRowSizes.size();
-
 int64_t n_globalsol = fIndexes.size();
 
 result.Resize(2*n_globalsol,1);

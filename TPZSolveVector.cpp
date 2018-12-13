@@ -7,6 +7,10 @@
 #include <mkl.h>
 #include <stdlib.h>
 
+#include <chrono>
+using namespace std::chrono;
+
+
 #ifdef USING_MKL
 #include <mkl.h>
 #include <algorithm>
@@ -23,88 +27,95 @@ void multvec(int n, double *a, double *b, double *c){
     }
 }
 
+void sigmaxx(int nelem, double *weight, double *dudx, double *dvdy, double *sigxx){
+    REAL E = 200000000.;
+    REAL nu =0.30;
+    for (int i = 0; i < nelem; i++) {
+        sigxx[i] = weight[i]*E/(1.-nu*nu)*(dudx[i] + nu*dvdy[i]);
+    }
+}
+
+void sigmayy(int nelem, double *weight, double *dudx, double *dvdy, double *sigyy){
+    REAL E = 200000000.;
+    REAL nu =0.30;
+    for (int i = 0; i < nelem; i++) {
+        sigyy[i] = weight[i]*E/(1.-nu*nu)*(nu*dudx[i] + dvdy[i]);
+    }
+}
+
+void sigmaxy(int nelem, double *weight, double *dvdx, double *dudy, double *sigxy, double *sigyx){
+    REAL E = 200000000.;
+    REAL nu =0.30;
+    for (int i = 0; i < nelem; i++) {
+        sigxy[i] = weight[i]*E/(1.+nu)*(dvdx[i] + dudy[i]);
+        sigyx[i] = sigxy[i];
+    }
+}
+
 void TPZSolveVector::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const {
-    int64_t n_globalsol = fIndexes.size()/2; //o vetor de indices esta duplicado
+    int64_t n_globalsol = fIndexes.size(); //o vetor de indices esta duplicado
     int64_t nelem = fRowSizes.size();
     int rows = fRowSizes[0];
     int cols = fColSizes[0];
 
-    TPZFMatrix<REAL> expandsolution(2*n_globalsol,1); //vetor solucao duplicado
+    TPZFMatrix<REAL> expandsolution(n_globalsol,1); //vetor solucao duplicado
 
-    cblas_dgthr(2*n_globalsol, global_solution, &expandsolution(0,0), &fIndexes[0]);
+    cblas_dgthr(n_globalsol, global_solution, &expandsolution(0,0), &fIndexes[0]);
+
+    TPZFMatrix<REAL> expand_x(n_globalsol/2,1,&expandsolution(0,0),n_globalsol/2);
+    expand_x.Resize(n_globalsol,1);
+    expand_x.AddSub(n_globalsol/2,0,expand_x);
+
+    TPZFMatrix<REAL> expand_y(n_globalsol/2,1,&expandsolution(n_globalsol/2,0),n_globalsol/2);
+    expand_y.Resize(n_globalsol,1);
+    expand_y.AddSub(n_globalsol/2,0,expand_y);
 
     result.Resize(2*n_globalsol,1);
     result.Zero();
-    //Multiplicacao vetor-vetor:
-    //Usando o metodo criado
-//        for (int i = 0; i < cols; i++) {
-//            multvec(nelem * rows / 2, &fStorageVec[i * nelem * rows], &expandsolution(i * nelem, 0), &result(0,0));
-//            multvec(nelem * rows / 2, &fStorageVec[i * nelem * rows + nelem * rows / 2], &expandsolution(i * nelem, 0), &result(nelem * rows / 2,0));
-//
-//            multvec(nelem * rows / 2, &fStorageVec[i * nelem * rows], &expandsolution(i * nelem + n_globalsol, 0), &result(n_globalsol,0));
-//            multvec(nelem * rows / 2, &fStorageVec[i * nelem * rows + nelem * rows / 2], &expandsolution(i * nelem + n_globalsol, 0), &result(n_globalsol + nelem * rows / 2,0));
-//    }
 
-    //Usando dsbmv (multiplicacao matriz-vetor com matriz de banda 0)
-    for (int i = 0; i < cols; i++) {
-        cblas_dsbmv(CblasColMajor, CblasUpper, nelem * rows / 2, 0, 1., &fStorageVec[i * nelem * rows], 1, &expandsolution(i * nelem, 0), 1, 1., &result(0,0), 1);
-        cblas_dsbmv(CblasColMajor, CblasUpper, nelem * rows / 2, 0, 1., &fStorageVec[i * nelem * rows + nelem * rows / 2], 1, &expandsolution(i * nelem, 0), 1, 1., &result(nelem * rows / 2,0), 1);
+        for (int i = 0; i < cols; i++) {
+            multvec(nelem * rows / 2, &fStorageVec[i * nelem * rows], &expand_x(i * nelem, 0), &result(0,0));
+            multvec(nelem * rows / 2, &fStorageVec[i * nelem * rows + nelem * rows / 2], &expand_x(i * nelem, 0), &result(nelem * rows / 2,0));
 
-        cblas_dsbmv(CblasColMajor, CblasUpper, nelem * rows / 2, 0, 1., &fStorageVec[i * nelem * rows], 1, &expandsolution(i * nelem + n_globalsol, 0), 1, 1., &result(n_globalsol,0), 1);
-        cblas_dsbmv(CblasColMajor, CblasUpper, nelem * rows / 2, 0, 1., &fStorageVec[i * nelem * rows + nelem * rows / 2], 1, &expandsolution(i * nelem + n_globalsol, 0), 1, 1., &result(n_globalsol + nelem * rows / 2,0), 1);
-
+            multvec(nelem * rows / 2, &fStorageVec[i * nelem * rows], &expand_y(i * nelem, 0), &result(n_globalsol,0));
+            multvec(nelem * rows / 2, &fStorageVec[i * nelem * rows + nelem * rows / 2], &expand_y(i * nelem, 0), &result(n_globalsol + nelem * rows / 2,0));
     }
-//
-//    TPZVec<int64_t> solpos(rows*cols/2);
-//    for (int i = 0; i < cols; i++) {
-//        for (int j = 0; j < cols; j++) {
-//            solpos[i*cols + j] = nelem * ((j + i) % cols);
-//        }
-//    }
-//
-    //Usando daxpy (multiplicacao escalar-vetor) obs: apenas 1 matriz para todos os elementos
-//    for (int i = 0; i < rows * cols / 2; i++) {
-//        cblas_daxpy(nelem, fStorageVec[i], &expandsolution(solpos[i],0), 1, &result((i%cols)*nelem,0), 1);
-//        cblas_daxpy(nelem, fStorageVec[i + rows*cols/2], &expandsolution(solpos[i],0), 1, &result((i%cols)*nelem + nelem*rows/2,0), 1);
-//
-//        cblas_daxpy(nelem, fStorageVec[i], &expandsolution(solpos[i] + n_globalsol,0), 1, &result((i%cols)*nelem + n_globalsol,0), 1);
-//        cblas_daxpy(nelem, fStorageVec[i + rows*cols/2], &expandsolution(solpos[i] + n_globalsol,0), 1, &result((i%cols)*nelem + n_globalsol + nelem*rows/2,0), 1);
-//    }
-
 }
 
 void TPZSolveVector::ComputeSigma( TPZVec<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<STATE> &sigma) {
-    REAL E = 200000000.;
-    REAL nu =0.30;
     int nelem = fRowSizes.size();
     int npts_el = fRow/nelem;
-    TPZFMatrix<REAL> aux(nelem,1,0.);
     sigma.Resize(2*fRow,1);
+    sigma.Zero();
 
     for (int64_t ipts=0; ipts< npts_el/2; ipts++) {
-        //sigma xx
-        cblas_daxpy(nelem, nu, &result((2*ipts + npts_el + 1)*nelem ,0), 1, &aux(0,0), 1);
-        cblas_daxpy(nelem, 1, &result(2*ipts*nelem ,0), 1, &aux(0,0), 1);
-        multvec(nelem, &weight[ipts*nelem], &aux(0,0), &sigma(2*ipts*nelem,0));
-        cblas_dscal (nelem, E/(1.-nu*nu), &sigma(2*ipts*nelem,0), 1);
-        aux.Zero();
+          sigmaxx(nelem, &weight[ipts*nelem], &result(2*ipts*nelem ,0), &result((2*ipts + npts_el + 1)*nelem ,0), &sigma(2*ipts*nelem,0));
+          sigmayy(nelem, &weight[ipts*nelem], &result((2*ipts + npts_el + 1)*nelem,0), &result(2*ipts*nelem,0), &sigma((2*ipts+npts_el+1)*nelem,0));
+          sigmaxy(nelem, &weight[ipts*nelem], &result((2*ipts + npts_el)*nelem,0), &result((2*ipts + 1)*nelem,0), &sigma((2*ipts+1)*nelem,0), &sigma((2*ipts+npts_el)*nelem,0));
 
-        //sigma yy
-        cblas_daxpy(nelem, nu, &result(2*ipts*nelem,0), 1, &aux(0,0), 1);
-        cblas_daxpy(nelem, 1, &result((2*ipts + npts_el + 1)*nelem,0), 1, &aux(0,0), 1);
-        multvec(nelem, &weight[ipts*nelem], &aux(0,0), &sigma((2*ipts+npts_el+1)*nelem,0));
-        cblas_dscal (nelem, E/(1.-nu*nu), &sigma((2*ipts+npts_el+1)*nelem,0), 1);
-        aux.Zero();
-
-        //sigma xy
-        cblas_daxpy(nelem, 1, &result((2*ipts + 1)*nelem,0), 1, &aux(0,0), 1);
-        cblas_daxpy(nelem, 1, &result((2*ipts + npts_el)*nelem,0), 1, &aux(0,0), 1);
-        multvec(nelem, &weight[ipts*nelem], &aux(0,0), &sigma((2*ipts+1)*nelem,0));
-        cblas_dscal (nelem, E/(1.-nu*nu)*(1.-nu), &sigma((2*ipts+1)*nelem,0), 1);
-        aux.Zero();
-
-        cblas_daxpy(nelem, 1, &sigma((2*ipts+1)*nelem,0), 1, &sigma((2*ipts+npts_el)*nelem,0), 1);
+//        cblas_daxpy(nelem, nu, &result((2*ipts + npts_el + 1)*nelem ,0), 1, &aux(0,0), 1);
+//        cblas_daxpy(nelem, 1, &result(2*ipts*nelem ,0), 1, &aux(0,0), 1);
+//        multvec(nelem, &weight[ipts*nelem], &aux(0,0), &sigma(2*ipts*nelem,0));
+//        cblas_dscal (nelem, E/(1.-nu*nu), &sigma(2*ipts*nelem,0), 1);
+//        aux.Zero();
+//
+////        sigma yy
+//        cblas_daxpy(nelem, nu, &result(2*ipts*nelem,0), 1, &aux(0,0), 1);
+//        cblas_daxpy(nelem, 1, &result((2*ipts + npts_el + 1)*nelem,0), 1, &aux(0,0), 1);
+//        multvec(nelem, &weight[ipts*nelem], &aux(0,0), &sigma((2*ipts+npts_el+1)*nelem,0));
+//        cblas_dscal (nelem, E/(1.-nu*nu), &sigma((2*ipts+npts_el+1)*nelem,0), 1);
+//        aux.Zero();
+//
+////        sigma xy
+//        cblas_daxpy(nelem, 1, &result((2*ipts + 1)*nelem,0), 1, &aux(0,0), 1);
+//        cblas_daxpy(nelem, 1, &result((2*ipts + npts_el)*nelem,0), 1, &aux(0,0), 1);
+//        multvec(nelem, &weight[ipts*nelem], &aux(0,0), &sigma((2*ipts+1)*nelem,0));
+//        cblas_dscal (nelem, E/(1.-nu*nu)*(1.-nu), &sigma((2*ipts+1)*nelem,0), 1);
+//        aux.Zero();
+//
+//        cblas_daxpy(nelem, 1, &sigma((2*ipts+1)*nelem,0), 1, &sigma((2*ipts+npts_el)*nelem,0), 1);
     }
+    sigma.Print(std::cout);
 }
 
 void TPZSolveVector::MultiplyTranspose(TPZFMatrix<STATE>  &sigma, TPZFMatrix<STATE> &nodal_forces_vec) {
@@ -112,35 +123,29 @@ void TPZSolveVector::MultiplyTranspose(TPZFMatrix<STATE>  &sigma, TPZFMatrix<STA
     nodal_forces_vec.Resize(npts_tot,1);
     nodal_forces_vec.Zero();
 
-    TPZFMatrix<REAL> sigx(fRow, 1, &sigma(0, 0), fRow);
-    TPZFMatrix<REAL> sigx_2(2 * fRow);
-    sigx_2.AddSub(0, 0, sigx);
-    sigx_2.AddSub(fRow, 0, sigx);
-
-    TPZFMatrix<REAL> sigy(fRow, 1, &sigma(fRow, 0), fRow);
-    TPZFMatrix<REAL> sigy_2(2 * fRow);
-    sigy_2.AddSub(0, 0, sigy);
-    sigy_2.AddSub(fRow, 0, sigy);
-
     int cols = fColSizes[0];
     int rows = fRowSizes[0];
     int  nelem = fRowSizes.size();
 
     for (int i = 0; i < cols; i++) {
         //Fx
-        multvec((cols-i)*nelem, &fStorageVec[(((cols-i)%cols)*rows + i)*nelem], &sigx_2(i * nelem, 0), &nodal_forces_vec(0, 0));
-        multvec(i*nelem, &fStorageVec[((cols-i)%cols)*rows*nelem], &sigx_2(0, 0), &nodal_forces_vec(nelem*((cols - i)%cols), 0));
+        multvec((cols-i)*nelem, &fStorageVec[(((cols-i)%cols)*rows + i)*nelem], &sigma(i * nelem, 0), &nodal_forces_vec(0, 0));
+        multvec(i*nelem, &fStorageVec[((cols-i)%cols)*rows*nelem], &sigma(0, 0), &nodal_forces_vec(nelem*((cols - i)%cols), 0));
 
-        multvec((cols-i)*nelem, &fStorageVec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem], &sigx_2(i * nelem + cols*nelem, 0), &nodal_forces_vec(0, 0));
-        multvec(i*nelem, &fStorageVec[((cols-i)%cols)*rows*nelem + cols*nelem], &sigx_2(cols*nelem, 0), &nodal_forces_vec(nelem*((cols - i)%cols), 0));
+        multvec((cols-i)*nelem, &fStorageVec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem], &sigma(i * nelem + cols*nelem, 0), &nodal_forces_vec(0, 0));
+        multvec(i*nelem, &fStorageVec[((cols-i)%cols)*rows*nelem + cols*nelem], &sigma(cols*nelem, 0), &nodal_forces_vec(nelem*((cols - i)%cols), 0));
 
         //Fy
-        multvec((cols-i)*nelem, &fStorageVec[(((cols-i)%cols)*rows + i)*nelem], &sigy_2(i * nelem, 0),  &nodal_forces_vec(npts_tot/2, 0));
-        multvec(i*nelem, &fStorageVec[((cols-i)%cols)*rows*nelem], &sigy_2(0, 0), &nodal_forces_vec(npts_tot/2 + nelem*((cols - i)%cols), 0));
+        multvec((cols-i)*nelem, &fStorageVec[(((cols-i)%cols)*rows + i)*nelem], &sigma(i * nelem + fRow, 0),  &nodal_forces_vec(npts_tot/2, 0));
+        multvec(i*nelem, &fStorageVec[((cols-i)%cols)*rows*nelem], &sigma(fRow, 0), &nodal_forces_vec(npts_tot/2 + nelem*((cols - i)%cols), 0));
 
-        multvec((cols-i)*nelem, &fStorageVec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem], &sigy_2(i * nelem + cols*nelem, 0), &nodal_forces_vec(npts_tot/2, 0));
-        multvec(i*nelem, &fStorageVec[((cols-i)%cols)*rows*nelem + cols*nelem], &sigy_2(cols*nelem, 0), &nodal_forces_vec(npts_tot/2 + nelem*((cols - i)%cols), 0));
+        multvec((cols-i)*nelem, &fStorageVec[(((cols-i)%cols)*rows + i)*nelem + cols*nelem], &sigma(i * nelem + cols*nelem + fRow, 0), &nodal_forces_vec(npts_tot/2, 0));
+        multvec(i*nelem, &fStorageVec[((cols-i)%cols)*rows*nelem + cols*nelem], &sigma(cols*nelem + fRow, 0), &nodal_forces_vec(npts_tot/2 + nelem*((cols - i)%cols), 0));
     }
+
+
+
+
 }
 
 void TPZSolveVector::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) {
@@ -198,13 +203,10 @@ void TPZSolveVector::cuBlasHandle(){
 
 
 void TPZSolveVector::TraditionalAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const {
-    std::cout << fIndexes << std::endl;
-    nodal_forces_vec.Print(std::cout);
     for (int64_t ir=0; ir<fRow/2; ir++) {
         nodal_forces_global(fIndexes[ir], 0) += nodal_forces_vec(ir, 0);
-        nodal_forces_global(fIndexes[ir+fRow], 0) += nodal_forces_vec(ir+fRow/2, 0);
+        nodal_forces_global(fIndexes[ir+fRow/2], 0) += nodal_forces_vec(ir+fRow/2, 0);
     }
-    nodal_forces_global.Print(std::cout);
 }
 
 void TPZSolveVector::ColoringElements(TPZCompMesh * cmesh) const {
@@ -245,13 +247,6 @@ void TPZSolveVector::ColoringElements(TPZCompMesh * cmesh) const {
         contcolor++;
         connects_vec.Fill(0);
     }
-    int64_t ind = fIndexes.size()/2;
-    TPZVec<REAL> indexes(ind);
-
-    for (int i = 0; i < ind/2; i++) {
-        indexes[ind/2 + i] = fIndexes[ind+i];
-        indexes[i] = fIndexes[i];
-    }
 
     int64_t nelem = fRowSizes.size();
     int64_t neq = cmesh->NEquations();
@@ -259,8 +254,8 @@ void TPZSolveVector::ColoringElements(TPZCompMesh * cmesh) const {
         int64_t cols = fColSizes[iel];
 
         for (int64_t icols = 0; icols < cols; icols++) {
-            fIndexesColor[iel + icols*nelem] = indexes[iel + icols*nelem] + fElemColor[iel]*neq;
-            fIndexesColor[iel + icols*nelem + fRow/2] = indexes[iel + icols*nelem + fRow/2] + fElemColor[iel]*neq;
+            fIndexesColor[iel + icols*nelem] = fIndexes[iel + icols*nelem] + fElemColor[iel]*neq;
+            fIndexesColor[iel + icols*nelem + fRow/2] = fIndexes[iel + icols*nelem + fRow/2] + fElemColor[iel]*neq;
         }
     }
 }

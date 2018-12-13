@@ -29,7 +29,7 @@ public:
 
     }
 
-    TPZSolveMatrix(int64_t rows, int64_t cols, TPZVec<int64_t> rowsizes, TPZVec<int64_t> colsizes) : TPZMatrix(rows,
+    TPZSolveMatrix(int64_t rows, int64_t cols, TPZVec<MKL_INT> rowsizes, TPZVec<MKL_INT> colsizes) : TPZMatrix(rows,
                                                                                                                cols) {
         SetParameters(rowsizes, colsizes);
         cuSparseHandle();
@@ -84,7 +84,7 @@ public:
         return new TPZSolveMatrix(*this);
     }
 
-    void SetParameters(TPZVec<int64_t> rowsize, TPZVec<int64_t> colsize) {
+    void SetParameters(TPZVec<MKL_INT> rowsize, TPZVec<MKL_INT> colsize) {
         int64_t nelem = rowsize.size();
 
         fRowSizes.resize(nelem);
@@ -168,10 +168,10 @@ protected:
     TPZVec<REAL> fStorage;
 
 /// number of rows of each block matrix
-    TPZVec<int64_t> fRowSizes;
+    TPZVec<MKL_INT> fRowSizes;
 
 /// number of columns of each block matrix
-    TPZVec<int64_t> fColSizes;
+    TPZVec<MKL_INT> fColSizes;
 
 /// indexes vector in x and y direction
     TPZVec<MKL_INT> fIndexes;

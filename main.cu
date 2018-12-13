@@ -20,6 +20,15 @@
 #include "TPZMatElasticity2D.h"
 #include "TPZSSpStructMatrix.h"
 
+#include "TPZMatElastoPlastic2D.h"
+#include "TPZMatElastoPlastic.h"
+#include "TPZElastoPlasticMem.h"
+#include "TPZElasticCriterion.h"
+#include "TPZPlasticStepPV.h"
+#include "TPZSandlerExtended.h"
+#include "TPZYCMohrCoulombPV.h"
+#include "pzstepsolver.h"
+
 #include "TPZSolveMatrix.h"
 #include "TPZSolveVector.h"
 
@@ -27,135 +36,77 @@
 #include "tbb/parallel_for_each.h"
 #endif
 
-TPZGeoMesh *geometry_2D(int nelem_x, int nelem_y, REAL len, int ndivide);
 
-TPZCompMesh *cmesh_2D(TPZGeoMesh *gmesh, int pOrder);
+TPZGeoMesh *Geometry2D(int nelem_x, int nelem_y, REAL len, int ndivide);
 
-TPZCompMesh *cmesh_mat_2D(TPZGeoMesh *gmesh, int pOrder);
+TPZCompMesh *CmeshElasticity(TPZGeoMesh *gmesh, int pOrder);
+TPZCompMesh *CmeshElasticityNoBoundary(TPZGeoMesh *gmesh, int pOrder);
 
-void SolMatrix(TPZCompMesh *cmesh, TPZFMatrix<STATE> res_d);
+TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int pOrder);
+TPZCompMesh *CmeshElastoplasticityNoBoundary(TPZGeoMesh *gmesh, int pOrder);
 
-void SolVector(TPZCompMesh *cmesh, TPZFMatrix<STATE> res_d);
+void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh);
+void SolVector(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh);
+
+TPZFMatrix<REAL>  Residual(TPZCompMesh *cmesh, TPZCompMesh *cmesh_noboundary);
 
 int main(int argc, char *argv[]) {
-        //// ------------------------ DATA INPUT ------------------------------
-        //// NUMBER OF ELEMENTS IN X AND Y DIRECTIONS
-        int nelem_x = atoi(argv[1]);
-        int nelem_y = atoi(argv[1]);
+//// ------------------------ DATA INPUT ------------------------------
+    int nelem_x = 1; // Number of elements in x direction
+    int nelem_y = 1; // Number of elements in y direction
+    REAL len = 1; // Domain length
+    int pOrder = 1; // Computational mesh order
+    int ndivide = 0; // Subdivision of elements
 
-        std::cout << "-------------------------------------------------" << std::endl;
-        std::cout << "MESH SIZE: " << nelem_x << "x" << nelem_y << std::endl;
+// Generates the geometry
+    TPZGeoMesh *gmesh = Geometry2D(nelem_x, nelem_y, len, ndivide);
 
-//// DOMAIN LENGTH
-        REAL len = 1;
+// Creates the computational mesh
+    TPZCompMesh *cmesh = CmeshElasticity(gmesh, pOrder);
+    TPZCompMesh *cmesh_noboundary = CmeshElasticityNoBoundary(gmesh, pOrder);
 
-//// COMPUTATIONAL MESH ORDER
-        int pOrder = 2;
+// Defines the analysis
+    bool optimizeBandwidth = true;
+    int n_threads = 16;
+    TPZAnalysis an(cmesh, optimizeBandwidth);
+    TPZSymetricSpStructMatrix strskyl(cmesh);
+    strskyl.SetNumThreads(n_threads);
+    an.SetStructuralMatrix(strskyl);
 
-//// SUBDIVISIONS OF THE ELEMENTS
-        int ndivide = 0;
+// Solve
+    TPZStepSolver<STATE> step;
+    step.SetDirect(ELDLt);
+    an.SetSolver(step);
+    an.Assemble();
+    an.Solve();
 
-//// ENTER THE FILE NAME
-        std::string namefile = "Elasticity_teste";
-//// ------------------------------------------------------------------
+// Post process
+//    TPZManVector<std::string> scalarnames(2), vecnames(1);
+//    scalarnames[0] = "SigmaX";
+//    scalarnames[1] = "SigmaY";
+//    vecnames[0] = "Displacement";
+//    std::string namefile = "Elasticity_teste";
+//    an.DefineGraphMesh(2, scalarnames, vecnames, namefile + "ElasticitySolutions.vtk");
+//    an.PostProcess(0);
 
-//// Generating the geometry
-        TPZGeoMesh *gmesh = geometry_2D(nelem_x, nelem_y, len, ndivide);
-//std::ofstream vtk_file_00(namefile + ".vtk");
-//TPZVTKGeoMesh::PrintGMeshVTK(gmesh, vtk_file_00);
+// Calculates residual without boundary conditions
+    TPZFMatrix<REAL> residual = Residual(cmesh, cmesh_noboundary);
 
-//// Creating the computational mesh
-        TPZCompMesh *cmesh = cmesh_2D(gmesh, pOrder);
-        TPZCompMesh *cmesh_d = cmesh_mat_2D(gmesh, pOrder);
-
-//// Defining the analysis
-        bool optimizeBandwidth = true;
-        int n_threads = 4;
-        TPZAnalysis an(cmesh, optimizeBandwidth);
-//        TPZAnalysis an_d(cmesh_d, optimizeBandwidth);
-#ifdef USING_MKL
-        TPZSymetricSpStructMatrix strskyl(cmesh);
-//        TPZSymetricSpStructMatrix strskyl_d(cmesh_d);
-#else
-        TPZSkylineStructMatrix strskyl(cmesh);
-//        TPZSkylineStructMatrix strskyl_d(cmesh_d);
-#endif
-        strskyl.SetNumThreads(n_threads);
-//        strskyl_d.SetNumThreads(n_threads);
-        an.SetStructuralMatrix(strskyl);
-//        an_d.SetStructuralMatrix(strskyl_d);
-
-//// Solve
-        TPZStepSolver<STATE> *direct = new TPZStepSolver<STATE>;
-        direct->SetDirect(ECholesky);
-        an.SetSolver(*direct);
-//        an_d.SetSolver(*direct);
-//        delete direct;
-
-
-        TPZFMatrix<STATE> res_d;
-
-if(nelem_x != 200 && nelem_x != 400 && nelem_x != 600 && nelem_x != 800 && nelem_x != 1000){
-        TPZAnalysis an_d(cmesh_d, optimizeBandwidth);
-        TPZSymetricSpStructMatrix strskyl_d(cmesh_d);
-        strskyl_d.SetNumThreads(n_threads);
-        an_d.SetStructuralMatrix(strskyl_d);
-        an_d.SetSolver(*direct);
-
-        delete direct;
-
-        an.Assemble();
-        an.Solve();
-
-        an_d.Assemble();
-	an_d.Solver().Matrix()->Multiply(an.Solution(), res_d);
-}
-
-//TPZFMatrix<REAL> sol = cmesh->Solution();
-//std::ofstream file("solution1000.txt");
-//for(int i = 0; i < sol.Rows(); i++){
-//file << sol(i,0) << std::endl;
-//}
-
-// Computing global K
-//        an_d.Assemble();
-//        TPZFMatrix<STATE> res_d;
-// Computing K u
-//       an_d.Solver().Matrix()->Multiply(an.Solution(), res_d);
-//Print Rhs without boundary conditions
-//res_d.Print("ku = ",std::cout,EMathematicaInput);
-
-//// Post processing in Paraview
-//        TPZManVector<std::string> scalarnames(2), vecnames(1);
-//        scalarnames[0] = "SigmaX";
-//        scalarnames[1] = "SigmaY";
-//        vecnames[0] = "Displacement";
-//        an.DefineGraphMesh(2, scalarnames, vecnames, namefile + "ElasticitySolutions.vtk");
-//        an.PostProcess(0);
-
-//std::ofstream file2("res1000.txt");
-//for(int i = 0; i < res_d.Rows(); i++){
-//file2 << res_d(i,0) << std::endl;
-//}
-
-
-
-std::cout << "\n\nSolveMatrix:" << std::endl;
-        SolMatrix(cmesh, res_d);
-std::cout << "\n\nSolveVector:" << std::endl;
-        SolVector(cmesh, res_d);
+// Calculates residual using matrix operations and check if the result is ok
+    SolMatrix(residual, cmesh);
+    SolVector(residual, cmesh);
     return 0;
 }
 
-TPZGeoMesh *geometry_2D(int nelem_x, int nelem_y, REAL len, int ndivide) {
+TPZGeoMesh *Geometry2D(int nelem_x, int nelem_y, REAL len, int ndivide) {
 // Creates the geometric mesh
     TPZGeoMesh *gmesh = new TPZGeoMesh();
     int dim = 2;
     gmesh->SetDimension(dim);
 
 // Geometry definitions
-    int nnodes_x = nelem_x + 1; //Number of elements in x direction
-    int nnodes_y = nelem_y + 1; //Number of elements in x direction
+    int nnodes_x = nelem_x + 1; //Number of nodes in x direction
+    int nnodes_y = nelem_y + 1; //Number of nodes in x direction
     int64_t nelem = nelem_x * nelem_y; //Total number of elements
 
 // Nodes initialization
@@ -186,10 +137,10 @@ TPZGeoMesh *geometry_2D(int nelem_x, int nelem_y, REAL len, int ndivide) {
         }
     }
 
-// Generate neighborhood information
+// Generates neighborhood information
     gmesh->BuildConnectivity();
 
-// Creating the boundary conditions
+// Creates the boundary conditions
 // Dirichlet
     for (int64_t i = 0; i < nelem_y; i++) {
         TPZGeoEl *gelem = gmesh->Element(i);
@@ -202,14 +153,14 @@ TPZGeoMesh *geometry_2D(int nelem_x, int nelem_y, REAL len, int ndivide) {
     }
 
 // Neumann
-    for (int64_t i = nelem - nelem_y; i < nelem; i++) {
-        TPZGeoEl *gelem = gmesh->Element(i);
-        TPZGeoElBC el_boundary(gelem, 5, -4); //Right side of the plane - tension
-    }
     for (int64_t i = 0; i < nelem_x; i++) {
         int64_t n = nelem_y * (i + 1) - (nelem_y);
         TPZGeoEl *gelem = gmesh->Element(n);
         TPZGeoElBC el_boundary(gelem, 4, -3); //Bottom side of the plane - tension
+    }
+    for (int64_t i = nelem - nelem_y; i < nelem; i++) {
+        TPZGeoEl *gelem = gmesh->Element(i);
+        TPZGeoElBC el_boundary(gelem, 5, -4); //Right side of the plane - tension
     }
 
 // HP adaptativity
@@ -238,33 +189,37 @@ TPZGeoMesh *geometry_2D(int nelem_x, int nelem_y, REAL len, int ndivide) {
     return gmesh;
 }
 
-TPZCompMesh *cmesh_2D(TPZGeoMesh *gmesh, int pOrder) {
+TPZCompMesh *CmeshElasticity(TPZGeoMesh *gmesh, int pOrder) {
 
-// Creating the computational mesh
+// Creates the computational mesh
     TPZCompMesh *cmesh = new TPZCompMesh(gmesh);
     cmesh->SetDefaultOrder(pOrder);
 
-// Creating elasticity material
-    TPZMatElasticity2D *mat = new TPZMatElasticity2D(1);
-    mat->SetElasticParameters(200000000., 0.3);
+// Creates elastic material
+    TPZMatElasticity2D *material = new TPZMatElasticity2D(1);
+    material->SetElasticParameters(200000000., 0.3);
 
-// Setting the boundary conditions
+// Set the boundary conditions
     TPZMaterial *bcBottom, *bcRight, *bcTop, *bcLeft;
-    TPZFMatrix<REAL> val1(2, 1, 0.);
-    TPZFMatrix<REAL> val2(2, 1, 0.);
+    TPZFMatrix<REAL> val1(2, 2), val2(2, 2);
 
-    bcLeft = mat->CreateBC(mat, -1, 7, val1, val2); // X displacement = 0
-    bcTop = mat->CreateBC(mat, -2, 8, val1, val2); // Y displacement = 0
+    val2(0, 0) = 0;
+    val2(1, 0) = 0;
+    bcLeft = material->CreateBC(material, -1, 7, val1, val2); // X displacement = 0
 
+    val2(0,0) = 0;
+    val2(1,0) = 0;
+    bcTop = material->CreateBC(material, -2, 8, val1, val2); // Y displacement = 0
+
+    val2(0, 0) = 0.0;
     val2(1, 0) = -1000000.;
-    bcBottom = mat->CreateBC(mat, -3, 1, val1, val2); // Tension in y
+    bcBottom = material->CreateBC(material, -3, 1, val1, val2); // Tension in y
 
     val2(0, 0) = 1000000.;
     val2(1, 0) = 0.0;
-    bcRight = mat->CreateBC(mat, -4, 1, val1, val2); // Tension in x
+    bcRight = material->CreateBC(material, -4, 1, val1, val2); // Tension in x
 
-    cmesh->InsertMaterialObject(mat);
-
+    cmesh->InsertMaterialObject(material);
     cmesh->InsertMaterialObject(bcBottom);
     cmesh->InsertMaterialObject(bcRight);
     cmesh->InsertMaterialObject(bcTop);
@@ -278,7 +233,7 @@ TPZCompMesh *cmesh_2D(TPZGeoMesh *gmesh, int pOrder) {
     return cmesh;
 }
 
-TPZCompMesh *cmesh_mat_2D(TPZGeoMesh *gmesh, int pOrder) {
+TPZCompMesh *CmeshElasticityNoBoundary(TPZGeoMesh *gmesh, int pOrder) {
 
     // Creating the computational mesh
     TPZCompMesh *cmesh = new TPZCompMesh(gmesh);
@@ -294,14 +249,110 @@ TPZCompMesh *cmesh_mat_2D(TPZGeoMesh *gmesh, int pOrder) {
     return cmesh;
 }
 
-void SolVector(TPZCompMesh *cmesh, TPZFMatrix<STATE> res_d) {
+TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh * gmesh, int p_order) {
+
+// Creates the computational mesh
+    TPZCompMesh * cmesh = new TPZCompMesh(gmesh);
+    cmesh->SetDefaultOrder(p_order);
+
+// Mohr Coulomb data
+    REAL mc_cohesion    = 10.0;
+    REAL mc_phi         = (20.0*M_PI/180);
+    REAL mc_psi         = mc_phi;
+
+// ElastoPlastic Material using Mohr Coulomb
+// Elastic predictor
+    TPZElasticResponse ER;
+    REAL G = 400*mc_cohesion;
+    REAL nu = 0.3;
+    REAL E = 2.0*G*(1+nu);
+
+    TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse> LEMC;
+    ER.SetUp(E, nu);
+    LEMC.SetElasticResponse(ER);
+    LEMC.fYC.SetUp(mc_phi, mc_psi, mc_cohesion, ER);
+    int PlaneStrain = 1;
+    int matid = 1;
+
+// Creates elastoplatic material
+    TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem > * material = new TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem >(matid,PlaneStrain);
+    material->SetPlasticityModel(LEMC);
+
+// Set the boundary conditions
+    TPZMaterial *bcBottom, *bcRight, *bcTop, *bcLeft;
+    TPZFMatrix<REAL> val1(2,2), val2(2,2);
+
+    val2(0,0) = 0;
+    val2(1,0) = 0;
+    bcLeft = material->CreateBC(material, -1, 1, val1, val2);
+
+    val2(0,0) = 0;
+    val2(1,0) = 0;
+    bcTop = material->CreateBC(material, -2, 0, val1, val2);
+
+    val2(0,0) = 0;
+    val2(1,0) = -1000000;
+    bcBottom = material->CreateBC(material, -3, 0, val1, val2);
+
+    val2(0,0) = 1000000;
+    val2(1,0) = 0;
+    bcRight = material->CreateBC(material, -4, 1, val1, val2);
+
+    cmesh->InsertMaterialObject(material);
+    cmesh->InsertMaterialObject(bcBottom);
+    cmesh->InsertMaterialObject(bcTop);
+    cmesh->InsertMaterialObject(bcLeft);
+    cmesh->InsertMaterialObject(bcRight);
+
+    cmesh->SetAllCreateFunctionsContinuousWithMem();
+    cmesh->AutoBuild();
+
+    return cmesh;
+}
+
+TPZCompMesh *CmeshElastoplasticityNoBoundary(TPZGeoMesh * gmesh, int p_order) {
+
+// Creates the computational mesh
+    TPZCompMesh * cmesh = new TPZCompMesh(gmesh);
+    cmesh->SetDefaultOrder(p_order);
+
+// Mohr Coulomb data
+    REAL mc_cohesion    = 10.0;
+    REAL mc_phi         = (20.0*M_PI/180);
+    REAL mc_psi         = mc_phi;
+
+// ElastoPlastic Material using Mohr Coulomb
+// Elastic predictor
+    TPZElasticResponse ER;
+    REAL G = 400*mc_cohesion;
+    REAL nu = 0.3;
+    REAL E = 2.0*G*(1+nu);
+
+    TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse> LEMC;
+    ER.SetUp(E, nu);
+    LEMC.SetElasticResponse(ER);
+    LEMC.fYC.SetUp(mc_phi, mc_psi, mc_cohesion, ER);
+    int PlaneStrain = 1;
+    int matid = 1;
+
+// Creates elastoplatic material
+    TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem > * material = new TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem >(matid,PlaneStrain);
+    material->SetPlasticityModel(LEMC);
+
+    cmesh->InsertMaterialObject(material);
+    cmesh->SetAllCreateFunctionsContinuousWithMem();
+    cmesh->AutoBuild();
+
+    return cmesh;
+}
+
+void SolVector(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
 
     int dim_mesh = (cmesh->Reference())->Dimension(); // Mesh dimension
     int64_t nelem_c = cmesh->NElements(); // Number of computational elements
     std::vector<int64_t> cel_indexes;
 
-//// -------------------------------------------------------------------------------
-//// NUMBER OF DOMAIN GEOMETRIC ELEMENTS
+// Number of domain geometric elements
     for (int64_t i = 0; i < nelem_c; i++) {
         TPZCompEl *cel = cmesh->Element(i);
         if (!cel) continue;
@@ -309,14 +360,13 @@ void SolVector(TPZCompMesh *cmesh, TPZFMatrix<STATE> res_d) {
         if (!gel || gel->Dimension() != dim_mesh) continue;
         cel_indexes.push_back(cel->Index());
     }
-//// -------------------------------------------------------------------------------
 
     if (cel_indexes.size() == 0) {
         DebugStop();
     }
 
-//// ROWSIZES AND COLSIZES VECTORS--------------------------------------------------
-    int64_t nelem = cel_indexes.size(); // Number of domain geometric elements
+// RowSizes and ColSizes vectors
+    int64_t nelem = cel_indexes.size();
     TPZVec<int64_t> rowsizes(nelem);
     TPZVec<int64_t> colsizes(nelem);
 
@@ -344,12 +394,11 @@ void SolVector(TPZCompMesh *cmesh, TPZFMatrix<STATE> res_d) {
     }
 
     TPZSolveVector *SolVec = new TPZSolveVector(dim_mesh * npts_tot, nf_tot, rowsizes, colsizes);
-//// -------------------------------------------------------------------------------
 
-//// DPHI MATRIX FOR EACH ELEMENT, WEIGHT AND INDEXES VECTORS-----------------------
+// Dphi matrix, weight and indexes vectors
     TPZFMatrix<REAL> elmatrix;
     TPZVec<REAL> weight(npts_tot);
-    TPZManVector<MKL_INT> indexes(2*dim_mesh * nf_tot);
+    TPZManVector<MKL_INT> indexes(dim_mesh * nf_tot);
     int cont = 0;
     for (auto iel : cel_indexes) {
         int64_t cont1 = 0;
@@ -385,7 +434,6 @@ void SolVector(TPZCompMesh *cmesh, TPZFMatrix<STATE> res_d) {
         }
         SolVec->SetElementMatrix(iel, elmatrix);
 
-        //Indexes vector
         int64_t ncon = cel->NConnects();
         for (int64_t icon = 0; icon < ncon; icon++) {
             int64_t id = cel->ConnectIndex(icon);
@@ -398,11 +446,9 @@ void SolVector(TPZCompMesh *cmesh, TPZFMatrix<STATE> res_d) {
                 for (int64_t isize = 0; isize < nsize; isize++) {
                     if (isize % 2 == 0) {
                         indexes[cont1*nelem + cont] = pos + isize;
-                        indexes[cont1*nelem + nf_tot + cont] = pos + isize; //para indices duplicados
                         cont1++;
                     } else {
-                        indexes[cont2*nelem + 2*nf_tot + cont] = pos + isize; //2*nf_tot para indices duplicados
-                        indexes[cont2*nelem + 3*nf_tot + cont] = pos + isize; //para indices duplicados
+                        indexes[cont2*nelem + nf_tot + cont] = pos + isize;
                         cont2++;
                     }
                 }
@@ -413,166 +459,22 @@ void SolVector(TPZCompMesh *cmesh, TPZFMatrix<STATE> res_d) {
     SolVec->SetIndexes(indexes);
     SolVec->ColoringElements(cmesh);
 
+    TPZFMatrix<REAL> coef_sol = cmesh->Solution();
     int neq = cmesh->NEquations();
+
     TPZFMatrix<REAL> nodal_forces_global1(neq, 1, 0.);
     TPZFMatrix<REAL> nodal_forces_global2(neq, 1, 0.);
-    TPZFMatrix<REAL> nodal_forces_global3(neq, 1, 0.);
     TPZFMatrix<REAL> result;
     TPZFMatrix<REAL> sigma;
     TPZFMatrix<REAL> nodal_forces_vec;
-
-TPZFMatrix<REAL> coef_sol(neq,1);
-if (nelem == 40000){
-        std::ifstream input("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/solution200.txt");
-        if(!input) {
-            std::cout  << "Failed to open file ";
-        }
-
-        int k = 0;
-        double val;
-        while (input >> val) {
-            coef_sol(k,0) = val;
-            k++;
-        }
-
-        res_d.Resize(neq,1);
-        std::ifstream input2("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/res200.txt");
-        if(!input2) {
-            std::cout  << "Failed to open file ";
-        }
-
-        int l = 0;
-        double val2;
-        while (input2 >> val2) {
-            res_d(l,0) = val2;
-            l++;
-        }
-
-
-}
-else if (nelem == 160000){
-        std::ifstream input("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/solution400.txt");
-        if(!input) {
-            std::cout  << "Failed to open file ";
-        }
-
-        int k = 0;
-        double val;
-        while (input >> val) {
-            coef_sol(k,0) = val;
-            k++;
-        }
-
-        res_d.Resize(neq,1);
-        std::ifstream input2("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/res400.txt");
-        if(!input2) {
-            std::cout  << "Failed to open file ";
-        }
-
-        int l = 0;
-        double val2;
-        while (input2 >> val2) {
-            res_d(l,0) = val2;
-            l++;
-        }
-
-}
-
-else if (nelem == 360000){
-        std::ifstream input("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/solution600.txt");
-        if(!input) {
-            std::cout  << "Failed to open file ";
-        }
-
-        int k = 0;
-        double val;
-        while (input >> val) {
-            coef_sol(k,0) = val;
-            k++;
-        }
-
-        res_d.Resize(neq,1);
-        std::ifstream input2("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/res600.txt");
-        if(!input2) {
-            std::cout  << "Failed to open file ";
-        }
-
-        int l = 0;
-        double val2;
-        while (input2 >> val2) {
-            res_d(l,0) = val2;
-            l++;
-        }
-
-}
-else if (nelem == 640000){
-        std::ifstream input("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/solution800.txt");
-        if(!input) {
-            std::cout  << "Failed to open file ";
-        }
-
-        int k = 0;
-        double val;
-        while (input >> val) {
-            coef_sol(k,0) = val;
-            k++;
-        }
-
-        res_d.Resize(neq,1);
-        std::ifstream input2("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/res800.txt");
-        if(!input2) {
-            std::cout  << "Failed to open file ";
-        }
-
-        int l = 0;
-        double val2;
-        while (input2 >> val2) {
-            res_d(l,0) = val2;
-            l++;
-        }
-
-}
-else if (nelem == 1000000){
-        std::ifstream input("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/solution1000.txt");
-        if(!input) {
-            std::cout  << "Failed to open file ";
-        }
-
-        int k = 0;
-        double val;
-        while (input >> val) {
-            coef_sol(k,0) = val;
-            k++;
-        }
-
-        res_d.Resize(neq,1);
-        std::ifstream input2("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/res1000.txt");
-        if(!input2) {
-            std::cout  << "Failed to open file ";
-        }
-
-        int l = 0;
-        double val2;
-        while (input2 >> val2) {
-            res_d(l,0) = val2;
-            l++;
-        }
-
-}
-
-
-else {
-  coef_sol = cmesh->Solution();
-}
 
 #ifdef __CUDACC__
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;
     SolVec->AllocateMemory(cmesh);
     SolVec->MultiplyCUDA(coef_sol,result);
-    SolVec->ComputeSigmaCUDA(weight, result, sigma);    
-TPZFMatrix<REAL> nodal_forces_vec2;
-    SolVec->MultiplyTransposeCUDA(sigma,nodal_forces_vec2);
-    SolVec->ColoredAssembleCUDA(nodal_forces_vec2,nodal_forces_global3);
+    SolVec->ComputeSigmaCUDA(weight, result, sigma);
+    SolVec->MultiplyTransposeCUDA(sigma,nodal_forces_vec);
+    SolVec->ColoredAssembleCUDA(nodal_forces_vec,nodal_forces_global1);
     SolVec->FreeMemory();
 
 #endif
@@ -583,34 +485,31 @@ TPZFMatrix<REAL> nodal_forces_vec2;
     SolVec->MultiplyTranspose(sigma,nodal_forces_vec);
     SolVec->ColoredAssemble(nodal_forces_vec,nodal_forces_global2);
 
-    //Check result
-//    SolVec->TraditionalAssemble(nodal_forces_vec, nodal_forces_global1); // ok
+    //Check the result
+    int rescpu = Norm(nodal_forces_global2 - residual);
+    if(rescpu == 0){
+        std::cout << "\nAssemble done in the CPU is ok." << std::endl;
+    } else {
+        std::cout << "\nAssemble done in the CPU is not ok." << std::endl;
+    }
 
-//    int rescpu = Norm(res_d - nodal_forces_global2);
-//    if(rescpu == 0){
-//        std::cout << "\nAssemble done in the CPU is ok." << std::endl;
-//    } else {
-//        std::cout << "\nAssemble done in the CPU is not ok." << std::endl;
-//    }
-//
-//#ifdef __CUDACC__
-//    int resgpu = Norm(res_d - nodal_forces_global3);
-//    if(resgpu == 0){
-//        std::cout << "\nAssemble done in the GPU is ok." << std::endl;
-//    } else {
-//        std::cout << "\nAssemble done in the GPU is not ok." << std::endl;
-//    }
-//#endif
+#ifdef __CUDACC__
+    int resgpu = Norm(nodal_forces_global1 - residual);
+    if(resgpu == 0){
+        std::cout << "\nAssemble done in the GPU is ok." << std::endl;
+    } else {
+        std::cout << "\nAssemble done in the GPU is not ok." << std::endl;
+    }
+#endif
 }
- 
-void SolMatrix(TPZCompMesh *cmesh, TPZFMatrix<STATE> res_d ) {
+
+void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
 
     int dim_mesh = (cmesh->Reference())->Dimension(); // Mesh dimension
     int64_t nelem_c = cmesh->NElements(); // Number of computational elements
     std::vector<int64_t> cel_indexes;
 
-//// -------------------------------------------------------------------------------
-//// NUMBER OF DOMAIN GEOMETRIC ELEMENTS
+// Number of domain geometric elements
     for (int64_t i = 0; i < nelem_c; i++) {
         TPZCompEl *cel = cmesh->Element(i);
         if (!cel) continue;
@@ -618,16 +517,15 @@ void SolMatrix(TPZCompMesh *cmesh, TPZFMatrix<STATE> res_d ) {
         if (!gel || gel->Dimension() != dim_mesh) continue;
         cel_indexes.push_back(cel->Index());
     }
-//// -------------------------------------------------------------------------------
 
     if (cel_indexes.size() == 0) {
         DebugStop();
     }
 
-//// ROWSIZES AND COLSIZES VECTORS--------------------------------------------------
-    int64_t nelem = cel_indexes.size(); // Number of domain geometric elements
-    TPZVec<int64_t> rowsizes(nelem);
-    TPZVec<int64_t> colsizes(nelem);
+// RowSizes and ColSizes vectors
+    int64_t nelem = cel_indexes.size();
+    TPZVec<MKL_INT> rowsizes(nelem);
+    TPZVec<MKL_INT> colsizes(nelem);
 
     int64_t npts_tot = 0;
     int64_t nf_tot = 0;
@@ -653,9 +551,8 @@ void SolMatrix(TPZCompMesh *cmesh, TPZFMatrix<STATE> res_d ) {
     }
 
     TPZSolveMatrix *SolMat = new TPZSolveMatrix(dim_mesh * npts_tot, nf_tot, rowsizes, colsizes);
-//// -------------------------------------------------------------------------------
 
-//// DPHI MATRIX FOR EACH ELEMENT, WEIGHT AND INDEXES VECTORS-----------------------
+// Dphi matrix, weight and indexes vectors
     TPZFMatrix<REAL> elmatrix;
     TPZStack<REAL> weight;
     TPZManVector<MKL_INT> indexes(dim_mesh * nf_tot);
@@ -720,156 +617,15 @@ void SolMatrix(TPZCompMesh *cmesh, TPZFMatrix<STATE> res_d ) {
     SolMat->SetIndexes(indexes);
     SolMat->ColoringElements(cmesh);
 
+    TPZFMatrix<REAL> coef_sol = cmesh->Solution();
     int neq = cmesh->NEquations();
+
     TPZFMatrix<REAL> nodal_forces_global1(neq, 1, 0.);
     TPZFMatrix<REAL> nodal_forces_global2(neq, 1, 0.);
-    TPZFMatrix<REAL> nodal_forces_global3(neq, 1, 0.);
     TPZFMatrix<REAL> result;
     TPZFMatrix<REAL> sigma;
     TPZFMatrix<REAL> nodal_forces_vec;
 
-TPZFMatrix<REAL> coef_sol(neq,1);
-if (nelem == 40000){
-        std::ifstream input("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/solution200.txt");
-        if(!input) {
-            std::cout  << "Failed to open file ";
-        }
-
-        int k = 0;
-        double val;
-        while (input >> val) {
-            coef_sol(k,0) = val;
-            k++;
-        }
-
-        res_d.Resize(neq,1);
-        std::ifstream input2("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/res200.txt");
-        if(!input2) {
-            std::cout  << "Failed to open file ";
-        }
-
-        int l = 0;
-        double val2;
-        while (input2 >> val2) {
-            res_d(l,0) = val2;
-            l++;
-        }
-
-
-}
-else if (nelem == 160000){
-        std::ifstream input("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/solution400.txt");
-        if(!input) {
-            std::cout  << "Failed to open file ";
-        }
-
-        int k = 0;
-        double val;
-        while (input >> val) {
-            coef_sol(k,0) = val;
-            k++;
-        }
-
-        res_d.Resize(neq,1);
-        std::ifstream input2("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/res400.txt");
-        if(!input2) {
-            std::cout  << "Failed to open file ";
-        }
-
-        int l = 0;
-        double val2;
-        while (input2 >> val2) {
-            res_d(l,0) = val2;
-            l++;
-        }
-
-}
-else if (nelem == 360000){
-        std::ifstream input("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/solution600.txt");
-        if(!input) {
-            std::cout  << "Failed to open file ";
-        }
-
-        int k = 0;
-        double val;
-        while (input >> val) {
-            coef_sol(k,0) = val;
-            k++;
-        }
-
-        res_d.Resize(neq,1);
-        std::ifstream input2("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/res600.txt");
-        if(!input2) {
-            std::cout  << "Failed to open file ";
-        }
-
-        int l = 0;
-        double val2;
-        while (input2 >> val2) {
-            res_d(l,0) = val2;
-            l++;
-        }
-
-}
-else if (nelem == 640000){
-        std::ifstream input("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/solution800.txt");
-        if(!input) {
-            std::cout  << "Failed to open file ";
-        }
-
-        int k = 0;
-        double val;
-        while (input >> val) {
-            coef_sol(k,0) = val;
-            k++;
-        }
-
-        res_d.Resize(neq,1);
-        std::ifstream input2("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/res800.txt");
-        if(!input2) {
-            std::cout  << "Failed to open file ";
-        }
-
-        int l = 0;
-        double val2;
-        while (input2 >> val2) {
-            res_d(l,0) = val2;
-            l++;
-        }
-
-}
-else if (nelem == 1000000){
-        std::ifstream input("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/solution1000.txt");
-        if(!input) {
-            std::cout  << "Failed to open file ";
-        }
-
-        int k = 0;
-        double val;
-        while (input >> val) {
-            coef_sol(k,0) = val;
-            k++;
-        }
-
-        res_d.Resize(neq,1);
-        std::ifstream input2("/home/nataliarvboas/TesteCPU/IntegrationPointExperiments/IntegrationPointExperiments/res1000.txt");
-        if(!input2) {
-            std::cout  << "Failed to open file ";
-        }
-
-        int l = 0;
-        double val2;
-        while (input2 >> val2) {
-            res_d(l,0) = val2;
-            l++;
-        }
-
-}
-
-
-else {
-  coef_sol = cmesh->Solution();
-}
 
     #ifdef __CUDACC__
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;
@@ -877,7 +633,7 @@ else {
     SolMat->MultiplyCUDA(coef_sol, result);
     SolMat->ComputeSigmaCUDA(weight, result, sigma);
     SolMat->MultiplyTransposeCUDA(sigma, nodal_forces_vec);
-    SolMat->ColoredAssembleCUDA(nodal_forces_vec, nodal_forces_global3);
+    SolMat->ColoredAssembleCUDA(nodal_forces_vec, nodal_forces_global1);
     SolMat->FreeMemory();
     #endif
 
@@ -887,9 +643,8 @@ else {
     SolMat->MultiplyTranspose(sigma, nodal_forces_vec);
     SolMat->ColoredAssemble(nodal_forces_vec, nodal_forces_global2);
 
-    //Check Result
-//    SolMat->TraditionalAssemble(nodal_forces_vec, nodal_forces_global1); // ok
-    int rescpu = Norm(res_d - nodal_forces_global2);
+    //Check the result
+    int rescpu = Norm(nodal_forces_global2 - residual);
     if(rescpu == 0){
         std::cout << "\nAssemble done in the CPU is ok." << std::endl;
     } else {
@@ -897,7 +652,7 @@ else {
     }
 
     #ifdef __CUDACC__
-    int resgpu = Norm(res_d - nodal_forces_global3);
+    int resgpu = Norm(nodal_forces_global1 - residual);
     if(resgpu == 0){
         std::cout << "\nAssemble done in the GPU is ok." << std::endl;
     } else {
@@ -906,3 +661,22 @@ else {
     #endif
 }
 
+TPZFMatrix<REAL> Residual(TPZCompMesh *cmesh, TPZCompMesh *cmesh_noboundary) {
+    bool optimizeBandwidth = true;
+    int n_threads = 16;
+
+    TPZAnalysis an_d(cmesh_noboundary, optimizeBandwidth);
+    TPZSymetricSpStructMatrix strskyl(cmesh_noboundary);
+    strskyl.SetNumThreads(n_threads);
+    an_d.SetStructuralMatrix(strskyl);
+
+    TPZStepSolver<STATE> step;
+    step.SetDirect(ELDLt);
+    an_d.SetSolver(step);
+    an_d.Assemble();
+    an_d.Solve();
+
+    TPZFMatrix<STATE> res;
+    an_d.Solver().Matrix()->Multiply(cmesh->Solution(), res);
+    return res;
+}
