@@ -85,7 +85,7 @@ parallel_for(size_t(0),size_t(npts_tot/2),size_t(1),[&](size_t ipts)
                       }
                       );
 #else
-
+//mudar para plane strain
 for (int64_t ipts=0; ipts< npts_tot/2; ipts++) {
     sigma(2*ipts,0) = weight[ipts]*E/(1.-nu*nu)*(result(2*ipts,0)+nu*result(2*ipts+npts_tot+1,0)); // Sigma x
     sigma(2*ipts+1,0) = weight[ipts]*E/(1.-nu*nu)*(1.-nu)/2*(result(2*ipts+1,0)+result(2*ipts+npts_tot,0))*0.5; // Sigma xy

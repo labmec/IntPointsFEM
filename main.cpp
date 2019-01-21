@@ -61,8 +61,8 @@ int main(int argc, char *argv[]) {
     TPZGeoMesh *gmesh = Geometry2D(nelem_x, nelem_y, len, ndivide);
 
 // Creates the computational mesh
-    TPZCompMesh *cmesh = CmeshElasticity(gmesh, pOrder);
-    TPZCompMesh *cmesh_noboundary = CmeshElasticityNoBoundary(gmesh, pOrder);
+    TPZCompMesh *cmesh = CmeshElastoplasticity(gmesh, pOrder);
+    TPZCompMesh *cmesh_noboundary = CmeshElastoplasticityNoBoundary(gmesh, pOrder);
 
 // Defines the analysis
     bool optimizeBandwidth = true;
@@ -77,23 +77,27 @@ int main(int argc, char *argv[]) {
     step.SetDirect(ELDLt);
     an.SetSolver(step);
     an.Assemble();
+    an.Solver().Matrix()->Print("K = ", std::cout, EMathematicaInput);
     an.Solve();
+//    an.Solution().Print("U = ", std::cout, EMathematicaInput);
+
 
 // Post process
-//    TPZManVector<std::string> scalarnames(2), vecnames(1);
+//    TPZManVector<std::string> scalarnames(0), vecnames(1);
 //    scalarnames[0] = "SigmaX";
 //    scalarnames[1] = "SigmaY";
+//    scalarnames[0] = "StressI1";
 //    vecnames[0] = "Displacement";
 //    std::string namefile = "Elasticity_teste";
 //    an.DefineGraphMesh(2, scalarnames, vecnames, namefile + "ElasticitySolutions.vtk");
-//    an.PostProcess(0);
+//    an.PostProcess(0,2);
 
 // Calculates residual without boundary conditions
     TPZFMatrix<REAL> residual = Residual(cmesh, cmesh_noboundary);
 
 // Calculates residual using matrix operations and check if the result is ok
     SolMatrix(residual, cmesh);
-    SolVector(residual, cmesh);
+//    SolVector(residual, cmesh);
     return 0;
 }
 
@@ -196,7 +200,8 @@ TPZCompMesh *CmeshElasticity(TPZGeoMesh *gmesh, int pOrder) {
 
 // Creates elastic material
     TPZMatElasticity2D *material = new TPZMatElasticity2D(1);
-    material->SetElasticParameters(200000000., 0.3);
+    material->SetElasticParameters(200000., 0.3);
+    material->SetPlaneStrain();
 
 // Set the boundary conditions
     TPZMaterial *bcBottom, *bcRight, *bcTop, *bcLeft;
@@ -204,19 +209,19 @@ TPZCompMesh *CmeshElasticity(TPZGeoMesh *gmesh, int pOrder) {
 
     val2(0, 0) = 0;
     val2(1, 0) = 0;
-    bcLeft = material->CreateBC(material, -1, 7, val1, val2); // X displacement = 0
+    bcLeft = material->CreateBC(material, -1, 0, val1, val2); // X displacement = 0
 
     val2(0,0) = 0;
     val2(1,0) = 0;
-    bcTop = material->CreateBC(material, -2, 8, val1, val2); // Y displacement = 0
+    bcTop = material->CreateBC(material, -2, 0, val1, val2); // Y displacement = 0
 
     val2(0, 0) = 0.0;
-    val2(1, 0) = -1000000.;
+    val2(1, 0) = -1000.;
     bcBottom = material->CreateBC(material, -3, 1, val1, val2); // Tension in y
 
-    val2(0, 0) = 1000000.;
+    val2(0, 0) = 0.0;
     val2(1, 0) = 0.0;
-    bcRight = material->CreateBC(material, -4, 1, val1, val2); // Tension in x
+    bcRight = material->CreateBC(material, -4, 0, val1, val2); // Tension in x
 
     cmesh->InsertMaterialObject(material);
     cmesh->InsertMaterialObject(bcBottom);
@@ -255,16 +260,15 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh * gmesh, int p_order) {
     cmesh->SetDefaultOrder(p_order);
 
 // Mohr Coulomb data
-    REAL mc_cohesion    = 10.0;
-    REAL mc_phi         = (20.0*M_PI/180);
+    REAL mc_cohesion    = 100.0;
+    REAL mc_phi         = (50.0*M_PI/180);
     REAL mc_psi         = mc_phi;
 
 // ElastoPlastic Material using Mohr Coulomb
 // Elastic predictor
     TPZElasticResponse ER;
-    REAL G = 400*mc_cohesion;
     REAL nu = 0.3;
-    REAL E = 2.0*G*(1+nu);
+    REAL E = 200000;
 
     TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse> LEMC;
     ER.SetUp(E, nu);
@@ -283,19 +287,19 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh * gmesh, int p_order) {
 
     val2(0,0) = 0;
     val2(1,0) = 0;
-    bcLeft = material->CreateBC(material, -1, 1, val1, val2);
+    bcLeft = material->CreateBC(material, -1, 0, val1, val2);
 
     val2(0,0) = 0;
     val2(1,0) = 0;
     bcTop = material->CreateBC(material, -2, 0, val1, val2);
 
     val2(0,0) = 0;
-    val2(1,0) = -1000000;
-    bcBottom = material->CreateBC(material, -3, 0, val1, val2);
+    val2(1,0) = -1000;
+    bcBottom = material->CreateBC(material, -3, 1, val1, val2);
 
-    val2(0,0) = 1000000;
+    val2(0,0) = 0;
     val2(1,0) = 0;
-    bcRight = material->CreateBC(material, -4, 1, val1, val2);
+    bcRight = material->CreateBC(material, -4, 0, val1, val2);
 
     cmesh->InsertMaterialObject(material);
     cmesh->InsertMaterialObject(bcBottom);
