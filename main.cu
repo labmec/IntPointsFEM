@@ -36,7 +36,6 @@
 #include "tbb/parallel_for_each.h"
 #endif
 
-
 TPZGeoMesh *Geometry2D(int nelem_x, int nelem_y, REAL len, int ndivide);
 
 TPZCompMesh *CmeshElasticity(TPZGeoMesh *gmesh, int pOrder);
@@ -78,23 +77,27 @@ int main(int argc, char *argv[]) {
     step.SetDirect(ELDLt);
     an.SetSolver(step);
     an.Assemble();
+//    an.Solver().Matrix()->Print("K = ", std::cout, EMathematicaInput);
     an.Solve();
+//    an.Solution().Print("U = ", std::cout, EMathematicaInput);
+
 
 // Post process
-//    TPZManVector<std::string> scalarnames(2), vecnames(1);
+//    TPZManVector<std::string> scalarnames(0), vecnames(1);
 //    scalarnames[0] = "SigmaX";
 //    scalarnames[1] = "SigmaY";
+//    scalarnames[0] = "StressI1";
 //    vecnames[0] = "Displacement";
 //    std::string namefile = "Elasticity_teste";
 //    an.DefineGraphMesh(2, scalarnames, vecnames, namefile + "ElasticitySolutions.vtk");
-//    an.PostProcess(0);
+//    an.PostProcess(0,2);
 
 // Calculates residual without boundary conditions
     TPZFMatrix<REAL> residual = Residual(cmesh, cmesh_noboundary);
 
 // Calculates residual using matrix operations and check if the result is ok
     SolMatrix(residual, cmesh);
-    SolVector(residual, cmesh);
+//    SolVector(residual, cmesh);
     return 0;
 }
 
@@ -191,35 +194,31 @@ TPZGeoMesh *Geometry2D(int nelem_x, int nelem_y, REAL len, int ndivide) {
 
 TPZCompMesh *CmeshElasticity(TPZGeoMesh *gmesh, int pOrder) {
 
-// Creates the computational mesh
+    // Creating the computational mesh
     TPZCompMesh *cmesh = new TPZCompMesh(gmesh);
     cmesh->SetDefaultOrder(pOrder);
 
-// Creates elastic material
-    TPZMatElasticity2D *material = new TPZMatElasticity2D(1);
-    material->SetElasticParameters(200000000., 0.3);
+// Creating elasticity material
+    TPZMatElasticity2D *mat = new TPZMatElasticity2D(1);
+    mat->SetElasticParameters(200000000., 0.3);
 
-// Set the boundary conditions
+// Setting the boundary conditions
     TPZMaterial *bcBottom, *bcRight, *bcTop, *bcLeft;
-    TPZFMatrix<REAL> val1(2, 2), val2(2, 2);
+    TPZFMatrix<REAL> val1(2, 1, 0.);
+    TPZFMatrix<REAL> val2(2, 1, 0.);
 
-    val2(0, 0) = 0;
-    val2(1, 0) = 0;
-    bcLeft = material->CreateBC(material, -1, 7, val1, val2); // X displacement = 0
+    bcLeft = mat->CreateBC(mat, -1, 7, val1, val2); // X displacement = 0
+    bcTop = mat->CreateBC(mat, -2, 8, val1, val2); // Y displacement = 0
 
-    val2(0,0) = 0;
-    val2(1,0) = 0;
-    bcTop = material->CreateBC(material, -2, 8, val1, val2); // Y displacement = 0
-
-    val2(0, 0) = 0.0;
     val2(1, 0) = -1000000.;
-    bcBottom = material->CreateBC(material, -3, 1, val1, val2); // Tension in y
+    bcBottom = mat->CreateBC(mat, -3, 1, val1, val2); // Tension in y
 
     val2(0, 0) = 1000000.;
     val2(1, 0) = 0.0;
-    bcRight = material->CreateBC(material, -4, 1, val1, val2); // Tension in x
+    bcRight = mat->CreateBC(mat, -4, 1, val1, val2); // Tension in x
 
-    cmesh->InsertMaterialObject(material);
+    cmesh->InsertMaterialObject(mat);
+
     cmesh->InsertMaterialObject(bcBottom);
     cmesh->InsertMaterialObject(bcRight);
     cmesh->InsertMaterialObject(bcTop);
@@ -231,6 +230,49 @@ TPZCompMesh *CmeshElasticity(TPZGeoMesh *gmesh, int pOrder) {
     cmesh->CleanUpUnconnectedNodes();
 
     return cmesh;
+
+
+//// Creates the computational mesh
+//    TPZCompMesh *cmesh = new TPZCompMesh(gmesh);
+//    cmesh->SetDefaultOrder(pOrder);
+//
+//// Creates elastic material
+//    TPZMatElasticity2D *material = new TPZMatElasticity2D(1);
+//    material->SetElasticParameters(200000., 0.3);
+//    material->SetPlaneStrain();
+//
+//// Set the boundary conditions
+//    TPZMaterial *bcBottom, *bcRight, *bcTop, *bcLeft;
+//    TPZFMatrix<REAL> val1(2, 2), val2(2, 2);
+//
+//    val2(0, 0) = 0;
+//    val2(1, 0) = 0;
+//    bcLeft = material->CreateBC(material, -1, 0, val1, val2); // X displacement = 0
+//
+//    val2(0,0) = 0;
+//    val2(1,0) = 0;
+//    bcTop = material->CreateBC(material, -2, 0, val1, val2); // Y displacement = 0
+//
+//    val2(0, 0) = 0.0;
+//    val2(1, 0) = -1000.;
+//    bcBottom = material->CreateBC(material, -3, 1, val1, val2); // Tension in y
+//
+//    val2(0, 0) = 0.0;
+//    val2(1, 0) = 0.0;
+//    bcRight = material->CreateBC(material, -4, 0, val1, val2); // Tension in x
+//
+//    cmesh->InsertMaterialObject(material);
+//    cmesh->InsertMaterialObject(bcBottom);
+//    cmesh->InsertMaterialObject(bcRight);
+//    cmesh->InsertMaterialObject(bcTop);
+//    cmesh->InsertMaterialObject(bcLeft);
+//
+//    cmesh->SetAllCreateFunctionsContinuous();
+//    cmesh->AutoBuild();
+//    cmesh->AdjustBoundaryElements();
+//    cmesh->CleanUpUnconnectedNodes();
+//
+//    return cmesh;
 }
 
 TPZCompMesh *CmeshElasticityNoBoundary(TPZGeoMesh *gmesh, int pOrder) {
@@ -247,6 +289,19 @@ TPZCompMesh *CmeshElasticityNoBoundary(TPZGeoMesh *gmesh, int pOrder) {
     cmesh->SetAllCreateFunctionsContinuous();
     cmesh->AutoBuild();
     return cmesh;
+
+//    // Creating the computational mesh
+//    TPZCompMesh *cmesh = new TPZCompMesh(gmesh);
+//    cmesh->SetDefaultOrder(pOrder);
+//
+//    // Creating elasticity material
+//    TPZMatElasticity2D *mat = new TPZMatElasticity2D(1);
+//    mat->SetElasticParameters(200000000., 0.3);
+//    cmesh->InsertMaterialObject(mat);
+//
+//    cmesh->SetAllCreateFunctionsContinuous();
+//    cmesh->AutoBuild();
+//    return cmesh;
 }
 
 TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh * gmesh, int p_order) {
@@ -256,16 +311,15 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh * gmesh, int p_order) {
     cmesh->SetDefaultOrder(p_order);
 
 // Mohr Coulomb data
-    REAL mc_cohesion    = 10.0;
-    REAL mc_phi         = (20.0*M_PI/180);
+    REAL mc_cohesion    = 100.0;
+    REAL mc_phi         = (50.0*M_PI/180);
     REAL mc_psi         = mc_phi;
 
 // ElastoPlastic Material using Mohr Coulomb
 // Elastic predictor
     TPZElasticResponse ER;
-    REAL G = 400*mc_cohesion;
     REAL nu = 0.3;
-    REAL E = 2.0*G*(1+nu);
+    REAL E = 200000;
 
     TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse> LEMC;
     ER.SetUp(E, nu);
@@ -284,19 +338,19 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh * gmesh, int p_order) {
 
     val2(0,0) = 0;
     val2(1,0) = 0;
-    bcLeft = material->CreateBC(material, -1, 1, val1, val2);
+    bcLeft = material->CreateBC(material, -1, 0, val1, val2);
 
     val2(0,0) = 0;
     val2(1,0) = 0;
     bcTop = material->CreateBC(material, -2, 0, val1, val2);
 
     val2(0,0) = 0;
-    val2(1,0) = -1000000;
-    bcBottom = material->CreateBC(material, -3, 0, val1, val2);
+    val2(1,0) = -1000;
+    bcBottom = material->CreateBC(material, -3, 1, val1, val2);
 
-    val2(0,0) = 1000000;
+    val2(0,0) = 0;
     val2(1,0) = 0;
-    bcRight = material->CreateBC(material, -4, 1, val1, val2);
+    bcRight = material->CreateBC(material, -4, 0, val1, val2);
 
     cmesh->InsertMaterialObject(material);
     cmesh->InsertMaterialObject(bcBottom);
@@ -627,7 +681,7 @@ void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
     TPZFMatrix<REAL> nodal_forces_vec;
 
 
-    #ifdef __CUDACC__
+#ifdef __CUDACC__
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;
     SolMat->AllocateMemory(cmesh);
     SolMat->MultiplyCUDA(coef_sol, result);
@@ -635,9 +689,10 @@ void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
     SolMat->MultiplyTransposeCUDA(sigma, nodal_forces_vec);
     SolMat->ColoredAssembleCUDA(nodal_forces_vec, nodal_forces_global1);
     SolMat->FreeMemory();
-    #endif
+#endif
 
     std::cout << "\n\nSOLVING WITH CPU" << std::endl;
+    SolMat->MultiplyInThreads(coef_sol, result);
     SolMat->Multiply(coef_sol, result);
     SolMat->ComputeSigma(weight, result, sigma);
     SolMat->MultiplyTranspose(sigma, nodal_forces_vec);
@@ -651,14 +706,14 @@ void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
         std::cout << "\nAssemble done in the CPU is not ok." << std::endl;
     }
 
-    #ifdef __CUDACC__
+#ifdef __CUDACC__
     int resgpu = Norm(nodal_forces_global1 - residual);
     if(resgpu == 0){
         std::cout << "\nAssemble done in the GPU is ok." << std::endl;
     } else {
         std::cout << "\nAssemble done in the GPU is not ok." << std::endl;
     }
-    #endif
+#endif
 }
 
 TPZFMatrix<REAL> Residual(TPZCompMesh *cmesh, TPZCompMesh *cmesh_noboundary) {

@@ -13,6 +13,32 @@
 using namespace tbb;
 #endif
 
+void TPZSolveMatrix::MultiplyInThreads(TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const {
+    int64_t nelem = fRowSizes.size();
+    int64_t n_globalsol = fIndexes.size();
+
+    result.Resize(2*n_globalsol,1);
+    result.Zero();
+
+    TPZVec<REAL> expandsolution(n_globalsol);
+
+/// gather operation
+    cblas_dgthr(n_globalsol, global_solution, &expandsolution[0], &fIndexes[0]);
+
+    for (int iel = 0; iel < nelem; iel++) {
+        for (int i = 0; i < fRowSizes[iel]; i++) {
+            for (int j = 0; j < 1; j++) {
+                for (int k = 0; k < fColSizes[iel]; k++) {
+                    result(j * fRowSizes[iel] + i + fRowFirstIndex[iel], 0) += fStorage[k * fRowSizes[iel] + i + fMatrixPosition[iel]] * expandsolution[j * fColSizes[iel] + k + fColFirstIndex[iel]];
+                    result(j * fRowSizes[iel] + i + fRowFirstIndex[iel] + n_globalsol, 0) += fStorage[k * fRowSizes[iel] + i + fMatrixPosition[iel]] * expandsolution[j * fColSizes[iel] + k + fColFirstIndex[iel] + n_globalsol/2];
+                }
+            }
+        }
+    }
+}
+
+
+
 void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const {
 int64_t nelem = fRowSizes.size();
 int64_t n_globalsol = fIndexes.size();

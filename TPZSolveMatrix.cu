@@ -37,6 +37,22 @@ __global__ void ComputeSigmaKernel(int npts_tot, double *weight, double *result,
     }
 }
 
+__global__ void MultiplyInThreadsKernel (double *storage, int* rowsizes, int *colsizes, int *matrixposition, int *rowfirstindex, int *colfirstindex, double *result, double *expandsolution, int n_globalsol, int nelem) {
+    int iel = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (iel < nelem) {
+        for (int i = 0; i < rowsizes[iel]; i++) {
+            for (int j = 0; j < 1; j++) {
+                for (int k = 0; k < colsizes[iel]; k++) {
+                    result(j * rowsizes[iel] + i + rowfirstindex[iel], 0) += storage[k * rowsizes[iel] + i + matrixposition[iel]] * expandsolution[j * colsizes[iel] + k + colfirstindex[iel]];
+                    result(j * rowsizes[iel] + i + rowfirstindex[iel] + n_globalsol, 0) += storage[k * rowsizes[iel] + i + matrixposition[iel]] * expandsolution[j * fColSizes[iel] + k + colfirstindex[iel] + n_globalsol/2];
+                }
+            }
+        }
+    }
+
+}
+
 void TPZSolveMatrix::AllocateMemory(TPZCompMesh *cmesh) {
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
@@ -59,6 +75,12 @@ void TPZSolveMatrix::AllocateMemory(TPZCompMesh *cmesh) {
     cudaMalloc(&dnodal_forces_vec, npts_tot * sizeof(double));
     cudaMalloc(&dindexescolor, nindexes * sizeof(int));
     cudaMalloc(&dnodal_forces_global, ncolor * neq * sizeof(double));
+
+    cudaMalloc(&dfRowSizes, nelem * sizeof(int));
+    cudaMalloc(&dfColSizes, nelem * sizeof(int));
+    cudaMalloc(&dfMatrixPosition, (nelem+1) * sizeof(int));
+    cudaMalloc(&dfRowFirstIndex, (nelem+1) * sizeof(int));
+    cudaMalloc(&dfColFirstIndex, (nelem+1) * sizeof(int));
 
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
@@ -84,6 +106,12 @@ void TPZSolveMatrix::FreeMemory() {
     cudaFree(dnodal_forces_vec);
     cudaFree(dindexescolor);
     cudaFree(dnodal_forces_global);
+
+    cudaFree(dfRowSizes);
+    cudaFree(dfColSizes);
+    cudaFree(dfMatrixPosition);
+    cudaFree(dfRowFirstIndex);
+    cudaFree(dfColFirstIndex);
 
     cublasDestroy(handle_cublas);
     cusparseDestroy(handle_cusparse);
@@ -127,6 +155,79 @@ void TPZSolveMatrix::cuBlasHandle() {
     std::cout << "cuBLAS: " << milliseconds/1000 << std::endl;
 }
 
+void TPZSolveMatrix::MultiplyInThreadsCUDA(TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const {
+    cudaEvent_t start, stop;
+    float milliseconds = 0;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    int64_t nelem = fRowSizes.size();
+    int64_t nindexes = fIndexes.size();
+    int64_t cols = fColSizes[0];
+    int64_t rows = fRowSizes[0];
+    result.Resize(2 * nindexes, 1);
+    result.Zero();
+
+    cudaEventRecord(start);
+
+    cudaMemcpy(dindexes, &fIndexes[0], nindexes * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(dglobal_solution, &global_solution[0], global_solution.Rows() * sizeof(double), cudaMemcpyHostToDevice);
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << "Copy: " << milliseconds/1000 << std::endl;
+
+    cudaEventRecord(start);
+
+    cusparseDgthr(handle_cusparse, nindexes, dglobal_solution, &dexpandsolution[0], &dindexes[0], CUSPARSE_INDEX_BASE_ZERO);
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << "Gather: " << milliseconds/1000 << std::endl;
+
+    cudaEventRecord(start);
+
+    cudaMemcpy(dstorage, &fStorage[0], nelem*fColSizes[0]*fRowSizes[0] * sizeof(double), cudaMemcpyHostToDevice);
+
+    cudaMemcpy(dfRowSizes, &fRowSizes[0], nelem * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(dfColSizes, &fColSizes[0], nelem * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(dfMatrixPosition, &fMatrixPosition[0], (nelem+1) * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(dfRowFirstIndex, &fRowFirstIndex[0], (nelem+1) * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(dfColFirstIndex, &fColFirstIndex[0], (nelem+1) * sizeof(int), cudaMemcpyHostToDevice);
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << "Copy: " << milliseconds/1000 << std::endl;
+
+    cudaEventRecord(start);
+
+    int64_t numthreads = 128;
+    int64_t numblocks = (nelem + numthreads - 1)/numthreads;
+    MultiplyInThreadsKernel <<< numblocks, numthreads >>> (dstorage, dfRowSizes, dfColSizes, dfMatrixPosition, dfRowFirstIndex, dfColFirstIndex, dresult, dexpandsolution, global_solution.Rows(), nelem);
+    cudaDeviceSynchronize();
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << "MultiplyInThreads: " << milliseconds/1000 << std::endl;
+
+    cudaEventRecord(start);
+
+    cudaMemcpy(&result(0, 0), dresult, 2 * nindexes * sizeof(double), cudaMemcpyDeviceToHost);
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << "Copy: " << milliseconds/1000 << std::endl;
+
+
+}
 
 void TPZSolveMatrix::MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const {
     cudaEvent_t start, stop;

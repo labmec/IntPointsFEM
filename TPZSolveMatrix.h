@@ -50,7 +50,9 @@ public:
                                                  fColFirstIndex(copy.fColFirstIndex), dglobal_solution(copy.dglobal_solution),
                                                  dindexes(copy.dindexes), dstorage(copy.dstorage), dstoragevec(copy.dstoragevec), dexpandsolution(copy.dexpandsolution),
                                                  dresult(copy.dresult), dweight(copy.dweight), dsigma(copy.dsigma), dnodal_forces_vec(copy.dnodal_forces_vec),
-                                                 dindexescolor(copy.dindexescolor), dnodal_forces_global(copy.dnodal_forces_global) {
+                                                 dindexescolor(copy.dindexescolor), dnodal_forces_global(copy.dnodal_forces_global),
+                                                 dfRowSizes(copy.dfRowSizes), dfColSizes(copy.dfColSizes), dfMatrixPosition(copy.dfMatrixPosition),
+                                                 dfRowFirstIndex(copy.dfRowFirstIndex), dfColFirstIndex(copy.dfRowFirstIndex) {
 
     }
 
@@ -76,6 +78,12 @@ public:
         dnodal_forces_vec = copy.dnodal_forces_vec;
         dindexescolor = copy.dindexescolor;
         dnodal_forces_global = copy.dnodal_forces_global;
+
+        dfRowSizes = copy.dfRowSizes;
+        dfColSizes = copy.dfColSizes;
+        dfMatrixPosition = copy.dfMatrixPosition;
+        dfRowFirstIndex = copy.dfRowFirstIndex;
+        dfColFirstIndex = copy.dfRowFirstIndex;
 
         return *this;
     }
@@ -148,6 +156,9 @@ public:
     void ColoredAssembleCUDA(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global);
 
 
+    void MultiplyInThreadsCUDA(TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
+
+    void MultiplyInThreads(TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
 
     void Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
 
@@ -203,6 +214,12 @@ protected:
     double *dnodal_forces_vec;
     int *dindexescolor;
     double *dnodal_forces_global;
+
+    int *dfRowSizes;
+    int *dfColSizes;
+    int *dfMatrixPosition;
+    int *dfRowFirstIndex;
+    int *dfColFirstIndex;
 
 //Libraries handles
 #ifdef __CUDACC__

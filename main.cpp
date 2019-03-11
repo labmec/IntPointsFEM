@@ -61,8 +61,8 @@ int main(int argc, char *argv[]) {
     TPZGeoMesh *gmesh = Geometry2D(nelem_x, nelem_y, len, ndivide);
 
 // Creates the computational mesh
-    TPZCompMesh *cmesh = CmeshElastoplasticity(gmesh, pOrder);
-    TPZCompMesh *cmesh_noboundary = CmeshElastoplasticityNoBoundary(gmesh, pOrder);
+    TPZCompMesh *cmesh = CmeshElasticity(gmesh, pOrder);
+    TPZCompMesh *cmesh_noboundary = CmeshElasticityNoBoundary(gmesh, pOrder);
 
 // Defines the analysis
     bool optimizeBandwidth = true;
@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
     step.SetDirect(ELDLt);
     an.SetSolver(step);
     an.Assemble();
-    an.Solver().Matrix()->Print("K = ", std::cout, EMathematicaInput);
+//    an.Solver().Matrix()->Print("K = ", std::cout, EMathematicaInput);
     an.Solve();
 //    an.Solution().Print("U = ", std::cout, EMathematicaInput);
 
@@ -194,36 +194,31 @@ TPZGeoMesh *Geometry2D(int nelem_x, int nelem_y, REAL len, int ndivide) {
 
 TPZCompMesh *CmeshElasticity(TPZGeoMesh *gmesh, int pOrder) {
 
-// Creates the computational mesh
+    // Creating the computational mesh
     TPZCompMesh *cmesh = new TPZCompMesh(gmesh);
     cmesh->SetDefaultOrder(pOrder);
 
-// Creates elastic material
-    TPZMatElasticity2D *material = new TPZMatElasticity2D(1);
-    material->SetElasticParameters(200000., 0.3);
-    material->SetPlaneStrain();
+// Creating elasticity material
+    TPZMatElasticity2D *mat = new TPZMatElasticity2D(1);
+    mat->SetElasticParameters(200000000., 0.3);
 
-// Set the boundary conditions
+// Setting the boundary conditions
     TPZMaterial *bcBottom, *bcRight, *bcTop, *bcLeft;
-    TPZFMatrix<REAL> val1(2, 2), val2(2, 2);
+    TPZFMatrix<REAL> val1(2, 1, 0.);
+    TPZFMatrix<REAL> val2(2, 1, 0.);
 
-    val2(0, 0) = 0;
-    val2(1, 0) = 0;
-    bcLeft = material->CreateBC(material, -1, 0, val1, val2); // X displacement = 0
+    bcLeft = mat->CreateBC(mat, -1, 7, val1, val2); // X displacement = 0
+    bcTop = mat->CreateBC(mat, -2, 8, val1, val2); // Y displacement = 0
 
-    val2(0,0) = 0;
-    val2(1,0) = 0;
-    bcTop = material->CreateBC(material, -2, 0, val1, val2); // Y displacement = 0
+    val2(1, 0) = -1000000.;
+    bcBottom = mat->CreateBC(mat, -3, 1, val1, val2); // Tension in y
 
-    val2(0, 0) = 0.0;
-    val2(1, 0) = -1000.;
-    bcBottom = material->CreateBC(material, -3, 1, val1, val2); // Tension in y
-
-    val2(0, 0) = 0.0;
+    val2(0, 0) = 1000000.;
     val2(1, 0) = 0.0;
-    bcRight = material->CreateBC(material, -4, 0, val1, val2); // Tension in x
+    bcRight = mat->CreateBC(mat, -4, 1, val1, val2); // Tension in x
 
-    cmesh->InsertMaterialObject(material);
+    cmesh->InsertMaterialObject(mat);
+
     cmesh->InsertMaterialObject(bcBottom);
     cmesh->InsertMaterialObject(bcRight);
     cmesh->InsertMaterialObject(bcTop);
@@ -235,6 +230,49 @@ TPZCompMesh *CmeshElasticity(TPZGeoMesh *gmesh, int pOrder) {
     cmesh->CleanUpUnconnectedNodes();
 
     return cmesh;
+
+
+//// Creates the computational mesh
+//    TPZCompMesh *cmesh = new TPZCompMesh(gmesh);
+//    cmesh->SetDefaultOrder(pOrder);
+//
+//// Creates elastic material
+//    TPZMatElasticity2D *material = new TPZMatElasticity2D(1);
+//    material->SetElasticParameters(200000., 0.3);
+//    material->SetPlaneStrain();
+//
+//// Set the boundary conditions
+//    TPZMaterial *bcBottom, *bcRight, *bcTop, *bcLeft;
+//    TPZFMatrix<REAL> val1(2, 2), val2(2, 2);
+//
+//    val2(0, 0) = 0;
+//    val2(1, 0) = 0;
+//    bcLeft = material->CreateBC(material, -1, 0, val1, val2); // X displacement = 0
+//
+//    val2(0,0) = 0;
+//    val2(1,0) = 0;
+//    bcTop = material->CreateBC(material, -2, 0, val1, val2); // Y displacement = 0
+//
+//    val2(0, 0) = 0.0;
+//    val2(1, 0) = -1000.;
+//    bcBottom = material->CreateBC(material, -3, 1, val1, val2); // Tension in y
+//
+//    val2(0, 0) = 0.0;
+//    val2(1, 0) = 0.0;
+//    bcRight = material->CreateBC(material, -4, 0, val1, val2); // Tension in x
+//
+//    cmesh->InsertMaterialObject(material);
+//    cmesh->InsertMaterialObject(bcBottom);
+//    cmesh->InsertMaterialObject(bcRight);
+//    cmesh->InsertMaterialObject(bcTop);
+//    cmesh->InsertMaterialObject(bcLeft);
+//
+//    cmesh->SetAllCreateFunctionsContinuous();
+//    cmesh->AutoBuild();
+//    cmesh->AdjustBoundaryElements();
+//    cmesh->CleanUpUnconnectedNodes();
+//
+//    return cmesh;
 }
 
 TPZCompMesh *CmeshElasticityNoBoundary(TPZGeoMesh *gmesh, int pOrder) {
@@ -251,6 +289,19 @@ TPZCompMesh *CmeshElasticityNoBoundary(TPZGeoMesh *gmesh, int pOrder) {
     cmesh->SetAllCreateFunctionsContinuous();
     cmesh->AutoBuild();
     return cmesh;
+
+//    // Creating the computational mesh
+//    TPZCompMesh *cmesh = new TPZCompMesh(gmesh);
+//    cmesh->SetDefaultOrder(pOrder);
+//
+//    // Creating elasticity material
+//    TPZMatElasticity2D *mat = new TPZMatElasticity2D(1);
+//    mat->SetElasticParameters(200000000., 0.3);
+//    cmesh->InsertMaterialObject(mat);
+//
+//    cmesh->SetAllCreateFunctionsContinuous();
+//    cmesh->AutoBuild();
+//    return cmesh;
 }
 
 TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh * gmesh, int p_order) {
@@ -641,6 +692,7 @@ void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
     #endif
 
     std::cout << "\n\nSOLVING WITH CPU" << std::endl;
+    SolMat->MultiplyInThreads(coef_sol, result);
     SolMat->Multiply(coef_sol, result);
     SolMat->ComputeSigma(weight, result, sigma);
     SolMat->MultiplyTranspose(sigma, nodal_forces_vec);
