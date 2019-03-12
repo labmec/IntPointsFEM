@@ -27,13 +27,15 @@ __global__ void ComputeSigmaKernel(int npts_tot, double *weight, double *result,
     int ipts = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (ipts < npts_tot / 2) {
-        sigma[2 * ipts] = weight[ipts] * E / (1. - nu * nu) *
-                          (result[2 * ipts] + nu * result[2 * ipts + npts_tot + 1]); // Sigma x
-        sigma[2 * ipts + 1] = weight[ipts] * E / (1. - nu * nu) * (1. - nu) / 2 *
-                              (result[2 * ipts + 1] + result[2 * ipts + npts_tot]) * 0.5; // Sigma xy
+        //plane strain
+        sigma[2 * ipts] = weight[ipts] * (result[2 * ipts] * E * (1. - nu) / ((1. - 2 * nu) * (1. + nu)) + result[2 * ipts + npts_tot + 1] * E * nu / ((1. - 2 * nu) * (1. + nu))); // Sigma x
+        sigma[2 * ipts + 1] = weight[ipts] * E / (2 * (1. + nu)) * (result[2 * ipts + 1] + result[2 * ipts + npts_tot]); // Sigma xy
         sigma[2 * ipts + npts_tot] = sigma[2 * ipts + 1]; //Sigma xy
-        sigma[2 * ipts + npts_tot + 1] = weight[ipts] * E / (1. - nu * nu) *
-                                         (result[2 * ipts + npts_tot + 1] + nu * result[2 * ipts]); // Sigma y
+        sigma[2 * ipts + npts_tot + 1] = weight[ipts] * (result[2 * ipts + npts_tot + 1] * E * (1. - nu) / ((1. - 2 * nu) * (1. + nu)) + result[2 * ipts] * E * nu / ((1. - 2 * nu) * (1. + nu))); // Sigma y
+//        sigma[2 * ipts] = weight[ipts] * E / (1. - nu * nu) * (result[2 * ipts] + nu * result[2 * ipts + npts_tot + 1]); // Sigma x
+//        sigma[2 * ipts + 1] = weight[ipts] * E / (1. - nu * nu) * (1. - nu) / 2 * (result[2 * ipts + 1] + result[2 * ipts + npts_tot]) * 0.5; // Sigma xy
+//        sigma[2 * ipts + npts_tot] = sigma[2 * ipts + 1]; //Sigma xy
+//        sigma[2 * ipts + npts_tot + 1] = weight[ipts] * E / (1. - nu * nu) * (result[2 * ipts + npts_tot + 1] + nu * result[2 * ipts]); // Sigma y
     }
 }
 

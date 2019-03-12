@@ -31,7 +31,8 @@ void sigmaxx(int nelem, double *weight, double *dudx, double *dvdy, double *sigx
     REAL E = 200000000.;
     REAL nu =0.30;
     for (int i = 0; i < nelem; i++) {
-        sigxx[i] = weight[i]*E/(1.-nu*nu)*(dudx[i] + nu*dvdy[i]);
+        sigxx[i] = weight[i] * (dudx[i] * E * (1. - nu) / ((1. - 2 * nu) * (1. + nu))  + dvdy[i] * E * nu / ((1. - 2 * nu) * (1. + nu))); //plane strain
+//        sigxx[i] = weight[i]*E/(1.-nu*nu)*(dudx[i] + nu*dvdy[i]);
     }
 }
 
@@ -39,7 +40,8 @@ void sigmayy(int nelem, double *weight, double *dudx, double *dvdy, double *sigy
     REAL E = 200000000.;
     REAL nu =0.30;
     for (int i = 0; i < nelem; i++) {
-        sigyy[i] = weight[i]*E/(1.-nu*nu)*(nu*dudx[i] + dvdy[i]);
+        sigyy[i] = weight[i] * (dudx[i] * E * nu / ((1. - 2 * nu) * (1. + nu)) + dvdy[i] * E * (1. - nu) / ((1. - 2 * nu) * (1. + nu))); //plane strain
+//        sigyy[i] = weight[i]*E/(1.-nu*nu)*(nu*dudx[i] + dvdy[i]);
     }
 }
 
@@ -47,7 +49,8 @@ void sigmaxy(int nelem, double *weight, double *dvdx, double *dudy, double *sigx
     REAL E = 200000000.;
     REAL nu =0.30;
     for (int i = 0; i < nelem; i++) {
-        sigxy[i] = weight[i]*E/(1.+nu)*(dvdx[i] + dudy[i]);
+        sigxy[i] = weight[i] * E / (2 * (1. + nu)) * (dvdx[i] + dudy[i]); //plane strain
+//        sigxy[i] = weight[i]*E/(1.+nu)*(dvdx[i] + dudy[i]);
         sigyx[i] = sigxy[i];
     }
 }
@@ -115,7 +118,6 @@ void TPZSolveVector::ComputeSigma( TPZVec<REAL> &weight, TPZFMatrix<REAL> &resul
 //
 //        cblas_daxpy(nelem, 1, &sigma((2*ipts+1)*nelem,0), 1, &sigma((2*ipts+npts_el)*nelem,0), 1);
     }
-    sigma.Print(std::cout);
 }
 
 void TPZSolveVector::MultiplyTranspose(TPZFMatrix<STATE>  &sigma, TPZFMatrix<STATE> &nodal_forces_vec) {

@@ -111,12 +111,17 @@ parallel_for(size_t(0),size_t(npts_tot/2),size_t(1),[&](size_t ipts)
                       }
                       );
 #else
-//mudar para plane strain
+
 for (int64_t ipts=0; ipts< npts_tot/2; ipts++) {
-    sigma(2*ipts,0) = weight[ipts]*E/(1.-nu*nu)*(result(2*ipts,0)+nu*result(2*ipts+npts_tot+1,0)); // Sigma x
-    sigma(2*ipts+1,0) = weight[ipts]*E/(1.-nu*nu)*(1.-nu)/2*(result(2*ipts+1,0)+result(2*ipts+npts_tot,0))*0.5; // Sigma xy
+    //plane strain
+    sigma(2*ipts,0) = weight[ipts]*(result(2*ipts,0)*E*(1.-nu)/((1.-2*nu)*(1.+nu)) + result(2*ipts+npts_tot+1,0)*E*nu/((1.-2*nu)*(1.+nu))); // Sigma x
+    sigma(2*ipts+1,0) = weight[ipts]*E/(2*(1.+nu))*(result(2*ipts+1,0)+result(2*ipts+npts_tot,0)); // Sigma xy
     sigma(2*ipts+npts_tot,0) = sigma(2*ipts+1,0); //Sigma xy
-    sigma(2*ipts+npts_tot+1,0) = weight[ipts]*E/(1.-nu*nu)*(result(2*ipts+npts_tot+1,0)+nu*result(2*ipts,0)); // Sigma y
+    sigma(2*ipts+npts_tot+1,0) = weight[ipts]*(result(2*ipts+npts_tot+1,0)*E*(1.-nu)/((1.-2*nu)*(1.+nu)) + result(2*ipts,0)*E*nu/((1.-2*nu)*(1.+nu))); // Sigma y
+//    sigma(2*ipts,0) = weight[ipts]*E/(1.-nu*nu)*(result(2*ipts,0)+nu*result(2*ipts+npts_tot+1,0)); // Sigma x
+//    sigma(2*ipts+1,0) = weight[ipts]*E/(1.-nu*nu)*(1.-nu)/2*(result(2*ipts+1,0)+result(2*ipts+npts_tot,0))*0.5; // Sigma xy
+//    sigma(2*ipts+npts_tot,0) = sigma(2*ipts+1,0); //Sigma xy
+//    sigma(2*ipts+npts_tot+1,0) = weight[ipts]*E/(1.-nu*nu)*(result(2*ipts+npts_tot+1,0)+nu*result(2*ipts,0)); // Sigma y
 }
 #endif
 }

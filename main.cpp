@@ -96,8 +96,8 @@ int main(int argc, char *argv[]) {
     TPZFMatrix<REAL> residual = Residual(cmesh, cmesh_noboundary);
 
 // Calculates residual using matrix operations and check if the result is ok
-    SolMatrix(residual, cmesh);
-//    SolVector(residual, cmesh);
+//    SolMatrix(residual, cmesh);
+    SolVector(residual, cmesh);
     return 0;
 }
 
@@ -201,6 +201,7 @@ TPZCompMesh *CmeshElasticity(TPZGeoMesh *gmesh, int pOrder) {
 // Creating elasticity material
     TPZMatElasticity2D *mat = new TPZMatElasticity2D(1);
     mat->SetElasticParameters(200000000., 0.3);
+    mat->SetPlaneStrain();
 
 // Setting the boundary conditions
     TPZMaterial *bcBottom, *bcRight, *bcTop, *bcLeft;
@@ -284,6 +285,7 @@ TPZCompMesh *CmeshElasticityNoBoundary(TPZGeoMesh *gmesh, int pOrder) {
     // Creating elasticity material
     TPZMatElasticity2D *mat = new TPZMatElasticity2D(1);
     mat->SetElasticParameters(200000000., 0.3);
+    mat->SetPlaneStrain();
     cmesh->InsertMaterialObject(mat);
 
     cmesh->SetAllCreateFunctionsContinuous();
@@ -692,7 +694,7 @@ void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
     #endif
 
     std::cout << "\n\nSOLVING WITH CPU" << std::endl;
-    SolMat->MultiplyInThreads(coef_sol, result);
+//    SolMat->MultiplyInThreads(coef_sol, result);
     SolMat->Multiply(coef_sol, result);
     SolMat->ComputeSigma(weight, result, sigma);
     SolMat->MultiplyTranspose(sigma, nodal_forces_vec);

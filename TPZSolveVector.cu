@@ -55,7 +55,8 @@ void sigmaxx(int nelem, double *weight, double *dudx, double *dvdy, double *sigx
     REAL E = 200000000.;
     REAL nu =0.30;
     for (int i = 0; i < nelem; i++) {
-        sigxx[i] = weight[i]*E/(1.-nu*nu)*(dudx[i] + nu*dvdy[i]);
+        sigxx[i] = weight[i] * (dudx[i] * E * (1. - nu) / ((1. - 2 * nu) * (1. + nu))  + dvdy[i] * E * nu / ((1. - 2 * nu) * (1. + nu))); //plane strain
+//        sigxx[i] = weight[i]*E/(1.-nu*nu)*(dudx[i] + nu*dvdy[i]);
     }
 }
 
@@ -63,7 +64,8 @@ void sigmayy(int nelem, double *weight, double *dudx, double *dvdy, double *sigy
     REAL E = 200000000.;
     REAL nu =0.30;
     for (int i = 0; i < nelem; i++) {
-        sigyy[i] = weight[i]*E/(1.-nu*nu)*(nu*dudx[i] + dvdy[i]);
+        sigyy[i] = weight[i] * (dudx[i] * E * nu / ((1. - 2 * nu) * (1. + nu)) + dvdy[i] * E * (1. - nu) / ((1. - 2 * nu) * (1. + nu))); //plane strain
+//        sigyy[i] = weight[i]*E/(1.-nu*nu)*(nu*dudx[i] + dvdy[i]);
     }
 }
 
@@ -71,7 +73,8 @@ void sigmaxy(int nelem, double *weight, double *dvdx, double *dudy, double *sigx
     REAL E = 200000000.;
     REAL nu =0.30;
     for (int i = 0; i < nelem; i++) {
-        sigxy[i] = weight[i]*E/(1.+nu)*(dvdx[i] + dudy[i]);
+        sigxy[i] = weight[i] * E / (2 * (1. + nu)) * (dvdx[i] + dudy[i]); //plane strain
+        //        sigxy[i] = weight[i]*E/(1.+nu)*(dvdx[i] + dudy[i]);
         sigyx[i] = sigxy[i];
     }
 }
@@ -81,7 +84,8 @@ __global__ void sigmaxxkernel(int nelem, double *weight, double *dudx, double *d
     REAL nu =0.30;
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < nelem) {
-    sigxx[i] = weight[i]*E/(1.-nu*nu)*(dudx[i] + nu*dvdy[i]);
+        sigxx[i] = weight[i] * (dudx[i] * E * (1. - nu) / ((1. - 2 * nu) * (1. + nu))  + dvdy[i] * E * nu / ((1. - 2 * nu) * (1. + nu))); //plane strain
+//        sigxx[i] = weight[i]*E/(1.-nu*nu)*(dudx[i] + nu*dvdy[i]);
     }
 }
 
@@ -90,7 +94,8 @@ __global__ void sigmayykernel(int nelem, double *weight, double *dudx, double *d
     REAL nu =0.30;
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < nelem) {
-    sigyy[i] = weight[i]*E/(1.-nu*nu)*(nu*dudx[i] + dvdy[i]);
+        sigyy[i] = weight[i] * (dudx[i] * E * nu / ((1. - 2 * nu) * (1. + nu)) + dvdy[i] * E * (1. - nu) / ((1. - 2 * nu) * (1. + nu))); //plane strain
+//        sigyy[i] = weight[i]*E/(1.-nu*nu)*(nu*dudx[i] + dvdy[i]);
     }
 }
 
@@ -99,8 +104,9 @@ __global__ void sigmaxykernel(int nelem, double *weight, double *dvdx, double *d
     REAL nu =0.30;
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < nelem) {
-    sigxy[i] = weight[i]*E/(1.+nu)*(dvdx[i] + dudy[i]);
-    sigyx[i] = sigxy[i];
+        sigxy[i] = weight[i] * E / (2 * (1. + nu)) * (dvdx[i] + dudy[i]); //plane strain
+//        sigxy[i] = weight[i]*E/(1.+nu)*(dvdx[i] + dudy[i]);
+        sigyx[i] = sigxy[i];
     }
 }
 
