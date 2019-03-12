@@ -96,8 +96,8 @@ int main(int argc, char *argv[]) {
     TPZFMatrix<REAL> residual = Residual(cmesh, cmesh_noboundary);
 
 // Calculates residual using matrix operations and check if the result is ok
-    SolMatrix(residual, cmesh);
-//    SolVector(residual, cmesh);
+//    SolMatrix(residual, cmesh);
+    SolVector(residual, cmesh);
     return 0;
 }
 
@@ -201,6 +201,7 @@ TPZCompMesh *CmeshElasticity(TPZGeoMesh *gmesh, int pOrder) {
 // Creating elasticity material
     TPZMatElasticity2D *mat = new TPZMatElasticity2D(1);
     mat->SetElasticParameters(200000000., 0.3);
+    mat->SetPlaneStrain();
 
 // Setting the boundary conditions
     TPZMaterial *bcBottom, *bcRight, *bcTop, *bcLeft;
@@ -284,6 +285,7 @@ TPZCompMesh *CmeshElasticityNoBoundary(TPZGeoMesh *gmesh, int pOrder) {
     // Creating elasticity material
     TPZMatElasticity2D *mat = new TPZMatElasticity2D(1);
     mat->SetElasticParameters(200000000., 0.3);
+    mat->SetPlaneStrain();
     cmesh->InsertMaterialObject(mat);
 
     cmesh->SetAllCreateFunctionsContinuous();
@@ -681,7 +683,7 @@ void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
     TPZFMatrix<REAL> nodal_forces_vec;
 
 
-#ifdef __CUDACC__
+    #ifdef __CUDACC__
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;
     SolMat->AllocateMemory(cmesh);
     SolMat->MultiplyCUDA(coef_sol, result);
@@ -689,10 +691,10 @@ void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
     SolMat->MultiplyTransposeCUDA(sigma, nodal_forces_vec);
     SolMat->ColoredAssembleCUDA(nodal_forces_vec, nodal_forces_global1);
     SolMat->FreeMemory();
-#endif
+    #endif
 
     std::cout << "\n\nSOLVING WITH CPU" << std::endl;
-    SolMat->MultiplyInThreads(coef_sol, result);
+//    SolMat->MultiplyInThreads(coef_sol, result);
     SolMat->Multiply(coef_sol, result);
     SolMat->ComputeSigma(weight, result, sigma);
     SolMat->MultiplyTranspose(sigma, nodal_forces_vec);
@@ -706,14 +708,14 @@ void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
         std::cout << "\nAssemble done in the CPU is not ok." << std::endl;
     }
 
-#ifdef __CUDACC__
+    #ifdef __CUDACC__
     int resgpu = Norm(nodal_forces_global1 - residual);
     if(resgpu == 0){
         std::cout << "\nAssemble done in the GPU is ok." << std::endl;
     } else {
         std::cout << "\nAssemble done in the GPU is not ok." << std::endl;
     }
-#endif
+    #endif
 }
 
 TPZFMatrix<REAL> Residual(TPZCompMesh *cmesh, TPZCompMesh *cmesh_noboundary) {
