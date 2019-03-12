@@ -16,8 +16,8 @@
 #endif
 #ifdef __CUDACC__
 #include <cuda.h>
-#include <cublas_v2.h>
-#include <cusparse.h>
+//#include <cublas_v2.h>
+//#include <cusparse.h>
 #include "mkl.h"
 #endif
 
@@ -211,8 +211,8 @@ protected:
 
 //Libraries handles
 #ifdef __CUDACC__
-    cusparseHandle_t handle_cusparse;
-    cublasHandle_t handle_cublas;
+//    cusparseHandle_t handle_cusparse;
+//    cublasHandle_t handle_cublas;
 #endif
 
 };

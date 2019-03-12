@@ -134,23 +134,29 @@ if(USING_TBB)
 
 endif(USING_TBB)
 
-find_package(CUDA REQUIRED)
-enable_language(CXX CUDA)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSING_CUDA")
-set(CMAKE_CUDA_FLAGS "--default-stream per-thread -ftz=true -Xcompiler -fopenmp -O3 -w -Wno-deprecated-gpu-targets")
-
-set(CMAKE_CUDA_STANDARD 11)
-set(CUDA_NVCC_FLAGS -gencode arch=compute_35,code=sm_35)	
-
 option(USING_CUDA on)
-if(USING_CUDA) 
+
+if(USING_CUDA)
+    find_package(CUDA REQUIRED)
+    enable_language(CXX CUDA)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSING_CUDA")
+    set(CMAKE_CUDA_FLAGS "--default-stream per-thread -ftz=true -Xcompiler -fopenmp -O3 -w -Wno-deprecated-gpu-targets")
+
+    set(CMAKE_CUDA_STANDARD 11)
+    set(CUDA_NVCC_FLAGS -gencode arch=compute_35,code=sm_35)	
     file(GLOB sources *.cu)
 else()
     file(GLOB sources *.cpp)
-endif()
+endif(USING_CUDA)
+
 file(GLOB headers *.h)
 set(main_SRCS ${sources} ${headers})
 
 add_executable(IntegrationPointExperiments ${main_SRCS})
 
-target_link_libraries(IntegrationPointExperiments pz ${PTHREAD_LIB} ${CUDA_cublas_LIBRARY} ${CUDA_cusparse_LIBRARY} ${CUDA_cudadevrt_LIBRARY})
+if(USING_CUDA)
+    target_link_libraries(IntegrationPointExperiments pz ${PTHREAD_LIB} ${CUDA_cublas_LIBRARY} ${CUDA_cusparse_LIBRARY} ${CUDA_cudadevrt_LIBRARY})
+else()
+    target_link_libraries(IntegrationPointExperiments pz ${PTHREAD_LIB})
+endif(USING_CUDA)
+
