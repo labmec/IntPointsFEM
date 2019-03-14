@@ -30,7 +30,7 @@
 #include "pzstepsolver.h"
 
 #include "TPZSolveMatrix.h"
-//#include "TPZSolveVector.h"
+#include "TPZSolveVector.h"
 
 #ifdef USING_TBB
 #include "tbb/parallel_for_each.h"
@@ -686,12 +686,13 @@ void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;
     SolMat->AllocateMemory(cmesh);
     SolMat->MultiplyInThreadsCUDA(coef_sol, result);
-    SolMat->MultiplyCUDA(coef_sol, result);
+//    SolMat->MultiplyCUDA(coef_sol, result);
     SolMat->ComputeSigmaCUDA(weight, result, sigma);
     SolMat->MultiplyTransposeCUDA(sigma, nodal_forces_vec);
     SolMat->ColoredAssembleCUDA(nodal_forces_vec, nodal_forces_global1);
     SolMat->FreeMemory();
     #endif
+	nodal_forces_global1.Print(std::cout);
 
     std::cout << "\n\nSOLVING WITH CPU" << std::endl;
     SolMat->MultiplyInThreads(coef_sol, result);
@@ -719,22 +720,22 @@ void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
 }
 
 TPZFMatrix<REAL> Residual(TPZCompMesh *cmesh, TPZCompMesh *cmesh_noboundary) {
-    bool optimizeBandwidth = true;
-    int n_threads = 1;
+//    bool optimizeBandwidth = true;
+//    int n_threads = 1;
+//
+//    TPZAnalysis an_d(cmesh_noboundary, optimizeBandwidth);
+//    TPZSymetricSpStructMatrix strskyl(cmesh_noboundary);
+//    strskyl.SetNumThreads(n_threads);
+//    an_d.SetStructuralMatrix(strskyl);
+//
+//    TPZStepSolver<STATE> step;
+//    step.SetDirect(ELDLt);
+//    an_d.SetSolver(step);
+//    an_d.Assemble();
+//    an_d.Solve();
 
-    TPZAnalysis an_d(cmesh_noboundary, optimizeBandwidth);
-    TPZSymetricSpStructMatrix strskyl(cmesh_noboundary);
-    strskyl.SetNumThreads(n_threads);
-    an_d.SetStructuralMatrix(strskyl);
-
-    TPZStepSolver<STATE> step;
-    step.SetDirect(ELDLt);
-    an_d.SetSolver(step);
-    an_d.Assemble();
-    an_d.Solve();
-
-//    TPZFMatrix<STATE> res(cmesh->NEquations(),1,0.);
-    TPZFMatrix<STATE> res;
-    an_d.Solver().Matrix()->Multiply(cmesh->Solution(), res);
+    TPZFMatrix<STATE> res(cmesh->NEquations(),1,0.);
+//    TPZFMatrix<STATE> res;
+//    an_d.Solver().Matrix()->Multiply(cmesh->Solution(), res);
     return res;
 }
