@@ -15,10 +15,10 @@
 #include "mkl.h"
 #endif
 #ifdef __CUDACC__
-//#include <cuda.h>
-//#include <cublas_v2.h>
-//#include <cusparse.h>
-//#include "mkl.h"
+#include <cuda.h>
+#include <cublas_v2.h>
+#include <cusparse.h>
+#include "mkl.h"
 #endif
 
 class TPZSolveMatrix : public TPZMatrix<STATE> {
@@ -32,8 +32,8 @@ public:
     TPZSolveMatrix(int64_t rows, int64_t cols, TPZVec<int> rowsizes, TPZVec<int> colsizes) : TPZMatrix(rows,
                                                                                                                cols) {
         SetParameters(rowsizes, colsizes);
-//        cuSparseHandle();
-//        cuBlasHandle();
+        cuSparseHandle();
+        cuBlasHandle();
     }
 
 
@@ -142,36 +142,36 @@ public:
  
     void FreeMemory();
 
-//    void cuSparseHandle();
-//
-//    void cuBlasHandle();
+    void cuSparseHandle();
+
+    void cuBlasHandle();
 
     void MultiplyInThreadsCUDA(TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
 
-//    void MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
-//
-//    void ComputeSigmaCUDA(TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<REAL> &sigma);
-//
-//    void MultiplyTransposeCUDA(TPZFMatrix<STATE> &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec);
-//
-//    void ColoredAssembleCUDA(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global);
+    void MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
+
+    void ComputeSigmaCUDA(TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<REAL> &sigma);
+
+    void MultiplyTransposeCUDA(TPZFMatrix<STATE> &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec);
+
+    void ColoredAssembleCUDA(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global);
 
 
 
-//    void MultiplyInThreads(TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
-//
-//    void Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
-//
-//    void ComputeSigma(TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<REAL> &sigma);
-//
-//    void MultiplyTranspose(TPZFMatrix<STATE> &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec);
-//
-//    void ColoredAssemble(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global);
-//
-//
-//    void TraditionalAssemble(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const;
-//
-//    void ColoringElements(TPZCompMesh *cmesh) const;
+    void MultiplyInThreads(TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
+
+    void Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
+
+    void ComputeSigma(TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<REAL> &sigma);
+
+    void MultiplyTranspose(TPZFMatrix<STATE> &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec);
+
+    void ColoredAssemble(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global);
+
+
+    void TraditionalAssemble(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const;
+
+    void ColoringElements(TPZCompMesh *cmesh) const;
 
 protected:
 
@@ -223,8 +223,8 @@ protected:
 
 //Libraries handles
 #ifdef __CUDACC__
-//    cusparseHandle_t handle_cusparse;
-//    cublasHandle_t handle_cublas;
+    cusparseHandle_t handle_cusparse;
+    cublasHandle_t handle_cublas;
 #endif
 
 };
