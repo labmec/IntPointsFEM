@@ -13,7 +13,7 @@
 using namespace tbb;
 #endif
 
-void TPZSolveMatrix::MultiplyInThreads(TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const {
+void TPZSolveMatrix::MultiplyInThreads(TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) {
     int64_t nelem = fRowSizes.size();
     int64_t n_globalsol = fIndexes.size();
 

@@ -54,7 +54,7 @@ int main(int argc, char *argv[]) {
     int nelem_x = atoi(argv[1]); // Number of elements in x direction
     int nelem_y = atoi(argv[1]); // Number of elements in y direction
     REAL len = 1; // Domain length
-    int pOrder = 2; // Computational mesh order
+    int pOrder = 1; // Computational mesh order
     int ndivide = 0; // Subdivision of elements
 
 // Generates the geometry
@@ -686,37 +686,36 @@ void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;
     SolMat->AllocateMemory(cmesh);
     SolMat->MultiplyInThreadsCUDA(coef_sol, result);
-//    SolMat->MultiplyCUDA(coef_sol, result);
+    SolMat->MultiplyCUDA(coef_sol, result);
     SolMat->ComputeSigmaCUDA(weight, result, sigma);
-    SolMat->MultiplyTransposeCUDA(sigma, nodal_forces_vec);
-    SolMat->ColoredAssembleCUDA(nodal_forces_vec, nodal_forces_global1);
-    SolMat->FreeMemory();
+//    SolMat->MultiplyTransposeCUDA(sigma, nodal_forces_vec);
+//    SolMat->ColoredAssembleCUDA(nodal_forces_vec, nodal_forces_global1);
+//    SolMat->FreeMemory();
     #endif
-	nodal_forces_global1.Print(std::cout);
 
-    std::cout << "\n\nSOLVING WITH CPU" << std::endl;
-    SolMat->MultiplyInThreads(coef_sol, result);
-    SolMat->Multiply(coef_sol, result);
-    SolMat->ComputeSigma(weight, result, sigma);
-    SolMat->MultiplyTranspose(sigma, nodal_forces_vec);
-    SolMat->ColoredAssemble(nodal_forces_vec, nodal_forces_global2);
-
-    //Check the result
-    int rescpu = Norm(nodal_forces_global2 - residual);
-    if(rescpu == 0){
-        std::cout << "\nAssemble done in the CPU is ok." << std::endl;
-    } else {
-        std::cout << "\nAssemble done in the CPU is not ok." << std::endl;
-    }
-
-    #ifdef __CUDACC__
-    int resgpu = Norm(nodal_forces_global1 - residual);
-    if(resgpu == 0){
-        std::cout << "\nAssemble done in the GPU is ok." << std::endl;
-    } else {
-        std::cout << "\nAssemble done in the GPU is not ok." << std::endl;
-    }
-    #endif
+//    std::cout << "\n\nSOLVING WITH CPU" << std::endl;
+//    SolMat->MultiplyInThreads(coef_sol, result);
+//    SolMat->Multiply(coef_sol, result);
+//    SolMat->ComputeSigma(weight, result, sigma);
+//    SolMat->MultiplyTranspose(sigma, nodal_forces_vec);
+//    SolMat->ColoredAssemble(nodal_forces_vec, nodal_forces_global2);
+//
+//    //Check the result
+//    int rescpu = Norm(nodal_forces_global2 - residual);
+//    if(rescpu == 0){
+//        std::cout << "\nAssemble done in the CPU is ok." << std::endl;
+//    } else {
+//        std::cout << "\nAssemble done in the CPU is not ok." << std::endl;
+//    }
+//
+//    #ifdef __CUDACC__
+//    int resgpu = Norm(nodal_forces_global1 - residual);
+//    if(resgpu == 0){
+//        std::cout << "\nAssemble done in the GPU is ok." << std::endl;
+//    } else {
+//        std::cout << "\nAssemble done in the GPU is not ok." << std::endl;
+//    }
+//    #endif
 }
 
 TPZFMatrix<REAL> Residual(TPZCompMesh *cmesh, TPZCompMesh *cmesh_noboundary) {

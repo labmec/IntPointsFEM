@@ -146,7 +146,7 @@ public:
 
     void cuBlasHandle();
 
-    void MultiplyInThreadsCUDA(TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
+    void MultiplyInThreadsCUDA(TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result);
 
     void MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
 
@@ -158,7 +158,7 @@ public:
 
 
 
-    void MultiplyInThreads(TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
+    void MultiplyInThreads(TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result);
 
     void Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
 
