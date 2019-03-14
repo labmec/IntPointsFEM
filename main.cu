@@ -65,7 +65,7 @@ int main(int argc, char *argv[]) {
 
 // Defines the analysis
     bool optimizeBandwidth = true;
-    int n_threads = 1;
+    int n_threads = 4;
     TPZAnalysis an(cmesh, optimizeBandwidth);
     TPZSymetricSpStructMatrix strskyl(cmesh);
     strskyl.SetNumThreads(n_threads);
@@ -290,19 +290,6 @@ TPZCompMesh *CmeshElasticityNoBoundary(TPZGeoMesh *gmesh, int pOrder) {
     cmesh->SetAllCreateFunctionsContinuous();
     cmesh->AutoBuild();
     return cmesh;
-
-//    // Creating the computational mesh
-//    TPZCompMesh *cmesh = new TPZCompMesh(gmesh);
-//    cmesh->SetDefaultOrder(pOrder);
-//
-//    // Creating elasticity material
-//    TPZMatElasticity2D *mat = new TPZMatElasticity2D(1);
-//    mat->SetElasticParameters(200000000., 0.3);
-//    cmesh->InsertMaterialObject(mat);
-//
-//    cmesh->SetAllCreateFunctionsContinuous();
-//    cmesh->AutoBuild();
-//    return cmesh;
 }
 
 TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh * gmesh, int p_order) {
@@ -670,7 +657,7 @@ void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
         }
     }
     SolMat->SetIndexes(indexes);
-//    SolMat->ColoringElements(cmesh);
+    SolMat->ColoringElements(cmesh);
 
     TPZFMatrix<REAL> coef_sol = cmesh->Solution();
     int neq = cmesh->NEquations();
@@ -686,20 +673,22 @@ void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;
     SolMat->AllocateMemory(cmesh);
     SolMat->MultiplyInThreadsCUDA(coef_sol, result);
-    SolMat->MultiplyCUDA(coef_sol, result);
+//    SolMat->MultiplyCUDA(coef_sol, result);
     SolMat->ComputeSigmaCUDA(weight, result, sigma);
-//    SolMat->MultiplyTransposeCUDA(sigma, nodal_forces_vec);
-//    SolMat->ColoredAssembleCUDA(nodal_forces_vec, nodal_forces_global1);
-//    SolMat->FreeMemory();
+    SolMat->MultiplyTransposeCUDA(sigma, nodal_forces_vec);
+    SolMat->ColoredAssembleCUDA(nodal_forces_vec, nodal_forces_global1);
+    SolMat->FreeMemory();
     #endif
 
-//    std::cout << "\n\nSOLVING WITH CPU" << std::endl;
-//    SolMat->MultiplyInThreads(coef_sol, result);
-//    SolMat->Multiply(coef_sol, result);
-//    SolMat->ComputeSigma(weight, result, sigma);
-//    SolMat->MultiplyTranspose(sigma, nodal_forces_vec);
-//    SolMat->ColoredAssemble(nodal_forces_vec, nodal_forces_global2);
-//
+    std::cout << "\n\nSOLVING WITH CPU" << std::endl;
+    SolMat->MultiplyInThreads(coef_sol, result);
+    SolMat->Multiply(coef_sol, result);
+    SolMat->ComputeSigma(weight, result, sigma);
+    SolMat->MultiplyTranspose(sigma, nodal_forces_vec);
+    SolMat->ColoredAssemble(nodal_forces_vec, nodal_forces_global2);
+
+    nodal_forces_global1.Print(std::cout);
+    nodal_forces_global2.Print(std::cout);
 //    //Check the result
 //    int rescpu = Norm(nodal_forces_global2 - residual);
 //    if(rescpu == 0){
@@ -720,7 +709,7 @@ void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
 
 TPZFMatrix<REAL> Residual(TPZCompMesh *cmesh, TPZCompMesh *cmesh_noboundary) {
 //    bool optimizeBandwidth = true;
-//    int n_threads = 1;
+//    int n_threads = 4;
 //
 //    TPZAnalysis an_d(cmesh_noboundary, optimizeBandwidth);
 //    TPZSymetricSpStructMatrix strskyl(cmesh_noboundary);

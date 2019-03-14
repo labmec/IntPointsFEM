@@ -51,22 +51,21 @@ TPZFMatrix<REAL>  Residual(TPZCompMesh *cmesh, TPZCompMesh *cmesh_noboundary);
 
 int main(int argc, char *argv[]) {
 //// ------------------------ DATA INPUT ------------------------------
-    int nelem_x = 1; // Number of elements in x direction
-    int nelem_y = 1; // Number of elements in y direction
+    int nelem_x = atoi(argv[1]); // Number of elements in x direction
+    int nelem_y = atoi(argv[1]); // Number of elements in y direction
     REAL len = 1; // Domain length
     int pOrder = 1; // Computational mesh order
     int ndivide = 0; // Subdivision of elements
 
 // Generates the geometry
     TPZGeoMesh *gmesh = Geometry2D(nelem_x, nelem_y, len, ndivide);
-
 // Creates the computational mesh
     TPZCompMesh *cmesh = CmeshElasticity(gmesh, pOrder);
     TPZCompMesh *cmesh_noboundary = CmeshElasticityNoBoundary(gmesh, pOrder);
 
 // Defines the analysis
     bool optimizeBandwidth = true;
-    int n_threads = 16;
+    int n_threads = 4;
     TPZAnalysis an(cmesh, optimizeBandwidth);
     TPZSymetricSpStructMatrix strskyl(cmesh);
     strskyl.SetNumThreads(n_threads);
@@ -96,8 +95,8 @@ int main(int argc, char *argv[]) {
     TPZFMatrix<REAL> residual = Residual(cmesh, cmesh_noboundary);
 
 // Calculates residual using matrix operations and check if the result is ok
-//    SolMatrix(residual, cmesh);
-    SolVector(residual, cmesh);
+    SolMatrix(residual, cmesh);
+//    SolVector(residual, cmesh);
     return 0;
 }
 
@@ -291,19 +290,6 @@ TPZCompMesh *CmeshElasticityNoBoundary(TPZGeoMesh *gmesh, int pOrder) {
     cmesh->SetAllCreateFunctionsContinuous();
     cmesh->AutoBuild();
     return cmesh;
-
-//    // Creating the computational mesh
-//    TPZCompMesh *cmesh = new TPZCompMesh(gmesh);
-//    cmesh->SetDefaultOrder(pOrder);
-//
-//    // Creating elasticity material
-//    TPZMatElasticity2D *mat = new TPZMatElasticity2D(1);
-//    mat->SetElasticParameters(200000000., 0.3);
-//    cmesh->InsertMaterialObject(mat);
-//
-//    cmesh->SetAllCreateFunctionsContinuous();
-//    cmesh->AutoBuild();
-//    return cmesh;
 }
 
 TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh * gmesh, int p_order) {
@@ -580,8 +566,8 @@ void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
 
 // RowSizes and ColSizes vectors
     int64_t nelem = cel_indexes.size();
-    TPZVec<MKL_INT> rowsizes(nelem);
-    TPZVec<MKL_INT> colsizes(nelem);
+    TPZVec<int> rowsizes(nelem);
+    TPZVec<int> colsizes(nelem);
 
     int64_t npts_tot = 0;
     int64_t nf_tot = 0;
@@ -686,7 +672,8 @@ void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
     #ifdef __CUDACC__
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;
     SolMat->AllocateMemory(cmesh);
-    SolMat->MultiplyCUDA(coef_sol, result);
+    SolMat->MultiplyInThreadsCUDA(coef_sol, result);
+//    SolMat->MultiplyCUDA(coef_sol, result);
     SolMat->ComputeSigmaCUDA(weight, result, sigma);
     SolMat->MultiplyTransposeCUDA(sigma, nodal_forces_vec);
     SolMat->ColoredAssembleCUDA(nodal_forces_vec, nodal_forces_global1);
@@ -694,46 +681,49 @@ void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
     #endif
 
     std::cout << "\n\nSOLVING WITH CPU" << std::endl;
-//    SolMat->MultiplyInThreads(coef_sol, result);
+    SolMat->MultiplyInThreads(coef_sol, result);
     SolMat->Multiply(coef_sol, result);
     SolMat->ComputeSigma(weight, result, sigma);
     SolMat->MultiplyTranspose(sigma, nodal_forces_vec);
     SolMat->ColoredAssemble(nodal_forces_vec, nodal_forces_global2);
 
-    //Check the result
-    int rescpu = Norm(nodal_forces_global2 - residual);
-    if(rescpu == 0){
-        std::cout << "\nAssemble done in the CPU is ok." << std::endl;
-    } else {
-        std::cout << "\nAssemble done in the CPU is not ok." << std::endl;
-    }
-
-    #ifdef __CUDACC__
-    int resgpu = Norm(nodal_forces_global1 - residual);
-    if(resgpu == 0){
-        std::cout << "\nAssemble done in the GPU is ok." << std::endl;
-    } else {
-        std::cout << "\nAssemble done in the GPU is not ok." << std::endl;
-    }
-    #endif
+    nodal_forces_global1.Print(std::cout);
+    nodal_forces_global2.Print(std::cout);
+//    //Check the result
+//    int rescpu = Norm(nodal_forces_global2 - residual);
+//    if(rescpu == 0){
+//        std::cout << "\nAssemble done in the CPU is ok." << std::endl;
+//    } else {
+//        std::cout << "\nAssemble done in the CPU is not ok." << std::endl;
+//    }
+//
+//    #ifdef __CUDACC__
+//    int resgpu = Norm(nodal_forces_global1 - residual);
+//    if(resgpu == 0){
+//        std::cout << "\nAssemble done in the GPU is ok." << std::endl;
+//    } else {
+//        std::cout << "\nAssemble done in the GPU is not ok." << std::endl;
+//    }
+//    #endif
 }
 
 TPZFMatrix<REAL> Residual(TPZCompMesh *cmesh, TPZCompMesh *cmesh_noboundary) {
-    bool optimizeBandwidth = true;
-    int n_threads = 16;
+//    bool optimizeBandwidth = true;
+//    int n_threads = 4;
+//
+//    TPZAnalysis an_d(cmesh_noboundary, optimizeBandwidth);
+//    TPZSymetricSpStructMatrix strskyl(cmesh_noboundary);
+//    strskyl.SetNumThreads(n_threads);
+//    an_d.SetStructuralMatrix(strskyl);
+//
+//    TPZStepSolver<STATE> step;
+//    step.SetDirect(ELDLt);
+//    an_d.SetSolver(step);
+//    an_d.Assemble();
+//    an_d.Solve();
 
-    TPZAnalysis an_d(cmesh_noboundary, optimizeBandwidth);
-    TPZSymetricSpStructMatrix strskyl(cmesh_noboundary);
-    strskyl.SetNumThreads(n_threads);
-    an_d.SetStructuralMatrix(strskyl);
-
-    TPZStepSolver<STATE> step;
-    step.SetDirect(ELDLt);
-    an_d.SetSolver(step);
-    an_d.Assemble();
-    an_d.Solve();
-
-    TPZFMatrix<STATE> res;
-    an_d.Solver().Matrix()->Multiply(cmesh->Solution(), res);
+    TPZFMatrix<STATE> res(cmesh->NEquations(),1,0.);
+//    TPZFMatrix<STATE> res;
+//    an_d.Solver().Matrix()->Multiply(cmesh->Solution(), res);
     return res;
 }
