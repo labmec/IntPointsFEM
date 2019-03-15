@@ -502,7 +502,7 @@ void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatr
     cblas_dgthr(nindexes, global_solution, &expandsolution[0], &fIndexes[0]);
     t2 = high_resolution_clock::now();
     time_span = duration_cast<duration<double>>(t2 - t1);
-    std::cout << "Gather: " << time_span.count() << std::endl;
+//    std::cout << "Gather: " << time_span.count() << std::endl;
 
     t1 = high_resolution_clock::now();
     for (int64_t iel = 0; iel < nelem; iel++) {

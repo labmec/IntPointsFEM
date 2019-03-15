@@ -19,6 +19,7 @@
 #include <cublas_v2.h>
 #include <cusparse.h>
 #include "mkl.h"
+#include <cuda_profiler_api.h>
 #endif
 
 class TPZSolveMatrix : public TPZMatrix<STATE> {
@@ -34,6 +35,7 @@ public:
         SetParameters(rowsizes, colsizes);
         cuSparseHandle();
         cuBlasHandle();
+        DeviceProp();
     }
 
 
@@ -52,7 +54,8 @@ public:
                                                  dresult(copy.dresult), dweight(copy.dweight), dsigma(copy.dsigma), dnodal_forces_vec(copy.dnodal_forces_vec),
                                                  dindexescolor(copy.dindexescolor), dnodal_forces_global(copy.dnodal_forces_global),
                                                  dfRowSizes(copy.dfRowSizes), dfColSizes(copy.dfColSizes), dfMatrixPosition(copy.dfMatrixPosition),
-                                                 dfRowFirstIndex(copy.dfRowFirstIndex), dfColFirstIndex(copy.dfRowFirstIndex) {
+                                                 dfRowFirstIndex(copy.dfRowFirstIndex), dfColFirstIndex(copy.dfRowFirstIndex),
+                                                 devProp(copy.devProp){
 
     }
 
@@ -84,6 +87,8 @@ public:
         dfMatrixPosition = copy.dfMatrixPosition;
         dfRowFirstIndex = copy.dfRowFirstIndex;
         dfColFirstIndex = copy.dfRowFirstIndex;
+
+        devProp = copy.devProp;
 
         return *this;
     }
@@ -138,6 +143,8 @@ public:
     /** @brief Solve procedure */
 
     //USING CUDA
+    void DeviceProp();
+
     void AllocateMemory(TPZCompMesh *cmesh);
  
     void FreeMemory();
@@ -225,6 +232,8 @@ protected:
 #ifdef __CUDACC__
     cusparseHandle_t handle_cusparse;
     cublasHandle_t handle_cublas;
+    cudaDeviceProp devProp;     //cuda properties
+
 #endif
 
 };

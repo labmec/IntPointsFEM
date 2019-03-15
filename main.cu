@@ -672,12 +672,12 @@ void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
     #ifdef __CUDACC__
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;
     SolMat->AllocateMemory(cmesh);
+    SolMat->MultiplyCUDA(coef_sol, result);
     SolMat->MultiplyInThreadsCUDA(coef_sol, result);
-//    SolMat->MultiplyCUDA(coef_sol, result);
-    SolMat->ComputeSigmaCUDA(weight, result, sigma);
-    SolMat->MultiplyTransposeCUDA(sigma, nodal_forces_vec);
-    SolMat->ColoredAssembleCUDA(nodal_forces_vec, nodal_forces_global1);
-    SolMat->FreeMemory();
+//    SolMat->ComputeSigmaCUDA(weight, result, sigma);
+//    SolMat->MultiplyTransposeCUDA(sigma, nodal_forces_vec);
+//    SolMat->ColoredAssembleCUDA(nodal_forces_vec, nodal_forces_global1);
+//    SolMat->FreeMemory();
     #endif
 
     std::cout << "\n\nSOLVING WITH CPU" << std::endl;
@@ -687,8 +687,8 @@ void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
     SolMat->MultiplyTranspose(sigma, nodal_forces_vec);
     SolMat->ColoredAssemble(nodal_forces_vec, nodal_forces_global2);
 
-    nodal_forces_global1.Print(std::cout);
-    nodal_forces_global2.Print(std::cout);
+//    nodal_forces_global1.Print(std::cout);
+//    nodal_forces_global2.Print(std::cout);
 //    //Check the result
 //    int rescpu = Norm(nodal_forces_global2 - residual);
 //    if(rescpu == 0){

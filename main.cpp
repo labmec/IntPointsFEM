@@ -687,8 +687,9 @@ void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
     SolMat->MultiplyTranspose(sigma, nodal_forces_vec);
     SolMat->ColoredAssemble(nodal_forces_vec, nodal_forces_global2);
 
-    nodal_forces_global1.Print(std::cout);
-    nodal_forces_global2.Print(std::cout);
+//    nodal_forces_global1.Print(std::cout);
+//    nodal_forces_global2.Print(std::cout);
+
 //    //Check the result
 //    int rescpu = Norm(nodal_forces_global2 - residual);
 //    if(rescpu == 0){
