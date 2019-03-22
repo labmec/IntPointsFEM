@@ -145,36 +145,36 @@ public:
 
     void cuBlasHandle();
 
-    void MultiplyInThreadsCUDA(TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
+    void MultiplyInThreadsCUDA(TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &result) const;
 
-    void MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
+    void MultiplyCUDA(const TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &result) const;
 
     void ComputeSigmaCUDA(TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<REAL> &sigma);
 
-    void MultiplyTransposeCUDA(TPZFMatrix<STATE> &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec);
+    void MultiplyTransposeCUDA(TPZFMatrix<REAL> &intpoint_solution, TPZFMatrix<REAL> &nodal_forces_vec);
 
-    void ColoredAssembleCUDA(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global);
+    void ColoredAssembleCUDA(TPZFMatrix<REAL> &nodal_forces_vec, TPZFMatrix<REAL> &nodal_forces_global);
 
     //Elastoplasticity
-    void DeltaStrain(TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &deltastrain);
+    void DeltaStrain(TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &deltastrain);
 
-    void ElasticStrain (TPZFMatrix<STATE> &delta_strain, TPZFMatrix<STATE> &total_strain, TPZFMatrix<STATE> &plastic_strain, TPZFMatrix<STATE> &elastic_strain);
+    void ElasticStrain (TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &total_strain, TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &elastic_strain);
 
     void SigmaTrial(TPZStack<REAL> &weight, TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &sigma_trial);
 
-    void PrincipalStress(TPZFMatrix<STATE> &sigma_trial, TPZFMatrix<STATE> &eigenvalues);
+    void PrincipalStress(TPZFMatrix<REAL> &sigma_trial, TPZFMatrix<REAL> &eigenvalues);
 
-    void ProjectSigma(TPZFMatrix<STATE> &total_strain, TPZFMatrix<STATE> &plastic_strain, TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<STATE> &sigma_projected);
+    void ProjectSigma(TPZFMatrix<REAL> &total_strain, TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &sigma_projected);
 
 
 
-    void Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &deltastrain) const;
+    void Multiply(const TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &deltastrain) const;
 
-    void MultiplyTranspose(TPZFMatrix<STATE> &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec);
+    void MultiplyTranspose(TPZFMatrix<REAL> &intpoint_solution, TPZFMatrix<REAL> &nodal_forces_vec);
 
-    void ColoredAssemble(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global);
+    void ColoredAssemble(TPZFMatrix<REAL> &nodal_forces_vec, TPZFMatrix<REAL> &nodal_forces_global);
 
-    void TraditionalAssemble(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const;
+    void TraditionalAssemble(TPZFMatrix<REAL> &nodal_forces_vec, TPZFMatrix<REAL> &nodal_forces_global) const;
 
     void ColoringElements(TPZCompMesh *cmesh) const;
 

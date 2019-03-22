@@ -67,9 +67,9 @@ void Interval(double *sigma, double *interval) {
 
 void NewtonIterations(double *interval, double *sigma, double *eigenvalues, double &maxel) {
     int numiterations = 20;
-    double tol = 10e-8;
+    REAL tol = 10e-8;
 
-    double res, f, df, x;
+    REAL res, f, df, x;
     int it;
 
     for (int i = 0; i < 2; i++) {
@@ -99,10 +99,10 @@ void NewtonIterations(double *interval, double *sigma, double *eigenvalues, doub
 
 //ProjectSigma
 bool PhiPlane(double *eigenvalues, double *sigma_projected) {
-    const double sinphi = sin(mc_phi);
-    const double cosphi = cos(mc_phi);
+    const REAL sinphi = sin(mc_phi);
+    const REAL cosphi = cos(mc_phi);
 
-    double phi = eigenvalues[0] - eigenvalues[2] + (eigenvalues[0] + eigenvalues[2]) * sinphi - 2. * mc_cohesion *cosphi;
+    REAL phi = eigenvalues[0] - eigenvalues[2] + (eigenvalues[0] + eigenvalues[2]) * sinphi - 2. * mc_cohesion *cosphi;
 
     sigma_projected[0] = eigenvalues[0];
     sigma_projected[1] = eigenvalues[1];
@@ -112,7 +112,7 @@ bool PhiPlane(double *eigenvalues, double *sigma_projected) {
     return check_validity;
 }
 
-bool ReturnMappingMainPlane(double *eigenvalues, double *sigma_projected, double &m_hardening, double *m_gamma) {
+bool ReturnMappingMainPlane(double *eigenvalues, double *sigma_projected, double &m_hardening) {
 
     const REAL sinphi = sin(mc_phi);
     const REAL sinpsi = sin(mc_psi);
@@ -121,35 +121,31 @@ bool ReturnMappingMainPlane(double *eigenvalues, double *sigma_projected, double
     const REAL cosphi2 = 1. - sinphi2;
     const REAL constA = 4. * G *(1. + sinphi * sinpsi / 3.) + 4. * K * sinphi*sinpsi;
 
-    double epsbar = (m_hardening + m_gamma[0]*2. * cosphi);
-    double phi = eigenvalues[0] - eigenvalues[2]+(eigenvalues[0] + eigenvalues[2]) * sinphi - 2. * mc_cohesion*cosphi;
+    REAL phi = eigenvalues[0] - eigenvalues[2]+(eigenvalues[0] + eigenvalues[2]) * sinphi - 2. * mc_cohesion*cosphi;
 
-    double gamma = m_gamma[0];
-    double phival = phi;
+    REAL gamma = 0;
     int n_iterations = 30;
     for (int i = 0; i < n_iterations; i++) {
         double jac = -constA - 4. * cosphi2 * 0; // H=0
         double delta_gamma = - phi / jac;
         gamma += delta_gamma;
         phi = eigenvalues[0] - eigenvalues[2]+(eigenvalues[0] + eigenvalues[2]) * sinphi - 2. * mc_cohesion * cosphi - constA * gamma;
-        phival = phi;
-        if (fabs(phival) < 1.e-12) {
+        if (fabs(phi) < 1.e-12) {
             break;
         }
     }
 
-    epsbar = m_hardening + gamma * 2. * cosphi;
-    m_gamma[0] = gamma;
     sigma_projected[0] -= (2. * G *(1 + sinpsi / 3.) + 2. * K * sinpsi) * gamma;
     sigma_projected[1] += (4. * G / 3. - K * 2.) * sinpsi * gamma;
     sigma_projected[2] += (2. * G * (1 - sinpsi / 3.) - 2. * K * sinpsi) * gamma;
-    m_hardening = epsbar;
+
+    m_hardening += gamma * 2. * cosphi;
 
     bool check_validity = (eigenvalues[0] > eigenvalues[1] || fabs(eigenvalues[0]-eigenvalues[1]) < 1.e-12) && (eigenvalues[1] > eigenvalues[2] || fabs(eigenvalues[1]-eigenvalues[2]) < 1.e-12);
     return check_validity;
 }
 
-bool ReturnMappingRightEdge(double *eigenvalues, double *sigma_projected, double &m_hardening, double *m_gamma) {
+bool ReturnMappingRightEdge(double *eigenvalues, double *sigma_projected, double &m_hardening) {
     const REAL sinphi = sin(mc_phi);
     const REAL sinpsi = sin(mc_psi);
     const REAL cosphi = cos(mc_phi);
@@ -157,10 +153,7 @@ bool ReturnMappingRightEdge(double *eigenvalues, double *sigma_projected, double
     const REAL cosphi2 = 1. - sinphi2;
 
     TPZVec<REAL> gamma(2, 0.), phi(2, 0.), sigma_bar(2, 0.), ab(2, 0.);
-    gamma[0] = m_gamma[0];
-    gamma[1] = m_gamma[1];
 
-    TPZVec<REAL> phival(2, 0.);
     TPZVec<TPZVec<REAL>> jac(2), jac_inv(2);
     for (int i = 0; i < 2; i++) {
         jac[i].Resize(2, 0.);
@@ -170,22 +163,19 @@ bool ReturnMappingRightEdge(double *eigenvalues, double *sigma_projected, double
     sigma_bar[0] = eigenvalues[0] - eigenvalues[2]+(eigenvalues[0] + eigenvalues[2]) * sinphi;
     sigma_bar[1] = eigenvalues[0] - eigenvalues[1] + (eigenvalues[0] + eigenvalues[1]) * sinphi;
 
+    phi[0] = sigma_bar[0] - 2. * cosphi * mc_cohesion;
+    phi[1] = sigma_bar[1] - 2. * cosphi * mc_cohesion;
+
     ab[0] = 4. * G * (1 + sinphi * sinpsi / 3.) + 4. * K * sinphi * sinpsi;
     ab[1] = 2. * G * (1. + sinphi + sinpsi - sinphi * sinpsi / 3.) + 4. * K * sinphi * sinpsi;
 
-    double epsbar = m_hardening +(gamma[0] + gamma[1]) * 2. * cosphi;
-
-    phi[0] = sigma_bar[0] - ab[0] * gamma[0] - ab[1] * gamma[1] - 2. * cosphi * mc_cohesion;
-    phi[1] = sigma_bar[1] - ab[1] * gamma[0] - ab[0] * gamma[1] - 2. * cosphi * mc_cohesion;
-
     int n_iterations = 30;
-    int i;
-    for (i = 0; i < n_iterations; i++) {
+    for (int i = 0; i < n_iterations; i++) {
 
-        jac[0][0] = -ab[0] - 4. * cosphi2 * 0;
-        jac[1][0] = -ab[1] - 4. * cosphi2 * 0;
-        jac[0][1] = -ab[1] - 4. * cosphi2 * 0;
-        jac[1][1] = -ab[0] - 4. * cosphi2 * 0;
+        jac[0][0] = -ab[0];
+        jac[1][0] = -ab[1];
+        jac[0][1] = -ab[1];
+        jac[1][1] = -ab[0];
 
         double det_jac = jac[0][0] * jac[1][1] - jac[0][1] * jac[1][0];
 
@@ -197,33 +187,27 @@ bool ReturnMappingRightEdge(double *eigenvalues, double *sigma_projected, double
         gamma[0] -= (jac_inv[0][0] * phi[0] + jac_inv[0][1] * phi[1]);
         gamma[1] -= (jac_inv[1][0] * phi[0] + jac_inv[1][1] * phi[1]);
 
-        epsbar = m_hardening +(gamma[0] + gamma[1]) * 2. * cosphi;
-
         phi[0] = sigma_bar[0] - ab[0] * gamma[0] - ab[1] * gamma[1] - 2. * cosphi * mc_cohesion;
         phi[1] = sigma_bar[1] - ab[1] * gamma[0] - ab[0] * gamma[1] - 2. * cosphi * mc_cohesion;
-        phival[0] = phi[0];
-        phival[1] = phi[1];
-        double res = (fabs(phival[0]) + fabs(phival[1]));
+
+        double res = (fabs(phi[0]) + fabs(phi[1]));
 
         if (fabs(res) < 1.e-12) {
             break;
         }
     }
 
-    m_gamma[0] = gamma[0];
-    m_gamma[1] = gamma[1];
-
     sigma_projected[0] -= (2. * G * (1 + sinpsi / 3.) + 2. * K * sinpsi) * (gamma[0] + gamma[1]);
     sigma_projected[1] += ((4. * G / 3. - K * 2.) * sinpsi) * gamma[0] + (2. * G * (1. - sinpsi / 3.) - 2. * K * sinpsi) * gamma[1];
     sigma_projected[2] += (2. * G * (1 - sinpsi / 3.) - 2. * K * sinpsi) * gamma[0] + ((4. * G / 3. - 2. * K) * sinpsi) * gamma[1];
 
-    m_hardening = epsbar;
+    m_hardening += (gamma[0] + gamma[1]) * 2. * cosphi;
 
     bool check_validity = (eigenvalues[0] > eigenvalues[1] || fabs(eigenvalues[0]-eigenvalues[1]) < 1.e-12) && (eigenvalues[1] > eigenvalues[2] || fabs(eigenvalues[1]-eigenvalues[2]) < 1.e-12);
     return check_validity;
 }
 
-bool ReturnMappingLeftEdge(double *eigenvalues, double *sigma_projected, double &m_hardening, double *m_gamma) {
+bool ReturnMappingLeftEdge(double *eigenvalues, double *sigma_projected, double &m_hardening) {
     const REAL sinphi = sin(mc_phi);
     const REAL sinpsi = sin(mc_psi);
     const REAL cosphi = cos(mc_phi);
@@ -232,9 +216,6 @@ bool ReturnMappingLeftEdge(double *eigenvalues, double *sigma_projected, double 
 
     TPZVec<REAL> gamma(2, 0.), phi(2, 0.), sigma_bar(2, 0.), ab(2, 0.);
 
-    gamma[0] = m_gamma[0];
-    gamma[1] = m_gamma[1];
-    TPZVec<REAL> phival(2, 0.);
     TPZVec<TPZVec<REAL>> jac(2), jac_inv(2);
     for (int i = 0; i < 2; i++) {
         jac[i].Resize(2, 0.);
@@ -247,21 +228,18 @@ bool ReturnMappingLeftEdge(double *eigenvalues, double *sigma_projected, double 
     ab[0] = 4. * G * (1 + sinphi * sinpsi / 3.) + 4. * K * sinphi * sinpsi;
     ab[1] = 2. * G * (1. - sinphi - sinpsi - sinphi * sinpsi / 3.) + 4. * K * sinphi * sinpsi;
 
-    double epsbar = m_hardening +(gamma[0] + gamma[1]) * 2. * cosphi;
-
-    phi[0] = sigma_bar[0] - ab[0] * gamma[0] - ab[1] * gamma[1] - 2. * cosphi * mc_cohesion;
-    phi[1] = sigma_bar[1] - ab[1] * gamma[0] - ab[0] * gamma[1] - 2. * cosphi * mc_cohesion;
+    phi[0] = sigma_bar[0] - 2. * cosphi * mc_cohesion;
+    phi[1] = sigma_bar[1] - 2. * cosphi * mc_cohesion;
 
     int n_iterations = 30;
-    int i;
-    for (i = 0; i < n_iterations; i++) {
+    for (int i = 0; i < n_iterations; i++) {
 
         jac[0][0] = -ab[0] - 4. * cosphi2 * 0;
         jac[1][0] = -ab[1] - 4. * cosphi2 * 0;
         jac[0][1] = -ab[1] - 4. * cosphi2 * 0;
         jac[1][1] = -ab[0] - 4. * cosphi2 * 0;
 
-        double det_jac = jac[0][0] * jac[1][1] - jac[0][1] * jac[1][0];
+        REAL det_jac = jac[0][0] * jac[1][1] - jac[0][1] * jac[1][0];
 
         jac_inv[0][0] = jac[1][1] / det_jac;
         jac_inv[1][0] = -jac[1][0] / det_jac;
@@ -271,27 +249,21 @@ bool ReturnMappingLeftEdge(double *eigenvalues, double *sigma_projected, double 
         gamma[0] -= (jac_inv[0][0] * phi[0] + jac_inv[0][1] * phi[1]);
         gamma[1] -= (jac_inv[1][0] * phi[0] + jac_inv[1][1] * phi[1]);
 
-        epsbar = m_hardening +(gamma[0] + gamma[1]) * 2. * cosphi;
-
         phi[0] = sigma_bar[0] - ab[0] * gamma[0] - ab[1] * gamma[1] - 2. * cosphi * mc_cohesion;
         phi[1] = sigma_bar[1] - ab[1] * gamma[0] - ab[0] * gamma[1] - 2. * cosphi * mc_cohesion;
-        phival[0] = phi[0];
-        phival[1] = phi[1];
-        double res = (fabs(phival[0]) + fabs(phival[1]));
+
+        REAL res = (fabs(phi[0]) + fabs(phi[1]));
 
         if (fabs(res) < 1.e-12) {
             break;
         }
     }
 
-    m_gamma[0] = gamma[0];
-    m_gamma[1] = gamma[1];
-
     sigma_projected[0] += -(2. * G * (1 + sinpsi / 3.) + 2. * K * sinpsi) * gamma[0] + ((4. * G / 3. - 2. * K) * sinpsi) * gamma[1];
     sigma_projected[1] += ((4. * G / 3. - K * 2.) * sinpsi) * gamma[0] - (2. * G * (1. + sinpsi / 3.) + 2. * K * sinpsi) * gamma[1];
     sigma_projected[2] += (2. * G * (1 - sinpsi / 3.) - 2. * K * sinpsi) * (gamma[0] + gamma[1]);
 
-    m_hardening = epsbar;
+    m_hardening += (gamma[0] + gamma[1]) * 2. * cosphi;
 
     bool check_validity = (eigenvalues[0] > eigenvalues[1] || fabs(eigenvalues[0]-eigenvalues[1]) < 1.e-12) && (eigenvalues[1] > eigenvalues[2] || fabs(eigenvalues[1]-eigenvalues[2]) < 1.e-12);
     return check_validity;
@@ -301,27 +273,23 @@ void ReturnMappingApex(double *eigenvalues, double *sigma_projected, double &m_h
     const REAL sinpsi = sin(mc_psi);
     const REAL cosphi = cos(mc_phi);
     const REAL cotphi = 1. / tan(mc_phi);
-    double ptrnp1 = 0.;
+
+    REAL ptrnp1 = 0.;
     for (int i = 0; i < 3; i++) {
         ptrnp1 += eigenvalues[i];
     }
     ptrnp1 /= 3.;
-    double DEpsPV = 0.;
-    double epsbarnp1 = m_hardening;
 
-    double alpha = cos(mc_phi) / sin(mc_psi);
-    REAL tol = 1.e-8;
-
-    double res = mc_cohesion * cotphi - ptrnp1;
-    double pnp1;
+    REAL DEpsPV = 0.;
+    REAL alpha = cos(mc_phi) / sin(mc_psi);
+    REAL res = mc_cohesion * cotphi - ptrnp1;
+    REAL pnp1;
 
     int n_iterations = 30;
-    int i;
-    for (i = 0; i < n_iterations; i++) {
-        const double jac = 0 * cosphi * cotphi / sinpsi + K; //H = 0
+    for (int i = 0; i < n_iterations; i++) {
+        const REAL jac = K; //H = 0
         DEpsPV -= res / jac;
 
-        epsbarnp1 = m_hardening + alpha * DEpsPV;
         pnp1 = ptrnp1 - K * DEpsPV;
         res = mc_cohesion * cotphi - pnp1;
 
@@ -330,13 +298,13 @@ void ReturnMappingApex(double *eigenvalues, double *sigma_projected, double &m_h
         }
     }
 
-    m_hardening = epsbarnp1;
+    m_hardening += alpha * DEpsPV;
     for (int i = 0; i < 3; i++) {
         sigma_projected[i] = pnp1;
     }
 }
 
-void TPZSolveMatrix::DeltaStrain(TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &delta_strain) {
+void TPZSolveMatrix::DeltaStrain(TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &delta_strain) {
     int64_t nelem = fRowSizes.size();
     int64_t n_globalsol = fIndexes.size();
 
@@ -348,7 +316,7 @@ void TPZSolveMatrix::DeltaStrain(TPZFMatrix<STATE> &global_solution, TPZFMatrix<
 /// gather operation
     cblas_dgthr(n_globalsol, global_solution, &expandsolution[0], &fIndexes[0]);
 
-    for (int iel = 0; iel < nelem; iel++) {
+    for (int64_t iel = 0; iel < nelem; iel++) {
         for (int i = 0; i < fRowSizes[iel]; i++) {
             for (int j = 0; j < 1; j++) {
                 for (int k = 0; k < fColSizes[iel]; k++) {
@@ -360,17 +328,17 @@ void TPZSolveMatrix::DeltaStrain(TPZFMatrix<STATE> &global_solution, TPZFMatrix<
     }
 }
 
-void TPZSolveMatrix::ElasticStrain(TPZFMatrix<STATE> &delta_strain, TPZFMatrix<STATE> &total_strain, TPZFMatrix<STATE> &plastic_strain, TPZFMatrix<STATE> &elastic_strain) {
+void TPZSolveMatrix::ElasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &total_strain, TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &elastic_strain) {
     elastic_strain = total_strain + delta_strain - plastic_strain;
 }
 
-void TPZSolveMatrix::SigmaTrial( TPZStack<REAL> &weight, TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<STATE> &sigma_trial) {
+void TPZSolveMatrix::SigmaTrial( TPZStack<REAL> &weight, TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &sigma_trial) {
 //REAL E = 200000000.;
 //REAL E = 20000000.;
 //    REAL nu =0.30;
 //    REAL E = 2.0*400*20.0*(1+nu);
     int dim = 2;
-    int npts = fRow/dim;
+    int64_t npts = fRow/dim;
     sigma_trial.Resize(4*npts,1);
 
 #ifdef USING_TBB
@@ -384,7 +352,7 @@ void TPZSolveMatrix::SigmaTrial( TPZStack<REAL> &weight, TPZFMatrix<REAL> &elast
                       );
 #else
 
-    for (int64_t ipts=0; ipts< npts; ipts++) {
+    for (int64_t ipts=0; ipts < npts; ipts++) {
         //plane strain
         sigma_trial(4*ipts,0) = weight[ipts]*(elastic_strain(2*ipts,0)*E*(1.-nu)/((1.-2*nu)*(1.+nu)) + elastic_strain(2*ipts+2*npts+1,0)*E*nu/((1.-2*nu)*(1.+nu))); // Sigma xx
         sigma_trial(4*ipts+1,0) = weight[ipts]*(elastic_strain(2*ipts+2*npts+1,0)*E*(1.-nu)/((1.-2*nu)*(1.+nu)) + elastic_strain(2*ipts,0)*E*nu/((1.-2*nu)*(1.+nu))); // Sigma yy
@@ -399,51 +367,44 @@ void TPZSolveMatrix::SigmaTrial( TPZStack<REAL> &weight, TPZFMatrix<REAL> &elast
 #endif
 }
 
-void TPZSolveMatrix::PrincipalStress(TPZFMatrix<REAL> &sigma_trial, TPZFMatrix<STATE> &eigenvalues) {
+void TPZSolveMatrix::PrincipalStress(TPZFMatrix<REAL> &sigma_trial, TPZFMatrix<REAL> &eigenvalues) {
     int dim = 2;
     int64_t npts = fRow/dim;
 
-    double maxel;
+    REAL maxel;
     TPZVec<REAL> interval(2);
     eigenvalues.Resize(3*npts,1);
 
-    for (int ipts = 0; ipts < npts; ipts++) {
+    for (int64_t ipts = 0; ipts < npts; ipts++) {
         Normalize(&sigma_trial(4*ipts, 0), maxel);
         Interval(&sigma_trial(4*ipts, 0), &interval[0]);
         NewtonIterations(&interval[0], &sigma_trial(4*ipts, 0), &eigenvalues(3*ipts, 0), maxel);
     }
 }
 
-void TPZSolveMatrix::ProjectSigma(TPZFMatrix<STATE> &total_strain, TPZFMatrix<STATE> &plastic_strain, TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<STATE> &sigma_projected) {
+void TPZSolveMatrix::ProjectSigma(TPZFMatrix<REAL> &total_strain, TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &sigma_projected) {
     int dim = 2;
     int npts = fRow/dim;
+
     sigma_projected.Resize(3*npts,1);
     sigma_projected.Zero();
+    TPZFMatrix<REAL> elastic_strain_np1(dim*dim*npts);
 
-    //store in memory
     TPZVec<int> m_type(npts,0);
     TPZVec<REAL> m_hardening(npts, 0.);
-    TPZVec<REAL> m_gamma(npts,0.);
-
     bool check = false;
 
     for (int ipts = 0; ipts < npts; ipts++) {
-        m_gamma.resize(0);
         m_type[ipts] = 0;
         check = PhiPlane(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0)); //elastic domain
         if (!check) { //plastic domain
-            m_gamma.resize(1*npts);
-            m_gamma[0 + ipts] = 0;
             m_type[ipts] = 1;
-            check = ReturnMappingMainPlane(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), m_hardening[ipts], &m_gamma[ipts]); //main plane
+            check = ReturnMappingMainPlane(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), m_hardening[ipts]); //main plane
             if (!check) { //edges or apex
-                m_gamma.resize(2*npts);
-                m_gamma[0 + ipts] = 0;
-                m_gamma[1 + ipts] = 0;
                 if  (((1 - sin(mc_psi)) * eigenvalues(0 + 3*ipts, 0) - 2. * eigenvalues(1 + 3*ipts, 0) + (1 + sin(mc_psi)) * eigenvalues(2 + 3*ipts, 0)) > 0) { // right edge
-                    check = ReturnMappingRightEdge(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), m_hardening[ipts], &m_gamma[2*ipts]);
+                    check = ReturnMappingRightEdge(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), m_hardening[ipts]);
                 } else { //left edge
-                    check = ReturnMappingLeftEdge(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), m_hardening[ipts], &m_gamma[2*ipts]);
+                    check = ReturnMappingLeftEdge(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), m_hardening[ipts]);
                 }
                 if (!check) { //apex
                     m_type[ipts] = -1;
@@ -509,8 +470,6 @@ for (int64_t iel=0; iel<nelem; iel++) {
 }
 #endif
 }
-
-
 
 void TPZSolveMatrix::MultiplyTranspose(TPZFMatrix<STATE>  &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec) {
 int64_t nelem = fRowSizes.size();

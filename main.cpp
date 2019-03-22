@@ -109,16 +109,16 @@ TPZGeoMesh *Geometry2D(int nelem_x, int nelem_y, REAL len, int ndivide) {
     gmesh->SetDimension(dim);
 
 // Geometry definitions
-    int nnodes_x = nelem_x + 1; //Number of nodes in x direction
-    int nnodes_y = nelem_y + 1; //Number of nodes in x direction
+    int64_t nnodes_x = nelem_x + 1; //Number of nodes in x direction
+    int64_t nnodes_y = nelem_y + 1; //Number of nodes in x direction
     int64_t nelem = nelem_x * nelem_y; //Total number of elements
 
 // Nodes initialization
 // Enumeration: vertical order - from the below to the top, and from the left to the right
     TPZManVector<REAL> coord(3, 0.);
     int64_t id, index;
-    for (int i = 0; i < nnodes_x; i++) {
-        for (int j = 0; j < nnodes_y; j++) {
+    for (int64_t i = 0; i < nnodes_x; i++) {
+        for (int64_t j = 0; j < nnodes_y; j++) {
             id = i * nnodes_y + j;
             coord[0] = (i) * len / (nnodes_x - 1);
             coord[1] = (j) * len / (nnodes_y - 1);
@@ -130,8 +130,8 @@ TPZGeoMesh *Geometry2D(int nelem_x, int nelem_y, REAL len, int ndivide) {
 // Element connectivities
 // Enumeration: vertical order - from the below to the top, and from the left to the right
     TPZManVector<int64_t> connect(4, 0);
-    for (int i = 0; i < (nnodes_x - 1); i++) {
-        for (int j = 0; j < (nnodes_y - 1); j++) {
+    for (int64_t i = 0; i < (nnodes_x - 1); i++) {
+        for (int64_t j = 0; j < (nnodes_y - 1); j++) {
             index = (i) * (nnodes_y - 1) + (j);
             connect[0] = (i) * nnodes_y + (j);
             connect[1] = connect[0] + (nnodes_y);
@@ -315,7 +315,7 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh * gmesh, int p_order) {
 
 // Mohr Coulomb data
     REAL mc_cohesion    = 10.0;
-    REAL mc_phi         = (20.0*M_PI/180);
+    REAL mc_phi         = (100.0*M_PI/180);
     REAL mc_psi         = mc_phi;
 
 // ElastoPlastic Material using Mohr Coulomb
@@ -686,9 +686,9 @@ void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
     TPZFMatrix<REAL> eigenvalues;
     TPZFMatrix<REAL> nodal_forces_vec;
     TPZFMatrix<REAL> delta_strain;
-    TPZFMatrix<REAL> total_strain(2 * dim_mesh * nf_tot, 1, 0.);
-    TPZFMatrix<REAL> plastic_strain(2 * dim_mesh * nf_tot, 1, 0.);
-    TPZFMatrix<REAL> elastic_strain(2 * dim_mesh * nf_tot, 1, 0.);
+    TPZFMatrix<REAL> total_strain(dim_mesh * dim_mesh * npts_tot, 1, 0.);
+    TPZFMatrix<REAL> plastic_strain(dim_mesh * dim_mesh * npts_tot, 1, 0.);
+    TPZFMatrix<REAL> elastic_strain(dim_mesh * dim_mesh * npts_tot, 1, 0.);
     TPZFMatrix<REAL> phi;
     TPZFMatrix<REAL> sigma_projected;
 
