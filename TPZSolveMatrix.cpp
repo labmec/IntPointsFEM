@@ -13,12 +13,335 @@
 using namespace tbb;
 #endif
 
-void TPZSolveMatrix::MultiplyInThreads(TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const {
+//MATERIAL PROPERTIES (organizar isso aqui!)
+#define mc_cohesion         10.0
+#define mc_phi              20.0*M_PI/180
+#define mc_psi              20.0*M_PI/180
+#define G                   400*mc_cohesion
+#define nu                  0.3
+#define E                   2.0*G*(1+nu)
+#define K                   nu * E / ((1. +nu)*(1. - 2. * nu)) + 2. * E / (2. * (1. + nu)) / 3.
+
+//PrincipalStress
+void Normalize(double *sigma, double &maxel) {
+    maxel = sigma[0];
+    for (int i = 1; i < 4; i++) {
+        if (sigma[i] > maxel) {
+            maxel = sigma[i];
+        }
+    }
+    for (int i = 0; i < 4; i++) {
+        sigma[i] /= maxel;
+    }
+}
+
+void Interval(double *sigma, double *interval) {
+    TPZVec<REAL> lower_vec(3);
+    TPZVec<REAL> upper_vec(3);
+
+    //row 1 |sigma_xx sigma_xy 0|
+    lower_vec[0] = sigma[0] - fabs(sigma[3]);
+    upper_vec[0] = sigma[0] + fabs(sigma[3]);
+
+    //row 2 |sigma_xy sigma_yy 0|
+    lower_vec[1] = sigma[2] - fabs(sigma[3]);
+    upper_vec[1] = sigma[2] + fabs(sigma[3]);
+
+    //row 3 |0 0 sigma_zz|
+    lower_vec[2] = sigma[2];
+    upper_vec[2] = sigma[2];
+
+    interval[0] = upper_vec[0];
+    interval[1] = lower_vec[0];
+
+    for (int i = 1; i < 3; i++) {
+        if (upper_vec[i] > interval[0]) { //lower interval at all
+            interval[0] = upper_vec[i];
+        }
+
+        if (lower_vec[i] < interval[1]) { //upper interval at all
+            interval[1] = lower_vec[i];
+        }
+    }
+}
+
+void NewtonIterations(double *interval, double *sigma, double *eigenvalues, double &maxel) {
+    int numiterations = 20;
+    double tol = 10e-8;
+
+    double res, f, df, x;
+    int it;
+
+    for (int i = 0; i < 2; i++) {
+        x = interval[i];
+        it = 0;
+
+        f = sigma[0] * sigma[1] - x * (sigma[0] + sigma[1]) + x * x - sigma[3] * sigma[3];
+        res = abs(f);
+
+        while (it < numiterations && res > tol) {
+            df = -sigma[0] - sigma[1] + 2 * x;
+
+            x -= f / df;
+            f = sigma[0] * sigma[1] - x * (sigma[0] + sigma[1]) + x * x - sigma[3] * sigma[3];
+            res = abs(f);
+            it++;
+        }
+        eigenvalues[2 * i] = x;
+
+    }
+    eigenvalues[1] = sigma[0] + sigma[2] + sigma[3] - eigenvalues[0] - eigenvalues[2];
+
+    eigenvalues[0] *= maxel;
+    eigenvalues[1] *= maxel;
+    eigenvalues[2] *= maxel;
+}
+
+//ProjectSigma
+bool PhiPlane(double *eigenvalues, double *sigma_projected) {
+    const double sinphi = sin(mc_phi);
+    const double cosphi = cos(mc_phi);
+
+    double phi = eigenvalues[0] - eigenvalues[2] + (eigenvalues[0] + eigenvalues[2]) * sinphi - 2. * mc_cohesion *cosphi;
+
+    sigma_projected[0] = eigenvalues[0];
+    sigma_projected[1] = eigenvalues[1];
+    sigma_projected[2] = eigenvalues[2];
+
+    bool check_validity = (fabs(phi) < 1.e-12) || (phi < 0.0);
+    return check_validity;
+}
+
+bool ReturnMappingMainPlane(double *eigenvalues, double *sigma_projected, double &m_hardening, double *m_gamma) {
+
+    const REAL sinphi = sin(mc_phi);
+    const REAL sinpsi = sin(mc_psi);
+    const REAL cosphi = cos(mc_phi);
+    const REAL sinphi2 = sinphi*sinphi;
+    const REAL cosphi2 = 1. - sinphi2;
+    const REAL constA = 4. * G *(1. + sinphi * sinpsi / 3.) + 4. * K * sinphi*sinpsi;
+
+    double epsbar = (m_hardening + m_gamma[0]*2. * cosphi);
+    double phi = eigenvalues[0] - eigenvalues[2]+(eigenvalues[0] + eigenvalues[2]) * sinphi - 2. * mc_cohesion*cosphi;
+
+    double gamma = m_gamma[0];
+    double phival = phi;
+    int n_iterations = 30;
+    for (int i = 0; i < n_iterations; i++) {
+        double jac = -constA - 4. * cosphi2 * 0; // H=0
+        double delta_gamma = - phi / jac;
+        gamma += delta_gamma;
+        phi = eigenvalues[0] - eigenvalues[2]+(eigenvalues[0] + eigenvalues[2]) * sinphi - 2. * mc_cohesion * cosphi - constA * gamma;
+        phival = phi;
+        if (fabs(phival) < 1.e-12) {
+            break;
+        }
+    }
+
+    epsbar = m_hardening + gamma * 2. * cosphi;
+    m_gamma[0] = gamma;
+    sigma_projected[0] -= (2. * G *(1 + sinpsi / 3.) + 2. * K * sinpsi) * gamma;
+    sigma_projected[1] += (4. * G / 3. - K * 2.) * sinpsi * gamma;
+    sigma_projected[2] += (2. * G * (1 - sinpsi / 3.) - 2. * K * sinpsi) * gamma;
+    m_hardening = epsbar;
+
+    bool check_validity = (eigenvalues[0] > eigenvalues[1] || fabs(eigenvalues[0]-eigenvalues[1]) < 1.e-12) && (eigenvalues[1] > eigenvalues[2] || fabs(eigenvalues[1]-eigenvalues[2]) < 1.e-12);
+    return check_validity;
+}
+
+bool ReturnMappingRightEdge(double *eigenvalues, double *sigma_projected, double &m_hardening, double *m_gamma) {
+    const REAL sinphi = sin(mc_phi);
+    const REAL sinpsi = sin(mc_psi);
+    const REAL cosphi = cos(mc_phi);
+    const REAL sinphi2 = sinphi*sinphi;
+    const REAL cosphi2 = 1. - sinphi2;
+
+    TPZVec<REAL> gamma(2, 0.), phi(2, 0.), sigma_bar(2, 0.), ab(2, 0.);
+    gamma[0] = m_gamma[0];
+    gamma[1] = m_gamma[1];
+
+    TPZVec<REAL> phival(2, 0.);
+    TPZVec<TPZVec<REAL>> jac(2), jac_inv(2);
+    for (int i = 0; i < 2; i++) {
+        jac[i].Resize(2, 0.);
+        jac_inv[i].Resize(2, 0.);
+    }
+
+    sigma_bar[0] = eigenvalues[0] - eigenvalues[2]+(eigenvalues[0] + eigenvalues[2]) * sinphi;
+    sigma_bar[1] = eigenvalues[0] - eigenvalues[1] + (eigenvalues[0] + eigenvalues[1]) * sinphi;
+
+    ab[0] = 4. * G * (1 + sinphi * sinpsi / 3.) + 4. * K * sinphi * sinpsi;
+    ab[1] = 2. * G * (1. + sinphi + sinpsi - sinphi * sinpsi / 3.) + 4. * K * sinphi * sinpsi;
+
+    double epsbar = m_hardening +(gamma[0] + gamma[1]) * 2. * cosphi;
+
+    phi[0] = sigma_bar[0] - ab[0] * gamma[0] - ab[1] * gamma[1] - 2. * cosphi * mc_cohesion;
+    phi[1] = sigma_bar[1] - ab[1] * gamma[0] - ab[0] * gamma[1] - 2. * cosphi * mc_cohesion;
+
+    int n_iterations = 30;
+    int i;
+    for (i = 0; i < n_iterations; i++) {
+
+        jac[0][0] = -ab[0] - 4. * cosphi2 * 0;
+        jac[1][0] = -ab[1] - 4. * cosphi2 * 0;
+        jac[0][1] = -ab[1] - 4. * cosphi2 * 0;
+        jac[1][1] = -ab[0] - 4. * cosphi2 * 0;
+
+        double det_jac = jac[0][0] * jac[1][1] - jac[0][1] * jac[1][0];
+
+        jac_inv[0][0] = jac[1][1] / det_jac;
+        jac_inv[1][0] = -jac[1][0] / det_jac;
+        jac_inv[0][1] = -jac[0][1] / det_jac;
+        jac_inv[1][1] = jac[0][0] / det_jac;
+
+        gamma[0] -= (jac_inv[0][0] * phi[0] + jac_inv[0][1] * phi[1]);
+        gamma[1] -= (jac_inv[1][0] * phi[0] + jac_inv[1][1] * phi[1]);
+
+        epsbar = m_hardening +(gamma[0] + gamma[1]) * 2. * cosphi;
+
+        phi[0] = sigma_bar[0] - ab[0] * gamma[0] - ab[1] * gamma[1] - 2. * cosphi * mc_cohesion;
+        phi[1] = sigma_bar[1] - ab[1] * gamma[0] - ab[0] * gamma[1] - 2. * cosphi * mc_cohesion;
+        phival[0] = phi[0];
+        phival[1] = phi[1];
+        double res = (fabs(phival[0]) + fabs(phival[1]));
+
+        if (fabs(res) < 1.e-12) {
+            break;
+        }
+    }
+
+    m_gamma[0] = gamma[0];
+    m_gamma[1] = gamma[1];
+
+    sigma_projected[0] -= (2. * G * (1 + sinpsi / 3.) + 2. * K * sinpsi) * (gamma[0] + gamma[1]);
+    sigma_projected[1] += ((4. * G / 3. - K * 2.) * sinpsi) * gamma[0] + (2. * G * (1. - sinpsi / 3.) - 2. * K * sinpsi) * gamma[1];
+    sigma_projected[2] += (2. * G * (1 - sinpsi / 3.) - 2. * K * sinpsi) * gamma[0] + ((4. * G / 3. - 2. * K) * sinpsi) * gamma[1];
+
+    m_hardening = epsbar;
+
+    bool check_validity = (eigenvalues[0] > eigenvalues[1] || fabs(eigenvalues[0]-eigenvalues[1]) < 1.e-12) && (eigenvalues[1] > eigenvalues[2] || fabs(eigenvalues[1]-eigenvalues[2]) < 1.e-12);
+    return check_validity;
+}
+
+bool ReturnMappingLeftEdge(double *eigenvalues, double *sigma_projected, double &m_hardening, double *m_gamma) {
+    const REAL sinphi = sin(mc_phi);
+    const REAL sinpsi = sin(mc_psi);
+    const REAL cosphi = cos(mc_phi);
+    const REAL sinphi2 = sinphi*sinphi;
+    const REAL cosphi2 = 1. - sinphi2;
+
+    TPZVec<REAL> gamma(2, 0.), phi(2, 0.), sigma_bar(2, 0.), ab(2, 0.);
+
+    gamma[0] = m_gamma[0];
+    gamma[1] = m_gamma[1];
+    TPZVec<REAL> phival(2, 0.);
+    TPZVec<TPZVec<REAL>> jac(2), jac_inv(2);
+    for (int i = 0; i < 2; i++) {
+        jac[i].Resize(2, 0.);
+        jac_inv[i].Resize(2, 0.);
+    }
+
+    sigma_bar[0] = eigenvalues[0] - eigenvalues[2]+(eigenvalues[0] + eigenvalues[2]) * sinphi;
+    sigma_bar[1] = eigenvalues[1] - eigenvalues[2]+(eigenvalues[1] + eigenvalues[2]) * sinphi;
+
+    ab[0] = 4. * G * (1 + sinphi * sinpsi / 3.) + 4. * K * sinphi * sinpsi;
+    ab[1] = 2. * G * (1. - sinphi - sinpsi - sinphi * sinpsi / 3.) + 4. * K * sinphi * sinpsi;
+
+    double epsbar = m_hardening +(gamma[0] + gamma[1]) * 2. * cosphi;
+
+    phi[0] = sigma_bar[0] - ab[0] * gamma[0] - ab[1] * gamma[1] - 2. * cosphi * mc_cohesion;
+    phi[1] = sigma_bar[1] - ab[1] * gamma[0] - ab[0] * gamma[1] - 2. * cosphi * mc_cohesion;
+
+    int n_iterations = 30;
+    int i;
+    for (i = 0; i < n_iterations; i++) {
+
+        jac[0][0] = -ab[0] - 4. * cosphi2 * 0;
+        jac[1][0] = -ab[1] - 4. * cosphi2 * 0;
+        jac[0][1] = -ab[1] - 4. * cosphi2 * 0;
+        jac[1][1] = -ab[0] - 4. * cosphi2 * 0;
+
+        double det_jac = jac[0][0] * jac[1][1] - jac[0][1] * jac[1][0];
+
+        jac_inv[0][0] = jac[1][1] / det_jac;
+        jac_inv[1][0] = -jac[1][0] / det_jac;
+        jac_inv[0][1] = -jac[0][1] / det_jac;
+        jac_inv[1][1] = jac[0][0] / det_jac;
+
+        gamma[0] -= (jac_inv[0][0] * phi[0] + jac_inv[0][1] * phi[1]);
+        gamma[1] -= (jac_inv[1][0] * phi[0] + jac_inv[1][1] * phi[1]);
+
+        epsbar = m_hardening +(gamma[0] + gamma[1]) * 2. * cosphi;
+
+        phi[0] = sigma_bar[0] - ab[0] * gamma[0] - ab[1] * gamma[1] - 2. * cosphi * mc_cohesion;
+        phi[1] = sigma_bar[1] - ab[1] * gamma[0] - ab[0] * gamma[1] - 2. * cosphi * mc_cohesion;
+        phival[0] = phi[0];
+        phival[1] = phi[1];
+        double res = (fabs(phival[0]) + fabs(phival[1]));
+
+        if (fabs(res) < 1.e-12) {
+            break;
+        }
+    }
+
+    m_gamma[0] = gamma[0];
+    m_gamma[1] = gamma[1];
+
+    sigma_projected[0] += -(2. * G * (1 + sinpsi / 3.) + 2. * K * sinpsi) * gamma[0] + ((4. * G / 3. - 2. * K) * sinpsi) * gamma[1];
+    sigma_projected[1] += ((4. * G / 3. - K * 2.) * sinpsi) * gamma[0] - (2. * G * (1. + sinpsi / 3.) + 2. * K * sinpsi) * gamma[1];
+    sigma_projected[2] += (2. * G * (1 - sinpsi / 3.) - 2. * K * sinpsi) * (gamma[0] + gamma[1]);
+
+    m_hardening = epsbar;
+
+    bool check_validity = (eigenvalues[0] > eigenvalues[1] || fabs(eigenvalues[0]-eigenvalues[1]) < 1.e-12) && (eigenvalues[1] > eigenvalues[2] || fabs(eigenvalues[1]-eigenvalues[2]) < 1.e-12);
+    return check_validity;
+}
+
+void ReturnMappingApex(double *eigenvalues, double *sigma_projected, double &m_hardening) {
+    const REAL sinpsi = sin(mc_psi);
+    const REAL cosphi = cos(mc_phi);
+    const REAL cotphi = 1. / tan(mc_phi);
+    double ptrnp1 = 0.;
+    for (int i = 0; i < 3; i++) {
+        ptrnp1 += eigenvalues[i];
+    }
+    ptrnp1 /= 3.;
+    double DEpsPV = 0.;
+    double epsbarnp1 = m_hardening;
+
+    double alpha = cos(mc_phi) / sin(mc_psi);
+    REAL tol = 1.e-8;
+
+    double res = mc_cohesion * cotphi - ptrnp1;
+    double pnp1;
+
+    int n_iterations = 30;
+    int i;
+    for (i = 0; i < n_iterations; i++) {
+        const double jac = 0 * cosphi * cotphi / sinpsi + K; //H = 0
+        DEpsPV -= res / jac;
+
+        epsbarnp1 = m_hardening + alpha * DEpsPV;
+        pnp1 = ptrnp1 - K * DEpsPV;
+        res = mc_cohesion * cotphi - pnp1;
+
+        if (fabs(res) < 1.e-12) {
+            break;
+        }
+    }
+
+    m_hardening = epsbarnp1;
+    for (int i = 0; i < 3; i++) {
+        sigma_projected[i] = pnp1;
+    }
+}
+
+void TPZSolveMatrix::DeltaStrain(TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &delta_strain) {
     int64_t nelem = fRowSizes.size();
     int64_t n_globalsol = fIndexes.size();
 
-    result.Resize(2*n_globalsol,1);
-    result.Zero();
+    delta_strain.Resize(2*n_globalsol,1);
+    delta_strain.Zero();
 
     TPZVec<REAL> expandsolution(n_globalsol);
 
@@ -29,15 +352,107 @@ void TPZSolveMatrix::MultiplyInThreads(TPZFMatrix<STATE> &global_solution, TPZFM
         for (int i = 0; i < fRowSizes[iel]; i++) {
             for (int j = 0; j < 1; j++) {
                 for (int k = 0; k < fColSizes[iel]; k++) {
-                    result(j * fRowSizes[iel] + i + fRowFirstIndex[iel], 0) += fStorage[k * fRowSizes[iel] + i + fMatrixPosition[iel]] * expandsolution[j * fColSizes[iel] + k + fColFirstIndex[iel]];
-                    result(j * fRowSizes[iel] + i + fRowFirstIndex[iel] + n_globalsol, 0) += fStorage[k * fRowSizes[iel] + i + fMatrixPosition[iel]] * expandsolution[j * fColSizes[iel] + k + fColFirstIndex[iel] + n_globalsol/2];
+                    delta_strain(j * fRowSizes[iel] + i + fRowFirstIndex[iel], 0) += fStorage[k * fRowSizes[iel] + i + fMatrixPosition[iel]] * expandsolution[j * fColSizes[iel] + k + fColFirstIndex[iel]];
+                    delta_strain(j * fRowSizes[iel] + i + fRowFirstIndex[iel] + n_globalsol, 0) += fStorage[k * fRowSizes[iel] + i + fMatrixPosition[iel]] * expandsolution[j * fColSizes[iel] + k + fColFirstIndex[iel] + n_globalsol/2];
                 }
             }
         }
     }
 }
 
+void TPZSolveMatrix::ElasticStrain(TPZFMatrix<STATE> &delta_strain, TPZFMatrix<STATE> &total_strain, TPZFMatrix<STATE> &plastic_strain, TPZFMatrix<STATE> &elastic_strain) {
+    elastic_strain = total_strain + delta_strain - plastic_strain;
+}
 
+void TPZSolveMatrix::SigmaTrial( TPZStack<REAL> &weight, TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<STATE> &sigma_trial) {
+//REAL E = 200000000.;
+//REAL E = 20000000.;
+//    REAL nu =0.30;
+//    REAL E = 2.0*400*20.0*(1+nu);
+    int dim = 2;
+    int npts = fRow/dim;
+    sigma_trial.Resize(4*npts,1);
+
+#ifdef USING_TBB
+    parallel_for(size_t(0),size_t(npts_tot/2),size_t(1),[&](size_t ipts)
+                      {
+                            sigma(2*ipts,0) = weight[ipts]*E/(1.-nu*nu)*(result(2*ipts,0)+nu*result(2*ipts+npts_tot+1,0)); // Sigma x
+                            sigma(2*ipts+1,0) = weight[ipts]*E/(1.-nu*nu)*(1.-nu)/2*(result(2*ipts+1,0)+result(2*ipts+npts_tot,0))*0.5; // Sigma xy
+                            sigma(2*ipts+npts_tot,0) = sigma(2*ipts+1,0); //Sigma xy
+                            sigma(2*ipts+npts_tot+1,0) = weight[ipts]*E/(1.-nu*nu)*(result(2*ipts+npts_tot+1,0)+nu*result(2*ipts,0)); // Sigma y
+                      }
+                      );
+#else
+
+    for (int64_t ipts=0; ipts< npts; ipts++) {
+        //plane strain
+        sigma_trial(4*ipts,0) = weight[ipts]*(elastic_strain(2*ipts,0)*E*(1.-nu)/((1.-2*nu)*(1.+nu)) + elastic_strain(2*ipts+2*npts+1,0)*E*nu/((1.-2*nu)*(1.+nu))); // Sigma xx
+        sigma_trial(4*ipts+1,0) = weight[ipts]*(elastic_strain(2*ipts+2*npts+1,0)*E*(1.-nu)/((1.-2*nu)*(1.+nu)) + elastic_strain(2*ipts,0)*E*nu/((1.-2*nu)*(1.+nu))); // Sigma yy
+        sigma_trial(4*ipts+2,0) = weight[ipts]*(E*nu/((1.+nu)*(1.-2*nu))*(elastic_strain(2*ipts,0) + elastic_strain(2*ipts+2*npts+1,0))); // Sigma zz
+        sigma_trial(4*ipts+3,0) = weight[ipts]*E/(2*(1.+nu))*(elastic_strain(2*ipts+1,0)+elastic_strain(2*ipts+2*npts,0)); // Sigma xy
+
+//    sigma(2*ipts,0) = weight[ipts]*E/(1.-nu*nu)*(result(2*ipts,0)+nu*result(2*ipts+npts_tot+1,0)); // Sigma x
+//    sigma(2*ipts+1,0) = weight[ipts]*E/(1.-nu*nu)*(1.-nu)/2*(result(2*ipts+1,0)+result(2*ipts+npts_tot,0))*0.5; // Sigma xy
+//    sigma(2*ipts+npts_tot,0) = sigma(2*ipts+1,0); //Sigma xy
+//    sigma(2*ipts+npts_tot+1,0) = weight[ipts]*E/(1.-nu*nu)*(result(2*ipts+npts_tot+1,0)+nu*result(2*ipts,0)); // Sigma y
+    }
+#endif
+}
+
+void TPZSolveMatrix::PrincipalStress(TPZFMatrix<REAL> &sigma_trial, TPZFMatrix<STATE> &eigenvalues) {
+    int dim = 2;
+    int64_t npts = fRow/dim;
+
+    double maxel;
+    TPZVec<REAL> interval(2);
+    eigenvalues.Resize(3*npts,1);
+
+    for (int ipts = 0; ipts < npts; ipts++) {
+        Normalize(&sigma_trial(4*ipts, 0), maxel);
+        Interval(&sigma_trial(4*ipts, 0), &interval[0]);
+        NewtonIterations(&interval[0], &sigma_trial(4*ipts, 0), &eigenvalues(3*ipts, 0), maxel);
+    }
+}
+
+void TPZSolveMatrix::ProjectSigma(TPZFMatrix<STATE> &total_strain, TPZFMatrix<STATE> &plastic_strain, TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<STATE> &sigma_projected) {
+    int dim = 2;
+    int npts = fRow/dim;
+    sigma_projected.Resize(3*npts,1);
+    sigma_projected.Zero();
+
+    //store in memory
+    TPZVec<int> m_type(npts,0);
+    TPZVec<REAL> m_hardening(npts, 0.);
+    TPZVec<REAL> m_gamma(npts,0.);
+
+    bool check = false;
+
+    for (int ipts = 0; ipts < npts; ipts++) {
+        m_gamma.resize(0);
+        m_type[ipts] = 0;
+        check = PhiPlane(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0)); //elastic domain
+        if (!check) { //plastic domain
+            m_gamma.resize(1*npts);
+            m_gamma[0 + ipts] = 0;
+            m_type[ipts] = 1;
+            check = ReturnMappingMainPlane(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), m_hardening[ipts], &m_gamma[ipts]); //main plane
+            if (!check) { //edges or apex
+                m_gamma.resize(2*npts);
+                m_gamma[0 + ipts] = 0;
+                m_gamma[1 + ipts] = 0;
+                if  (((1 - sin(mc_psi)) * eigenvalues(0 + 3*ipts, 0) - 2. * eigenvalues(1 + 3*ipts, 0) + (1 + sin(mc_psi)) * eigenvalues(2 + 3*ipts, 0)) > 0) { // right edge
+                    check = ReturnMappingRightEdge(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), m_hardening[ipts], &m_gamma[2*ipts]);
+                } else { //left edge
+                    check = ReturnMappingLeftEdge(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), m_hardening[ipts], &m_gamma[2*ipts]);
+                }
+                if (!check) { //apex
+                    m_type[ipts] = -1;
+                    ReturnMappingApex(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), m_hardening[ipts]);
+                }
+            }
+        }
+    }
+}
 
 void TPZSolveMatrix::Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const {
 int64_t nelem = fRowSizes.size();
@@ -95,36 +510,7 @@ for (int64_t iel=0; iel<nelem; iel++) {
 #endif
 }
 
-void TPZSolveMatrix::ComputeSigma( TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<STATE> &sigma) {
-REAL E = 200000000.;
-REAL nu =0.30;
-int npts_tot = fRow;
-sigma.Resize(2*npts_tot,1);
 
-#ifdef USING_TBB
-parallel_for(size_t(0),size_t(npts_tot/2),size_t(1),[&](size_t ipts)
-                      {
-                            sigma(2*ipts,0) = weight[ipts]*E/(1.-nu*nu)*(result(2*ipts,0)+nu*result(2*ipts+npts_tot+1,0)); // Sigma x
-                            sigma(2*ipts+1,0) = weight[ipts]*E/(1.-nu*nu)*(1.-nu)/2*(result(2*ipts+1,0)+result(2*ipts+npts_tot,0))*0.5; // Sigma xy
-                            sigma(2*ipts+npts_tot,0) = sigma(2*ipts+1,0); //Sigma xy
-                            sigma(2*ipts+npts_tot+1,0) = weight[ipts]*E/(1.-nu*nu)*(result(2*ipts+npts_tot+1,0)+nu*result(2*ipts,0)); // Sigma y
-                      }
-                      );
-#else
-
-for (int64_t ipts=0; ipts< npts_tot/2; ipts++) {
-    //plane strain
-    sigma(2*ipts,0) = weight[ipts]*(result(2*ipts,0)*E*(1.-nu)/((1.-2*nu)*(1.+nu)) + result(2*ipts+npts_tot+1,0)*E*nu/((1.-2*nu)*(1.+nu))); // Sigma x
-    sigma(2*ipts+1,0) = weight[ipts]*E/(2*(1.+nu))*(result(2*ipts+1,0)+result(2*ipts+npts_tot,0)); // Sigma xy
-    sigma(2*ipts+npts_tot,0) = sigma(2*ipts+1,0); //Sigma xy
-    sigma(2*ipts+npts_tot+1,0) = weight[ipts]*(result(2*ipts+npts_tot+1,0)*E*(1.-nu)/((1.-2*nu)*(1.+nu)) + result(2*ipts,0)*E*nu/((1.-2*nu)*(1.+nu))); // Sigma y
-//    sigma(2*ipts,0) = weight[ipts]*E/(1.-nu*nu)*(result(2*ipts,0)+nu*result(2*ipts+npts_tot+1,0)); // Sigma x
-//    sigma(2*ipts+1,0) = weight[ipts]*E/(1.-nu*nu)*(1.-nu)/2*(result(2*ipts+1,0)+result(2*ipts+npts_tot,0))*0.5; // Sigma xy
-//    sigma(2*ipts+npts_tot,0) = sigma(2*ipts+1,0); //Sigma xy
-//    sigma(2*ipts+npts_tot+1,0) = weight[ipts]*E/(1.-nu*nu)*(result(2*ipts+npts_tot+1,0)+nu*result(2*ipts,0)); // Sigma y
-}
-#endif
-}
 
 void TPZSolveMatrix::MultiplyTranspose(TPZFMatrix<STATE>  &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec) {
 int64_t nelem = fRowSizes.size();
@@ -195,7 +581,6 @@ void TPZSolveMatrix::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFM
     }
     nodal_forces_global.Resize(neq, 1);
 }
-
 
 void TPZSolveMatrix::TraditionalAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const {
 #ifdef USING_TBB

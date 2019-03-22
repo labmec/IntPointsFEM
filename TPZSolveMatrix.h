@@ -8,7 +8,6 @@
 
 #include "pzmatrix.h"
 #include "pzfmatrix.h"
-#include <mkl.h>
 #include "pzinterpolationspace.h"
 #include "pzcmesh.h"
 #ifdef USING_MKL
@@ -142,36 +141,42 @@ public:
  
     void FreeMemory();
 
-//    void cuSparseHandle();
-//
-//    void cuBlasHandle();
+    void cuSparseHandle();
+
+    void cuBlasHandle();
 
     void MultiplyInThreadsCUDA(TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
 
-//    void MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
-//
-//    void ComputeSigmaCUDA(TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<REAL> &sigma);
-//
-//    void MultiplyTransposeCUDA(TPZFMatrix<STATE> &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec);
-//
-//    void ColoredAssembleCUDA(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global);
+    void MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
+
+    void ComputeSigmaCUDA(TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<REAL> &sigma);
+
+    void MultiplyTransposeCUDA(TPZFMatrix<STATE> &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec);
+
+    void ColoredAssembleCUDA(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global);
+
+    //Elastoplasticity
+    void DeltaStrain(TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &deltastrain);
+
+    void ElasticStrain (TPZFMatrix<STATE> &delta_strain, TPZFMatrix<STATE> &total_strain, TPZFMatrix<STATE> &plastic_strain, TPZFMatrix<STATE> &elastic_strain);
+
+    void SigmaTrial(TPZStack<REAL> &weight, TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &sigma_trial);
+
+    void PrincipalStress(TPZFMatrix<STATE> &sigma_trial, TPZFMatrix<STATE> &eigenvalues);
+
+    void ProjectSigma(TPZFMatrix<STATE> &total_strain, TPZFMatrix<STATE> &plastic_strain, TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<STATE> &sigma_projected);
 
 
 
-//    void MultiplyInThreads(TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
-//
-//    void Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const;
-//
-//    void ComputeSigma(TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<REAL> &sigma);
-//
-//    void MultiplyTranspose(TPZFMatrix<STATE> &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec);
-//
-//    void ColoredAssemble(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global);
-//
-//
-//    void TraditionalAssemble(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const;
-//
-//    void ColoringElements(TPZCompMesh *cmesh) const;
+    void Multiply(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &deltastrain) const;
+
+    void MultiplyTranspose(TPZFMatrix<STATE> &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec);
+
+    void ColoredAssemble(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global);
+
+    void TraditionalAssemble(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const;
+
+    void ColoringElements(TPZCompMesh *cmesh) const;
 
 protected:
 
@@ -223,8 +228,8 @@ protected:
 
 //Libraries handles
 #ifdef __CUDACC__
-//    cusparseHandle_t handle_cusparse;
-//    cublasHandle_t handle_cublas;
+    cusparseHandle_t handle_cusparse;
+    cublasHandle_t handle_cublas;
 #endif
 
 };

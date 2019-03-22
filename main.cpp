@@ -61,12 +61,12 @@ int main(int argc, char *argv[]) {
     TPZGeoMesh *gmesh = Geometry2D(nelem_x, nelem_y, len, ndivide);
 
 // Creates the computational mesh
-    TPZCompMesh *cmesh = CmeshElasticity(gmesh, pOrder);
-    TPZCompMesh *cmesh_noboundary = CmeshElasticityNoBoundary(gmesh, pOrder);
+    TPZCompMesh *cmesh = CmeshElastoplasticity(gmesh, pOrder);
+//    TPZCompMesh *cmesh_noboundary = CmeshElastoplasticityNoBoundary(gmesh, pOrder);
 
 // Defines the analysis
     bool optimizeBandwidth = true;
-    int n_threads = 16;
+    int n_threads = 1;
     TPZAnalysis an(cmesh, optimizeBandwidth);
     TPZSymetricSpStructMatrix strskyl(cmesh);
     strskyl.SetNumThreads(n_threads);
@@ -93,11 +93,12 @@ int main(int argc, char *argv[]) {
 //    an.PostProcess(0,2);
 
 // Calculates residual without boundary conditions
-    TPZFMatrix<REAL> residual = Residual(cmesh, cmesh_noboundary);
+//    TPZFMatrix<REAL> residual = Residual(cmesh, cmesh_noboundary);
+    TPZFMatrix<REAL> residual(1,1,0.);
 
 // Calculates residual using matrix operations and check if the result is ok
-//    SolMatrix(residual, cmesh);
-    SolVector(residual, cmesh);
+    SolMatrix(residual, cmesh);
+//    SolVector(residual, cmesh);
     return 0;
 }
 
@@ -313,22 +314,25 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh * gmesh, int p_order) {
     cmesh->SetDefaultOrder(p_order);
 
 // Mohr Coulomb data
-    REAL mc_cohesion    = 100.0;
-    REAL mc_phi         = (50.0*M_PI/180);
+    REAL mc_cohesion    = 10.0;
+    REAL mc_phi         = (20.0*M_PI/180);
     REAL mc_psi         = mc_phi;
 
 // ElastoPlastic Material using Mohr Coulomb
 // Elastic predictor
     TPZElasticResponse ER;
+    REAL G = 400*mc_cohesion;
     REAL nu = 0.3;
-    REAL E = 200000;
+    REAL E = 2.0*G*(1+nu);
 
     TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse> LEMC;
-    ER.SetUp(E, nu);
+    ER.SetEngineeringData(E,nu);
     LEMC.SetElasticResponse(ER);
     LEMC.fYC.SetUp(mc_phi, mc_psi, mc_cohesion, ER);
     int PlaneStrain = 1;
     int matid = 1;
+    LEMC.fN.m_eps_t.Zero();
+    LEMC.fN.m_eps_p.Zero();
 
 // Creates elastoplatic material
     TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem > * material = new TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem >(matid,PlaneStrain);
@@ -385,7 +389,7 @@ TPZCompMesh *CmeshElastoplasticityNoBoundary(TPZGeoMesh * gmesh, int p_order) {
     REAL E = 2.0*G*(1+nu);
 
     TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse> LEMC;
-    ER.SetUp(E, nu);
+    ER.SetEngineeringData(E,nu);
     LEMC.SetElasticResponse(ER);
     LEMC.fYC.SetUp(mc_phi, mc_psi, mc_cohesion, ER);
     int PlaneStrain = 1;
@@ -673,15 +677,20 @@ void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
     SolMat->SetIndexes(indexes);
     SolMat->ColoringElements(cmesh);
 
-    TPZFMatrix<REAL> coef_sol = cmesh->Solution();
+    TPZFMatrix<REAL> solution = cmesh->Solution();
     int neq = cmesh->NEquations();
 
     TPZFMatrix<REAL> nodal_forces_global1(neq, 1, 0.);
     TPZFMatrix<REAL> nodal_forces_global2(neq, 1, 0.);
-    TPZFMatrix<REAL> result;
-    TPZFMatrix<REAL> sigma;
+    TPZFMatrix<REAL> sigma_trial;
+    TPZFMatrix<REAL> eigenvalues;
     TPZFMatrix<REAL> nodal_forces_vec;
-
+    TPZFMatrix<REAL> delta_strain;
+    TPZFMatrix<REAL> total_strain(2 * dim_mesh * nf_tot, 1, 0.);
+    TPZFMatrix<REAL> plastic_strain(2 * dim_mesh * nf_tot, 1, 0.);
+    TPZFMatrix<REAL> elastic_strain(2 * dim_mesh * nf_tot, 1, 0.);
+    TPZFMatrix<REAL> phi;
+    TPZFMatrix<REAL> sigma_projected;
 
     #ifdef __CUDACC__
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;
@@ -694,19 +703,25 @@ void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
     #endif
 
     std::cout << "\n\nSOLVING WITH CPU" << std::endl;
-//    SolMat->MultiplyInThreads(coef_sol, result);
-    SolMat->Multiply(coef_sol, result);
-    SolMat->ComputeSigma(weight, result, sigma);
-    SolMat->MultiplyTranspose(sigma, nodal_forces_vec);
-    SolMat->ColoredAssemble(nodal_forces_vec, nodal_forces_global2);
 
-    //Check the result
-    int rescpu = Norm(nodal_forces_global2 - residual);
-    if(rescpu == 0){
-        std::cout << "\nAssemble done in the CPU is ok." << std::endl;
-    } else {
-        std::cout << "\nAssemble done in the CPU is not ok." << std::endl;
-    }
+    SolMat->DeltaStrain(solution, delta_strain);
+    SolMat->ElasticStrain(delta_strain, total_strain, plastic_strain, elastic_strain);
+    SolMat->SigmaTrial(weight, delta_strain, sigma_trial);
+    SolMat->PrincipalStress(sigma_trial, eigenvalues);
+    SolMat->ProjectSigma(total_strain, plastic_strain, eigenvalues, sigma_projected);
+
+//    SolMat->Multiply(coef_sol, result);
+//    SolMat->ComputeSigma(weight, result, sigma);
+//    SolMat->MultiplyTranspose(sigma, nodal_forces_vec);
+//    SolMat->ColoredAssemble(nodal_forces_vec, nodal_forces_global2);
+
+//    //Check the result
+//    int rescpu = Norm(nodal_forces_global2 - residual);
+//    if(rescpu == 0){
+//        std::cout << "\nAssemble done in the CPU is ok." << std::endl;
+//    } else {
+//        std::cout << "\nAssemble done in the CPU is not ok." << std::endl;
+//    }
 
     #ifdef __CUDACC__
     int resgpu = Norm(nodal_forces_global1 - residual);
