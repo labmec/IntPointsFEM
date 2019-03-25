@@ -2,6 +2,7 @@
 #include "pzmatrix.h"
 #include <mkl.h>
 #include <stdlib.h>
+#include "TPZTensor.h"
 
 #ifdef USING_MKL
 #include <mkl.h>
@@ -44,8 +45,8 @@ void Interval(double *sigma, double *interval) {
     upper_vec[0] = sigma[0] + fabs(sigma[3]);
 
     //row 2 |sigma_xy sigma_yy 0|
-    lower_vec[1] = sigma[2] - fabs(sigma[3]);
-    upper_vec[1] = sigma[2] + fabs(sigma[3]);
+    lower_vec[1] = sigma[1] - fabs(sigma[3]);
+    upper_vec[1] = sigma[1] + fabs(sigma[3]);
 
     //row 3 |0 0 sigma_zz|
     lower_vec[2] = sigma[2];
@@ -55,11 +56,11 @@ void Interval(double *sigma, double *interval) {
     interval[1] = lower_vec[0];
 
     for (int i = 1; i < 3; i++) {
-        if (upper_vec[i] > interval[0]) { //lower interval at all
+        if (upper_vec[i] > interval[0]) { //lower interval
             interval[0] = upper_vec[i];
         }
 
-        if (lower_vec[i] < interval[1]) { //upper interval at all
+        if (lower_vec[i] < interval[1]) { //upper interval
             interval[1] = lower_vec[i];
         }
     }
@@ -90,7 +91,7 @@ void NewtonIterations(double *interval, double *sigma, double *eigenvalues, doub
         eigenvalues[2 * i] = x;
 
     }
-    eigenvalues[1] = sigma[0] + sigma[2] + sigma[3] - eigenvalues[0] - eigenvalues[2];
+    eigenvalues[1] = sigma[0] + sigma[1] + sigma[2] - eigenvalues[0] - eigenvalues[2];
 
     eigenvalues[0] *= maxel;
     eigenvalues[1] *= maxel;
