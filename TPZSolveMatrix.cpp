@@ -27,7 +27,7 @@ using namespace tbb;
 void Normalize(double *sigma, double &maxel) {
     maxel = sigma[0];
     for (int i = 1; i < 4; i++) {
-        if (sigma[i] > maxel) {
+        if (fabs(sigma[i]) > fabs(maxel)) {
             maxel = sigma[i];
         }
     }
@@ -56,11 +56,11 @@ void Interval(double *sigma, double *interval) {
     interval[1] = lower_vec[0];
 
     for (int i = 1; i < 3; i++) {
-        if (upper_vec[i] > interval[0]) { //lower interval
+        if (upper_vec[i] > interval[0]) { //upper interval
             interval[0] = upper_vec[i];
         }
 
-        if (lower_vec[i] < interval[1]) { //upper interval
+        if (lower_vec[i] < interval[1]) { //lower interval
             interval[1] = lower_vec[i];
         }
     }
@@ -88,14 +88,16 @@ void NewtonIterations(double *interval, double *sigma, double *eigenvalues, doub
             res = abs(f);
             it++;
         }
-        eigenvalues[2 * i] = x;
+        eigenvalues[i] = x;
 
     }
-    eigenvalues[1] = sigma[0] + sigma[1] + sigma[2] - eigenvalues[0] - eigenvalues[2];
+    eigenvalues[2] = sigma[0] + sigma[1] + sigma[2] - eigenvalues[0] - eigenvalues[1];
 
     eigenvalues[0] *= maxel;
     eigenvalues[1] *= maxel;
     eigenvalues[2] *= maxel;
+
+    std::sort(eigenvalues, eigenvalues+3, [](int i, int j) { return abs(i) > abs(j); }); //store eigenvalues in descending order (absolute value)
 }
 
 //ProjectSigma

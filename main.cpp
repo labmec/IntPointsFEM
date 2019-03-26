@@ -61,8 +61,8 @@ int main(int argc, char *argv[]) {
     TPZGeoMesh *gmesh = Geometry2D(nelem_x, nelem_y, len, ndivide);
 
 // Creates the computational mesh
-    TPZCompMesh *cmesh = CmeshElasticity(gmesh, pOrder);
-//    TPZCompMesh *cmesh = CmeshElastoplasticity(gmesh, pOrder);
+//    TPZCompMesh *cmesh = CmeshElasticity(gmesh, pOrder);
+    TPZCompMesh *cmesh = CmeshElastoplasticity(gmesh, pOrder);
 //    TPZCompMesh *cmesh_noboundary = CmeshElastoplasticityNoBoundary(gmesh, pOrder);
 
 // Defines the analysis
@@ -316,7 +316,7 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh * gmesh, int p_order) {
 
 // Mohr Coulomb data
     REAL mc_cohesion    = 10.0;
-    REAL mc_phi         = (100.0*M_PI/180);
+    REAL mc_phi         = (20.0*M_PI/180);
     REAL mc_psi         = mc_phi;
 
 // ElastoPlastic Material using Mohr Coulomb
@@ -348,14 +348,14 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh * gmesh, int p_order) {
     bcLeft = material->CreateBC(material, -1, 0, val1, val2);
 
     val2(0,0) = 0;
-    val2(1,0) = -1000;
-    bcTop = material->CreateBC(material, -2, 1, val1, val2);
+    val2(1,0) = 0;
+    bcTop = material->CreateBC(material, -2, 0, val1, val2);
 
     val2(0,0) = 0;
-    val2(1,0) = 0;
-    bcBottom = material->CreateBC(material, -3, 0, val1, val2);
+    val2(1,0) = -1000;
+    bcBottom = material->CreateBC(material, -3, 1, val1, val2);
 
-    val2(0,0) = -1000;
+    val2(0,0) = 1000;
     val2(1,0) = 0;
     bcRight = material->CreateBC(material, -4, 1, val1, val2);
 
