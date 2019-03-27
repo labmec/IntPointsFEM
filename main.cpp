@@ -19,6 +19,9 @@
 #include "tpzintpoints.h"
 #include "TPZMatElasticity2D.h"
 #include "TPZSSpStructMatrix.h"
+#include "TPZGmshReader.h"
+#include "pzpostprocanalysis.h"
+#include "pzfstrmatrix.h"
 
 #include "TPZMatElastoPlastic2D.h"
 #include "TPZMatElastoPlastic.h"
@@ -27,58 +30,54 @@
 #include "TPZPlasticStepPV.h"
 #include "TPZSandlerExtended.h"
 #include "TPZYCMohrCoulombPV.h"
-#include "pzstepsolver.h"
 
 #include "TPZSolveMatrix.h"
 #include "TPZSolveVector.h"
-#include "TPZGmshReader.h"
 #include "TElastoPlasticData.h"
-#include "pzpostprocanalysis.h"
-#include "pzfstrmatrix.h"
 
 #ifdef USING_TBB
 #include "tbb/parallel_for_each.h"
+
 #endif
-
+/// Geometric mesh (quadrilateral elements)
 TPZGeoMesh *Geometry2D(int nelem_x, int nelem_y, REAL len, int ndivide);
-
-TPZCompMesh *CmeshElasticity(TPZGeoMesh *gmesh, int pOrder);
-TPZCompMesh *CmeshElasticityNoBoundary(TPZGeoMesh *gmesh, int pOrder);
-
-TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int pOrder, TElastoPlasticData & material_data);
-TPZCompMesh *CmeshElastoplasticityNoBoundary(TPZGeoMesh *gmesh, int pOrder);
-
-void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh);
-void SolVector(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh);
-
-TPZFMatrix<REAL>  Residual(TPZCompMesh *cmesh, TPZCompMesh *cmesh_noboundary);
-
-void AcceptPseudoTimeStepSolution(TPZAnalysis * an, TPZCompMesh * cmesh);
 
 /// Gmsh mesh
 TPZGeoMesh * ReadGeometry(std::string geometry_file);
 void PrintGeometry(TPZGeoMesh * geometry);
 
+/// CompMesh elasticity
+TPZCompMesh *CmeshElasticity(TPZGeoMesh *gmesh, int pOrder);
+TPZCompMesh *CmeshElasticityNoBoundary(TPZGeoMesh *gmesh, int pOrder);
+
+/// CompMesh elastoplasticity
+TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int pOrder, TElastoPlasticData & material_data);
+TPZCompMesh *CmeshElastoplasticityNoBoundary(TPZGeoMesh *gmesh, int pOrder);
+
+/// Material configuration
 TElastoPlasticData WellboreConfig();
 
+/// Residual calculation
+void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh);
+void SolVector(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh);
+TPZFMatrix<REAL>  Residual(TPZCompMesh *cmesh, TPZCompMesh *cmesh_noboundary);
+
+/// Accept solution
+void AcceptPseudoTimeStepSolution(TPZAnalysis * an, TPZCompMesh * cmesh);
+
+/// Post process
+void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData material, int n_threads);
+
 int main(int argc, char *argv[]) {
-//// ------------------------ DATA INPUT ------------------------------
-    int nelem_x = 1; // Number of elements in x direction
-    int nelem_y = 1; // Number of elements in y direction
-    REAL len = 1; // Domain length
     int pOrder = 3; // Computational mesh order
-    int ndivide = 0; // Subdivision of element
-    
-    TElastoPlasticData wellbore_material = WellboreConfig();
-    
+
 // Generates the geometry
     std::string file("wellbore.msh");
     TPZGeoMesh *gmesh = ReadGeometry(file);
     PrintGeometry(gmesh);
-//    Geometry2D(nelem_x, nelem_y, len, ndivide);
 
 // Creates the computational mesh
-//    TPZCompMesh *cmesh = CmeshElasticity(gmesh, pOrder);
+    TElastoPlasticData wellbore_material = WellboreConfig();
     TPZCompMesh *cmesh = CmeshElastoplasticity(gmesh, pOrder, wellbore_material);
 //    TPZCompMesh *cmesh_noboundary = CmeshElastoplasticityNoBoundary(gmesh, pOrder);
 
@@ -95,54 +94,12 @@ int main(int argc, char *argv[]) {
     step.SetDirect(ELDLt);
     an->SetSolver(step);
     an->Assemble();
-//    an.Solver().Matrix()->Print("K = ", std::cout, EMathematicaInput);
     an->Solve();
     an->LoadSolution();
     AcceptPseudoTimeStepSolution(an, cmesh);
-    
-    
-//    an->Solution().Print("du = ",std::cout,EMathematicaInput);
-//    an.Solution().Print("U = ", std::cout, EMathematicaInput);
 
-
-    // Post process
-    {
-        int div = 1;
-        TPZPostProcAnalysis * post_processor = new TPZPostProcAnalysis;
-        post_processor->SetCompMesh(cmesh);
-        
-        int n_regions = 1;
-        TPZManVector<int,1> post_mat_id(n_regions);
-        post_mat_id[0] = wellbore_material.m_id;
-    
-        TPZStack<std::string,50> names, scalnames,vecnames,tensnames;
-        vecnames.push_back("Displacement");
-        tensnames.push_back("Stress");
-        
-        for (auto i : scalnames) {
-            names.push_back(i);
-        }
-        for (auto i : vecnames) {
-            names.push_back(i);
-        }
-        for (auto i : tensnames) {
-            names.push_back(i);
-        }
-    
-        
-        std::string vtk_file("Approximation.vtk");
-        
-        post_processor->SetPostProcessVariables(post_mat_id, names);
-        TPZFStructMatrix structmatrix(post_processor->Mesh());
-        structmatrix.SetNumThreads(n_threads);
-        post_processor->SetStructuralMatrix(structmatrix);
-        
-        post_processor->TransferSolution(); /// Computes the L2 projection.
-        post_processor->DefineGraphMesh(2,scalnames,vecnames,tensnames,vtk_file);
-        post_processor->PostProcess(div,2);
-        
-    }
-    
+// Post process
+    PostProcess(cmesh, wellbore_material, n_threads);
 
 // Calculates residual without boundary conditions
 //    TPZFMatrix<REAL> residual = Residual(cmesh, cmesh_noboundary);
@@ -151,12 +108,47 @@ int main(int argc, char *argv[]) {
 // Calculates residual using matrix operations and check if the result is ok
 //    SolMatrix(residual, cmesh);
 //    SolVector(residual, cmesh);
+
     return 0;
 }
 
-TElastoPlasticData WellboreConfig(){
-    
+void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData wellbore_material, int n_threads) {
+    int div = 1;
+    TPZPostProcAnalysis * post_processor = new TPZPostProcAnalysis;
+    post_processor->SetCompMesh(cmesh);
 
+    int n_regions = 1;
+    TPZManVector<int,1> post_mat_id(n_regions);
+    post_mat_id[0] = wellbore_material.Id();
+
+    TPZStack<std::string,50> names, scalnames,vecnames,tensnames;
+    vecnames.push_back("Displacement");
+    tensnames.push_back("Stress");
+
+    for (auto i : scalnames) {
+        names.push_back(i);
+    }
+    for (auto i : vecnames) {
+        names.push_back(i);
+    }
+    for (auto i : tensnames) {
+        names.push_back(i);
+    }
+
+
+    std::string vtk_file("Approximation.vtk");
+
+    post_processor->SetPostProcessVariables(post_mat_id, names);
+    TPZFStructMatrix structmatrix(post_processor->Mesh());
+    structmatrix.SetNumThreads(n_threads);
+    post_processor->SetStructuralMatrix(structmatrix);
+
+    post_processor->TransferSolution(); /// Computes the L2 projection.
+    post_processor->DefineGraphMesh(2,scalnames,vecnames,tensnames,vtk_file);
+    post_processor->PostProcess(div,2);
+}
+
+TElastoPlasticData WellboreConfig(){
     TPZElasticResponse LER;
     
     REAL Ey = 2000.0;
@@ -169,21 +161,21 @@ TElastoPlasticData WellboreConfig(){
 
     std::vector<TBCData> bc_data;
     TBCData bc_inner, bc_outer, bc_ux_fixed, bc_uy_fixed;
-    bc_inner.m_id = 2;
-    bc_inner.m_type = 6;
-    bc_inner.m_value = {-10}; /// tr(sigma)/3
+    bc_inner.SetId(2);
+    bc_inner.SetType(6);
+    bc_inner.SetValue({-10.}); /// tr(sigma)/3
     
-    bc_outer.m_id = 3;
-    bc_outer.m_type = 6;
-    bc_outer.m_value = {-50}; /// tr(sigma)/3
+    bc_outer.SetId(3);
+    bc_outer.SetType(6);
+    bc_outer.SetValue({-50.}); /// tr(sigma)/3
     
-    bc_ux_fixed.m_id = 4;
-    bc_ux_fixed.m_type = 3;
-    bc_ux_fixed.m_value = {1,0};
+    bc_ux_fixed.SetId(4);
+    bc_ux_fixed.SetType(3);
+    bc_ux_fixed.SetValue({1,0});
     
-    bc_uy_fixed.m_id = 5;
-    bc_uy_fixed.m_type = 3;
-    bc_uy_fixed.m_value = {0,1};
+    bc_uy_fixed.SetId(5);
+    bc_uy_fixed.SetType(3);
+    bc_uy_fixed.SetValue({0,1});
     
     bc_data.push_back(bc_inner);
     bc_data.push_back(bc_outer);
@@ -191,17 +183,15 @@ TElastoPlasticData WellboreConfig(){
     bc_data.push_back(bc_uy_fixed);
     
     TElastoPlasticData rock;
-    rock.m_LER = LER;
-    rock.m_id = 1;
-    rock.m_MC_phi = mc_phi;
-    rock.m_MC_c = mc_cohesion;
-    rock.m_gamma_data = bc_data;
+    rock.SetParameters(LER, mc_phi, mc_cohesion);
+    rock.SetId(1);
+
+    rock.SetBoundaryData(bc_data);
     
     return rock;
 }
 
-TPZGeoMesh * ReadGeometry(std::string geometry_file)
-{
+TPZGeoMesh * ReadGeometry(std::string geometry_file) {
     TPZGmshReader Geometry;
     REAL l = 1.0;
     Geometry.SetCharacteristiclength(l);
@@ -220,8 +210,7 @@ TPZGeoMesh * ReadGeometry(std::string geometry_file)
     
 }
 
-void PrintGeometry(TPZGeoMesh * geometry)
-{
+void PrintGeometry(TPZGeoMesh * geometry) {
     std::stringstream text_name;
     std::stringstream vtk_name;
     text_name  << "geometry" << ".txt";
@@ -490,16 +479,16 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int p_order, TElastoPlasti
     TPZCompMesh * cmesh = new TPZCompMesh(gmesh);
     cmesh->SetDefaultOrder(p_order);
     int dim = gmesh->Dimension();
-    int matid = material_data.m_id;
+    int matid = material_data.Id();
     
     // Mohr Coulomb data
-    REAL mc_cohesion    = material_data.m_MC_c;
-    REAL mc_phi         = material_data.m_MC_phi;
+    REAL mc_cohesion    = material_data.Cohesion();
+    REAL mc_phi         = material_data.FrictionAngle();
     REAL mc_psi         = mc_phi;
 
     // ElastoPlastic Material using Mohr Coulomb
     // Elastic predictor
-    TPZElasticResponse ER = material_data.m_LER;
+    TPZElasticResponse ER = material_data.ElasticResponse();
 
     TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse> LEMC;
     LEMC.SetElasticResponse(ER);
@@ -523,15 +512,15 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int p_order, TElastoPlasti
     TPZFNMatrix<3,REAL> val1(dim,dim), val2(dim,dim);
     val1.Zero();
     val2.Zero();
-    int n_bc = material_data.m_gamma_data.size();
+    int n_bc = material_data.BoundaryData().size();
     for (int i = 0; i < n_bc; i++) {
-        int bc_id = material_data.m_gamma_data[i].m_id;
-        int type = material_data.m_gamma_data[i].m_type;
+        int bc_id = material_data.BoundaryData()[i].Id();
+        int type = material_data.BoundaryData()[i].Type();
         
-        int n_values = material_data.m_gamma_data[i].m_value.size();
+        int n_values = material_data.BoundaryData()[i].Value().size();
 
         for (int k = 0; k < n_values; k++) {
-            val2(k,0) = material_data.m_gamma_data[i].m_value[k];
+            val2(k,0) = material_data.BoundaryData()[i].Value()[k];
         }
         TPZMaterial *bc = material->CreateBC(material, bc_id, type, val1, val2);
         cmesh->InsertMaterialObject(bc);

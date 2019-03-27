@@ -14,7 +14,7 @@
 
 class TElastoPlasticData {
     
-public:
+protected:
     
     /// Stands for boundary data
     std::vector<TBCData> m_gamma_data;
@@ -29,6 +29,8 @@ public:
     
     /// Cohesion
     REAL m_MC_c = -1;
+
+public:
     
     /// Default constructor
     TElastoPlasticData();
@@ -41,9 +43,24 @@ public:
     
     /// Default destructor
     ~TElastoPlasticData();
-    
-    
-    // @TODO:: NVB please implement access methods
+
+    void SetBoundaryData (std::vector<TBCData> bcdata);
+
+    std::vector<TBCData> BoundaryData ();
+
+    void SetId (int id);
+
+    int Id ();
+
+    void SetParameters (TPZElasticResponse ER, REAL phi, REAL c);
+
+    TPZElasticResponse ElasticResponse ();
+
+    REAL FrictionAngle();
+
+    REAL Cohesion();
+
+
 };
 
 #endif /* TElastoPlasticData_h */

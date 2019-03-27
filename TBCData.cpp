@@ -35,3 +35,27 @@ TBCData & TBCData::operator=(const TBCData &  other){
 TBCData::~TBCData(){
     
 }
+
+void TBCData::SetId (int id) {
+    m_id = id;
+}
+
+int TBCData::Id () {
+    return m_id;
+}
+
+void TBCData::SetType (int type) {
+    m_type = type;
+}
+
+int TBCData::Type () {
+    return m_type;
+}
+
+void TBCData::SetValue (std::vector<REAL> value) {
+    m_value = value;
+}
+
+std::vector<REAL> TBCData::Value () {
+    return m_value;
+}

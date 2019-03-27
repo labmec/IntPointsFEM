@@ -13,8 +13,8 @@
 #include "pzreal.h"
 
 class TBCData {
-    
-public:
+
+protected:
     
     /// material identifier
     int m_id = -1;
@@ -24,6 +24,8 @@ public:
     
     /// The boundary data
     std::vector<REAL> m_value;
+
+public:
     
     /// Default constructor
     TBCData();
@@ -36,9 +38,18 @@ public:
     
     /// Default destructor
     ~TBCData();
-    
-    // @TODO:: NVB please implement access methods
-    
+
+    void SetId (int id);
+
+    int Id ();
+
+    void SetType (int type);
+
+    int Type ();
+
+    void SetValue (std::vector<REAL> m_value);
+
+    std::vector<REAL> Value ();
 };
 
 #endif /* TBCData_h */

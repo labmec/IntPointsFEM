@@ -40,3 +40,37 @@ TElastoPlasticData & TElastoPlasticData::operator=(const TElastoPlasticData &  o
 TElastoPlasticData::~TElastoPlasticData(){
     
 }
+
+void TElastoPlasticData::SetBoundaryData (std::vector<TBCData> bcdata) {
+    m_gamma_data = bcdata;
+}
+
+std::vector<TBCData> TElastoPlasticData::BoundaryData () {
+    return m_gamma_data;
+}
+
+void TElastoPlasticData::SetId (int id) {
+    m_id = id;
+}
+
+int TElastoPlasticData::Id () {
+    return m_id;
+}
+
+void TElastoPlasticData::SetParameters (TPZElasticResponse ER, REAL phi, REAL c) {
+    m_LER = ER;
+    m_MC_phi = phi;
+    m_MC_c = c;
+}
+
+TPZElasticResponse TElastoPlasticData::ElasticResponse () {
+    return m_LER;
+}
+
+REAL TElastoPlasticData::FrictionAngle() {
+    return m_MC_phi;
+}
+
+REAL TElastoPlasticData::Cohesion() {
+    return m_MC_c;
+}
