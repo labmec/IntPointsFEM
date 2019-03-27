@@ -33,6 +33,8 @@
 #include "TPZSolveVector.h"
 #include "TPZGmshReader.h"
 #include "TElastoPlasticData.h"
+#include "pzpostprocanalysis.h"
+#include "pzfstrmatrix.h"
 
 #ifdef USING_TBB
 #include "tbb/parallel_for_each.h"
@@ -51,6 +53,8 @@ void SolVector(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh);
 
 TPZFMatrix<REAL>  Residual(TPZCompMesh *cmesh, TPZCompMesh *cmesh_noboundary);
 
+void AcceptPseudoTimeStepSolution(TPZAnalysis * an, TPZCompMesh * cmesh);
+
 /// Gmsh mesh
 TPZGeoMesh * ReadGeometry(std::string geometry_file);
 void PrintGeometry(TPZGeoMesh * geometry);
@@ -62,7 +66,7 @@ int main(int argc, char *argv[]) {
     int nelem_x = 1; // Number of elements in x direction
     int nelem_y = 1; // Number of elements in y direction
     REAL len = 1; // Domain length
-    int pOrder = 1; // Computational mesh order
+    int pOrder = 3; // Computational mesh order
     int ndivide = 0; // Subdivision of element
     
     TElastoPlasticData wellbore_material = WellboreConfig();
@@ -80,31 +84,65 @@ int main(int argc, char *argv[]) {
 
 // Defines the analysis
     bool optimizeBandwidth = true;
-    int n_threads = 0;
-    TPZAnalysis an(cmesh, optimizeBandwidth);
+    int n_threads = 12;
+    TPZAnalysis * an = new TPZAnalysis(cmesh, optimizeBandwidth);
     TPZSymetricSpStructMatrix strskyl(cmesh);
     strskyl.SetNumThreads(n_threads);
-    an.SetStructuralMatrix(strskyl);
+    an->SetStructuralMatrix(strskyl);
 
 // Solve
     TPZStepSolver<STATE> step;
     step.SetDirect(ELDLt);
-    an.SetSolver(step);
-    an.Assemble();
+    an->SetSolver(step);
+    an->Assemble();
 //    an.Solver().Matrix()->Print("K = ", std::cout, EMathematicaInput);
-    an.Solve();
+    an->Solve();
+    an->LoadSolution();
+    AcceptPseudoTimeStepSolution(an, cmesh);
+    
+    
+//    an->Solution().Print("du = ",std::cout,EMathematicaInput);
 //    an.Solution().Print("U = ", std::cout, EMathematicaInput);
 
 
     // Post process
-    TPZStack<std::string,50> scalnames,vecnames,tensnames;
-    vecnames.push_back("Displacement");
-    tensnames.push_back("Stress");
+    {
+        int div = 1;
+        TPZPostProcAnalysis * post_processor = new TPZPostProcAnalysis;
+        post_processor->SetCompMesh(cmesh);
+        
+        int n_regions = 1;
+        TPZManVector<int,1> post_mat_id(n_regions);
+        post_mat_id[0] = wellbore_material.m_id;
     
-    int div = 0;
-    std::string namefile = "Approximation.vtk";
-    an.DefineGraphMesh(2, scalnames,vecnames,tensnames, namefile);
-    an.PostProcess(div,2);
+        TPZStack<std::string,50> names, scalnames,vecnames,tensnames;
+        vecnames.push_back("Displacement");
+        tensnames.push_back("Stress");
+        
+        for (auto i : scalnames) {
+            names.push_back(i);
+        }
+        for (auto i : vecnames) {
+            names.push_back(i);
+        }
+        for (auto i : tensnames) {
+            names.push_back(i);
+        }
+    
+        
+        std::string vtk_file("Approximation.vtk");
+        
+        post_processor->SetPostProcessVariables(post_mat_id, names);
+        TPZFStructMatrix structmatrix(post_processor->Mesh());
+        structmatrix.SetNumThreads(n_threads);
+        post_processor->SetStructuralMatrix(structmatrix);
+        
+        post_processor->TransferSolution(); /// Computes the L2 projection.
+        post_processor->DefineGraphMesh(2,scalnames,vecnames,tensnames,vtk_file);
+        post_processor->PostProcess(div,2);
+        
+    }
+    
 
 // Calculates residual without boundary conditions
 //    TPZFMatrix<REAL> residual = Residual(cmesh, cmesh_noboundary);
@@ -125,7 +163,7 @@ TElastoPlasticData WellboreConfig(){
     REAL nu = 0.2;
     LER.SetEngineeringData(Ey, nu);
     
-    REAL mc_cohesion    = 10.0;
+    REAL mc_cohesion    = 1000000000000.0;
     REAL mc_phi         = (20.0*M_PI/180);
     
 
@@ -133,11 +171,11 @@ TElastoPlasticData WellboreConfig(){
     TBCData bc_inner, bc_outer, bc_ux_fixed, bc_uy_fixed;
     bc_inner.m_id = 2;
     bc_inner.m_type = 6;
-    bc_inner.m_value = {-50}; /// tr(sigma)/3
+    bc_inner.m_value = {-10}; /// tr(sigma)/3
     
     bc_outer.m_id = 3;
     bc_outer.m_type = 6;
-    bc_outer.m_value = {-10}; /// tr(sigma)/3
+    bc_outer.m_value = {-50}; /// tr(sigma)/3
     
     bc_ux_fixed.m_id = 4;
     bc_ux_fixed.m_type = 3;
@@ -293,6 +331,43 @@ TPZGeoMesh *Geometry2D(int nelem_x, int nelem_y, REAL len, int ndivide) {
 
     }
     return gmesh;
+}
+
+void AcceptPseudoTimeStepSolution(TPZAnalysis * an, TPZCompMesh * cmesh){
+    
+    bool update = true;
+    {
+        std::map<int, TPZMaterial *> & refMatVec = cmesh->MaterialVec();
+        std::map<int, TPZMaterial * >::iterator mit;
+        TPZMatWithMem<TPZElastoPlasticMem> * pMatWithMem;
+        for(mit=refMatVec.begin(); mit!= refMatVec.end(); mit++)
+        {
+            pMatWithMem = dynamic_cast<TPZMatWithMem<TPZElastoPlasticMem> *>( mit->second );
+            if(pMatWithMem != NULL)
+            {
+                pMatWithMem->SetUpdateMem(update);
+            }
+        }
+    }
+    an->AssembleResidual();
+    update = false;
+    {
+        std::map<int, TPZMaterial *> & refMatVec = cmesh->MaterialVec();
+        std::map<int, TPZMaterial * >::iterator mit;
+        TPZMatWithMem<TPZElastoPlasticMem> * pMatWithMem;
+        for(mit=refMatVec.begin(); mit!= refMatVec.end(); mit++)
+        {
+            pMatWithMem = dynamic_cast<TPZMatWithMem<TPZElastoPlasticMem> *>( mit->second );
+            if(pMatWithMem != NULL)
+            {
+                pMatWithMem->SetUpdateMem(update);
+//                for(auto memory: *pMatWithMem->GetMemory()){
+//                    memory.Print();
+//                }
+            }
+        }
+    }
+    
 }
 
 TPZCompMesh *CmeshElasticity(TPZGeoMesh *gmesh, int pOrder) {
