@@ -5,34 +5,45 @@
 
 #ifndef TPZSolveMatrix_h
 #define TPZSolveMatrix_h
-
 #include "pzmatrix.h"
 #include "pzfmatrix.h"
 #include "pzinterpolationspace.h"
 #include "pzcmesh.h"
+
 #ifdef USING_MKL
 #include "mkl.h"
 #endif
+
 #ifdef __CUDACC__
-//#include <cuda.h>
-//#include <cublas_v2.h>
-//#include <cusparse.h>
-//#include "mkl.h"
+#include <cuda.h>
+#include <cublas_v2.h>
+#include <cusparse.h>
+#include "mkl.h"
 #endif
 
 class TPZSolveMatrix : public TPZMatrix<STATE> {
 
 public:
 
-    TPZSolveMatrix() : TPZMatrix<STATE>(), fStorage(), fIndexes(), fColSizes(), fRowSizes(), fMatrixPosition() {
+    TPZSolveMatrix() : TPZMatrix<STATE>() {
+        fStorage.resize(0);
+        fColSizes.resize(0);
+        fRowSizes.resize(0);
+        fMatrixPosition.resize(0);
+        fColFirstIndex.resize(0);
+        fRowFirstIndex.resize(0);
+        fElemColor.resize(0);
+        fIndexes.resize(0);
+        fIndexesColor.resize(0);
+        fDim = -1;
+        fWeight.resize(0);
 
     }
 
-    TPZSolveMatrix(int64_t rows, int64_t cols, TPZVec<int> rowsizes, TPZVec<int> colsizes) : TPZMatrix(rows,
-                                                                                                               cols) {
+    TPZSolveMatrix(int64_t rows, int64_t cols, TPZVec<int> rowsizes, TPZVec<int> colsizes) : TPZMatrix(rows, cols) { //rows = dim * npts_tot, cols = nf_tot
         SetParameters(rowsizes, colsizes);
-//        cuSparseHandle();
-//        cuBlasHandle();
+        cuSparseHandle();
+        cuBlasHandle();
     }
 
 
@@ -40,50 +51,73 @@ public:
 
     }
 
-    TPZSolveMatrix(const TPZSolveMatrix &copy) : TPZMatrix<STATE>(copy),
-                                                 fStorage(copy.fStorage), fIndexes(copy.fIndexes),
-                                                 fColSizes(copy.fColSizes), fRowSizes(copy.fRowSizes),
-                                                 fMatrixPosition(copy.fMatrixPosition),
-                                                 fRowFirstIndex(copy.fRowFirstIndex),
-                                                 fElemColor(copy.fElemColor), fIndexesColor(copy.fIndexesColor),
-                                                 fColFirstIndex(copy.fColFirstIndex), dglobal_solution(copy.dglobal_solution),
-                                                 dindexes(copy.dindexes), dstorage(copy.dstorage), dstoragevec(copy.dstoragevec), dexpandsolution(copy.dexpandsolution),
-                                                 dresult(copy.dresult), dweight(copy.dweight), dsigma(copy.dsigma), dnodal_forces_vec(copy.dnodal_forces_vec),
-                                                 dindexescolor(copy.dindexescolor), dnodal_forces_global(copy.dnodal_forces_global),
-                                                 dfRowSizes(copy.dfRowSizes), dfColSizes(copy.dfColSizes), dfMatrixPosition(copy.dfMatrixPosition),
-                                                 dfRowFirstIndex(copy.dfRowFirstIndex), dfColFirstIndex(copy.dfRowFirstIndex) {
+    TPZSolveMatrix(const TPZSolveMatrix &copy) : TPZMatrix<STATE>(copy) {
+        fStorage = copy.fStorage;
+        fColSizes = copy.fColSizes;
+        fRowSizes = copy.fRowSizes;
+        fMatrixPosition = copy.fMatrixPosition;
+        fColFirstIndex = copy.fColFirstIndex;
+        fRowFirstIndex = copy.fRowFirstIndex;
+        fElemColor = copy.fElemColor;
+        fIndexes = copy.fIndexes;
+        fIndexesColor = copy.fIndexesColor;
+        fDim = copy.fDim;
+        fWeight = copy.fWeight;
 
+#ifdef __CUDACC__
+        d_fStorage = copy.d_fStorage;
+        d_fColSizes = copy.d_fColSizes;
+        d_fRowSizes = copy.d_fRowSizes;
+        d_fMatrixPosition = copy.d_fMatrixPosition;
+        d_fColFirstIndex = copy.d_fColFirstIndex;
+        d_fRowFirstIndex = copy.d_fRowFirstIndex;
+        d_fElemColor = copy.d_fElemColor;
+        d_fIndexes = copy.d_fIndexes;
+        d_fIndexesColor = copy.d_fIndexesColor;
+
+        d_GlobalSolution = copy.d_GlobalSolution;
+        d_ExpandSolution = copy.d_ExpandSolution;
+        d_Result = copy.d_Result;
+        d_Weight = copy.d_Weight;
+        d_Sigma = copy.d_Sigma;
+        d_NodalForces = copy.d_NodalForces;
+        d_GlobalForces = copy.d_GlobalForces;
+#endif
     }
 
     TPZSolveMatrix &operator=(const TPZSolveMatrix &copy) {
         TPZMatrix::operator=(copy);
         fStorage = copy.fStorage;
-        fIndexes = copy.fIndexes;
         fColSizes = copy.fColSizes;
         fRowSizes = copy.fRowSizes;
-        fElemColor = copy.fElemColor;
-        fIndexesColor = copy.fIndexesColor;
         fMatrixPosition = copy.fMatrixPosition;
-        fRowFirstIndex = copy.fRowFirstIndex;
         fColFirstIndex = copy.fColFirstIndex;
-        dglobal_solution = copy.dglobal_solution;
-        dindexes = copy.dindexes;
-        dstorage = copy.dstorage;
-        dstoragevec = copy.dstoragevec;
-        dexpandsolution = copy.dexpandsolution;
-        dresult = copy.dresult;
-        dweight = copy.dweight;
-        dsigma = copy.dsigma;
-        dnodal_forces_vec = copy.dnodal_forces_vec;
-        dindexescolor = copy.dindexescolor;
-        dnodal_forces_global = copy.dnodal_forces_global;
+        fRowFirstIndex = copy.fRowFirstIndex;
+        fElemColor = copy.fElemColor;
+        fIndexes = copy.fIndexes;
+        fIndexesColor = copy.fIndexesColor;
+        fDim = copy.fDim;
+        fWeight = copy.fWeight;
 
-        dfRowSizes = copy.dfRowSizes;
-        dfColSizes = copy.dfColSizes;
-        dfMatrixPosition = copy.dfMatrixPosition;
-        dfRowFirstIndex = copy.dfRowFirstIndex;
-        dfColFirstIndex = copy.dfRowFirstIndex;
+#ifdef __CUDACC__
+        d_fStorage = copy.d_fStorage;
+        d_fColSizes = copy.d_fColSizes;
+        d_fRowSizes = copy.d_fRowSizes;
+        d_fMatrixPosition = copy.d_fMatrixPosition;
+        d_fColFirstIndex = copy.d_fColFirstIndex;
+        d_fRowFirstIndex = copy.d_fRowFirstIndex;
+        d_fElemColor = copy.d_fElemColor;
+        d_fIndexes = copy.d_fIndexes;
+        d_fIndexesColor = copy.d_fIndexesColor;
+        d_Weight = copy.d_Weight;
 
+        d_GlobalSolution = copy.d_GlobalSolution;
+        d_ExpandSolution = copy.d_ExpandSolution;
+        d_Result = copy.d_Result;
+        d_Sigma = copy.d_Sigma;
+        d_NodalForces = copy.d_NodalForces;
+        d_GlobalForces = copy.d_GlobalForces;
+#endif
         return *this;
     }
 
@@ -134,7 +168,13 @@ public:
         fIndexesColor.resize(indsize);
     }
 
-    /** @brief Solve procedure */
+    void SetMeshDimension (int dim) {
+        fDim = dim;
+    }
+
+    void SetWeightVector (TPZStack<REAL> wvec) {
+        fWeight = wvec;
+    }
 
     //USING CUDA
     void AllocateMemory(TPZCompMesh *cmesh);
@@ -160,7 +200,7 @@ public:
 
     void ElasticStrain (TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &total_strain, TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &elastic_strain);
 
-    void SigmaTrial(TPZStack<REAL> &weight, TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &sigma_trial);
+    void SigmaTrial(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &sigma_trial);
 
     void PrincipalStress(TPZFMatrix<REAL> &sigma_trial, TPZFMatrix<REAL> &eigenvalues);
 
@@ -207,27 +247,33 @@ protected:
 /// position in the fIndex vector of each element
     TPZVec<int> fColFirstIndex;
 
+/// Mesh Dimension
+    int fDim;
+
+/// Weight Vector
+    TPZStack<REAL> fWeight;
+
 /// Parameters stored on device
-    double *dglobal_solution;
-    int *dindexes;
-    double *dstorage;
-    double *dstoragevec;
-    double *dexpandsolution;
-    double *dresult;
-    double *dweight;
-    double *dsigma;
-    double *dnodal_forces_vec;
-    int *dindexescolor;
-    double *dnodal_forces_global;
-
-    int *dfRowSizes;
-    int *dfColSizes;
-    int *dfMatrixPosition;
-    int *dfRowFirstIndex;
-    int *dfColFirstIndex;
-
-//Libraries handles
 #ifdef __CUDACC__
+    REAL *d_fStorage;
+    int *d_fColSizes;
+    int *d_fRowSizes;
+    int *d_fMatrixPosition;
+    int *d_fColFirstIndex;
+    int *d_fRowFirstIndex;
+    int *d_fElemColor;
+    int *d_fIndexes;
+    int *d_fIndexesColor;
+
+    REAL *d_GlobalSolution;
+    REAL *d_ExpandSolution;
+    REAL *d_Result;
+    REAL *d_Weight;
+    REAL *d_Sigma;
+    REAL *d_NodalForces;
+    REAL *d_GlobalForces;
+
+    //library handles
     cusparseHandle_t handle_cusparse;
     cublasHandle_t handle_cublas;
 #endif

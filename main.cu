@@ -29,8 +29,7 @@
 #include "TPZYCMohrCoulombPV.h"
 #include "pzstepsolver.h"
 
-#include "TPZSolveMatrix.h"
-#include "TPZSolveVector.h"
+#include "Headers/TPZSolveMatrix.h"
 
 #ifdef USING_TBB
 #include "tbb/parallel_for_each.h"

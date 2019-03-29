@@ -134,6 +134,10 @@ if(USING_TBB)
 
 endif(USING_TBB)
 
+#Specify where the headers files must be found
+include_directories("${PROJECT_SOURCE_DIR}/_Headers")
+set(PROJECTSOURCE ${BASIC_TYPES} ${HEADERS})
+
 option(USING_CUDA on)
 
 if(USING_CUDA)
@@ -144,13 +148,15 @@ if(USING_CUDA)
 
     set(CMAKE_CUDA_STANDARD 11)
     set(CUDA_NVCC_FLAGS -gencode arch=compute_35,code=sm_35)	
-    file(GLOB sources *.cu)
+    file(GLOB sources _SourcesCUDA/*.cu)
+    file(GLOB main *.cu)
 else()
-    file(GLOB sources *.cpp)
+    file(GLOB sources _SourcesCPP/*.cpp)
+    file(GLOB headers _Headers/*.h)
+    file(GLOB main *.cpp)
 endif(USING_CUDA)
 
-file(GLOB headers *.h)
-set(main_SRCS ${sources} ${headers})
+set(main_SRCS ${main} ${sources} ${headers})
 
 add_executable(IntegrationPointExperiments ${main_SRCS})
 

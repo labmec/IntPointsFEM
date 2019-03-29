@@ -2,8 +2,8 @@
 // Created by natalia on 28/03/19.
 //
 
-#ifndef INTEGRATIONPOINTEXPERIMENTS_TRKSOLUTION_H
-#define INTEGRATIONPOINTEXPERIMENTS_TRKSOLUTION_H
+#ifndef TRKSolution_h
+#define TRKSolution_h
 
 #include "TElastoPlasticData.h"
 #include "TPZYCMohrCoulombPV.h"
@@ -85,4 +85,4 @@ public:
 };
 
 
-#endif //INTEGRATIONPOINTEXPERIMENTS_TRKSOLUTION_H
+#endif //TRKSolution_h

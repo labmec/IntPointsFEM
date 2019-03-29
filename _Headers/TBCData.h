@@ -25,7 +25,7 @@ protected:
     /// The boundary data
     std::vector<REAL> m_value;
 
-    REAL m_initial_value;
+    REAL m_initial_value = -1;
 
 public:
     
