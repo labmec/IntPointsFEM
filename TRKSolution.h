@@ -73,7 +73,7 @@ public:
 
     void ParametersAtRe (TPZFNMatrix<3,REAL> &sigma, REAL &u_re);
 
-    void RKProcess(int np, std::ostream &out);
+    void RKProcess(int np, std::ostream &out, bool euler);
 
 
 

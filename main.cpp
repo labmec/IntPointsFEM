@@ -70,7 +70,7 @@ void AcceptPseudoTimeStepSolution(TPZAnalysis * an, TPZCompMesh * cmesh);
 void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData material, int n_threads);
 
 ///RK Approximation
-void RKApproximation (TElastoPlasticData wellbore_material, int npoints, std::ostream &out);
+void RKApproximation (TElastoPlasticData wellbore_material, int npoints, std::ostream &outbool, bool euler = false);
 
 int main(int argc, char *argv[]) {
     int pOrder = 3; // Computational mesh order
@@ -88,7 +88,8 @@ int main(int argc, char *argv[]) {
 // Runge Kutta approximation
     int np = 100;
     ofstream rkfile("rkdata.txt");
-    RKApproximation(wellbore_material, np, rkfile);
+    bool euler = true;
+    RKApproximation(wellbore_material, np, rkfile, euler);
 
 // Defines the analysis
     bool optimizeBandwidth = true;
@@ -932,7 +933,7 @@ TPZFMatrix<REAL> Residual(TPZCompMesh *cmesh, TPZCompMesh *cmesh_noboundary) {
     return res;
 }
 
-void RKApproximation (TElastoPlasticData wellbore_material, int npoints, std::ostream &out) {
+void RKApproximation (TElastoPlasticData wellbore_material, int npoints, std::ostream &out, bool euler) {
     REAL rw = 0.1;
     REAL re = 4.;
     REAL theta = 0.;
@@ -981,5 +982,5 @@ void RKApproximation (TElastoPlasticData wellbore_material, int npoints, std::os
     rkmethod.SetInitialStress(sigma0);
     rkmethod.SetWellborePressure(pw);
 
-    rkmethod.RKProcess(npoints,out);
+    rkmethod.RKProcess(npoints,out, euler);
 }

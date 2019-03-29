@@ -98,7 +98,7 @@ void TRKSolution::ParametersAtRe (TPZFNMatrix<3,REAL> &sigma, REAL &u_re) {
     u_re = -(m_re * sigma(0,2) - m_re * sigma(0,1)) / (2 * G);
 }
 
-void TRKSolution::RKProcess(int np, std::ostream &out) {
+void TRKSolution::RKProcess(int np, std::ostream &out, bool euler) {
     REAL h = (m_rw - m_re) / np;
 
     REAL lambda = m_material->GetDefaultMemory().m_ER.Lambda();
@@ -120,24 +120,35 @@ void TRKSolution::RKProcess(int np, std::ostream &out) {
     sigma(0,2) = sigma_re(0,2);
 
     for (int i = 0; i < np; i++) {
-        REAL du_k1, du_k2, du_k3, du_k4;
-        REAL dsigma_rr_k1, dsigma_rr_k2, dsigma_rr_k3, dsigma_rr_k4;
+        REAL du_k1;
+        REAL dsigma_rr_k1;
 
         //k1
         F(r[i], u[i], sigma(i,0), du_k1, dsigma_rr_k1);
 
-        //k2
-        F(r[i] + h / 2., u[i] + h*du_k1 / 2., sigma(i,0) + h*dsigma_rr_k1 / 2., du_k2, dsigma_rr_k2);
+        if (euler == false) {
+            REAL du_k2, du_k3, du_k4;
+            REAL dsigma_rr_k2, dsigma_rr_k3, dsigma_rr_k4;
+            //k2
+            F(r[i] + h / 2., u[i] + h * du_k1 / 2., sigma(i, 0) + h * dsigma_rr_k1 / 2., du_k2, dsigma_rr_k2);
 
-        //k3
-        F(r[i] + h / 2., u[i] + h*du_k2 / 2., sigma(i,0) + h*dsigma_rr_k2 / 2., du_k3, dsigma_rr_k3);
+            //k3
+            F(r[i] + h / 2., u[i] + h * du_k2 / 2., sigma(i, 0) + h * dsigma_rr_k2 / 2., du_k3, dsigma_rr_k3);
 
-        //k4
-        F(r[i] + h, u[i] + h*du_k3, sigma(i,0) + h*dsigma_rr_k3, du_k4, dsigma_rr_k4);
+            //k4
+            F(r[i] + h, u[i] + h * du_k3, sigma(i, 0) + h * dsigma_rr_k3, du_k4, dsigma_rr_k4);
+
+            //u_ip1, sigma_ip1
+            u[i + 1] = u[i] + 1. / 6. * h * (du_k1 + 2. * du_k2 + 2. * du_k3 + du_k4);
+            sigma(i+1,0) = sigma(i,0) + 1. / 6. * h * (dsigma_rr_k1 + 2. * dsigma_rr_k2 + 2. * dsigma_rr_k3 + dsigma_rr_k4);
+
+        } else if (euler == true) {
+            //u_ip1, sigma_ip1
+            u[i + 1] = u[i] + h * du_k1;
+            sigma(i+1,0) = sigma(i,0) + h * dsigma_rr_k1;
+        }
 
         r[i + 1] = r[i] + h;
-        u[i + 1] = u[i] + 1. / 6. * h * (du_k1 + 2. * du_k2 + 2. * du_k3 + du_k4);
-        sigma(i+1,0) = sigma(i,0) + 1. / 6. * h * (dsigma_rr_k1 + 2. * dsigma_rr_k2 + 2. * dsigma_rr_k3 + dsigma_rr_k4);
         sigma(i+1,1) = 2 * G * u[i + 1] / r[i + 1] + lambda * (u[i + 1] / r[i + 1] + (r[i + 1] * sigma(i+1,0) - lambda * u[i + 1]) / (r[i + 1] * (lambda + 2 * G)));
         sigma(i+1,2) = (-lambda*(lambda* (sigma(i+1,0) - 2* sigma(i+1,0) - sigma(i+1,1)) - 2 *G *(sigma(i+1,0) + sigma(i+1,1))))/(2*(lambda + G)*(lambda + 2*G));
     }
