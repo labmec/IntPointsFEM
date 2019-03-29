@@ -335,13 +335,12 @@ void TPZSolveMatrix::ElasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<RE
     elastic_strain = total_strain + delta_strain - plastic_strain;
 }
 
-void TPZSolveMatrix::SigmaTrial( TPZStack<REAL> &weight, TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &sigma_trial) {
+void TPZSolveMatrix::SigmaTrial(TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &sigma_trial) {
 //REAL E = 200000000.;
 //REAL E = 20000000.;
 //    REAL nu =0.30;
 //    REAL E = 2.0*400*20.0*(1+nu);
-    int dim = 2;
-    int64_t npts = fRow/dim;
+    int64_t npts = fRow/fDim;
     sigma_trial.Resize(4*npts,1);
 
 #ifdef USING_TBB
@@ -357,10 +356,10 @@ void TPZSolveMatrix::SigmaTrial( TPZStack<REAL> &weight, TPZFMatrix<REAL> &elast
 
     for (int64_t ipts=0; ipts < npts; ipts++) {
         //plane strain
-        sigma_trial(4*ipts,0) = weight[ipts]*(elastic_strain(2*ipts,0)*E*(1.-nu)/((1.-2*nu)*(1.+nu)) + elastic_strain(2*ipts+2*npts+1,0)*E*nu/((1.-2*nu)*(1.+nu))); // Sigma xx
-        sigma_trial(4*ipts+1,0) = weight[ipts]*(elastic_strain(2*ipts+2*npts+1,0)*E*(1.-nu)/((1.-2*nu)*(1.+nu)) + elastic_strain(2*ipts,0)*E*nu/((1.-2*nu)*(1.+nu))); // Sigma yy
-        sigma_trial(4*ipts+2,0) = weight[ipts]*(E*nu/((1.+nu)*(1.-2*nu))*(elastic_strain(2*ipts,0) + elastic_strain(2*ipts+2*npts+1,0))); // Sigma zz
-        sigma_trial(4*ipts+3,0) = weight[ipts]*E/(2*(1.+nu))*(elastic_strain(2*ipts+1,0)+elastic_strain(2*ipts+2*npts,0)); // Sigma xy
+        sigma_trial(4*ipts,0) = fWeight[ipts]*(elastic_strain(2*ipts,0)*E*(1.-nu)/((1.-2*nu)*(1.+nu)) + elastic_strain(2*ipts+2*npts+1,0)*E*nu/((1.-2*nu)*(1.+nu))); // Sigma xx
+        sigma_trial(4*ipts+1,0) = fWeight[ipts]*(elastic_strain(2*ipts+2*npts+1,0)*E*(1.-nu)/((1.-2*nu)*(1.+nu)) + elastic_strain(2*ipts,0)*E*nu/((1.-2*nu)*(1.+nu))); // Sigma yy
+        sigma_trial(4*ipts+2,0) = fWeight[ipts]*(E*nu/((1.+nu)*(1.-2*nu))*(elastic_strain(2*ipts,0) + elastic_strain(2*ipts+2*npts+1,0))); // Sigma zz
+        sigma_trial(4*ipts+3,0) = fWeight[ipts]*E/(2*(1.+nu))*(elastic_strain(2*ipts+1,0)+elastic_strain(2*ipts+2*npts,0)); // Sigma xy
 
 //    sigma(2*ipts,0) = weight[ipts]*E/(1.-nu*nu)*(result(2*ipts,0)+nu*result(2*ipts+npts_tot+1,0)); // Sigma x
 //    sigma(2*ipts+1,0) = weight[ipts]*E/(1.-nu*nu)*(1.-nu)/2*(result(2*ipts+1,0)+result(2*ipts+npts_tot,0))*0.5; // Sigma xy
@@ -371,8 +370,7 @@ void TPZSolveMatrix::SigmaTrial( TPZStack<REAL> &weight, TPZFMatrix<REAL> &elast
 }
 
 void TPZSolveMatrix::PrincipalStress(TPZFMatrix<REAL> &sigma_trial, TPZFMatrix<REAL> &eigenvalues) {
-    int dim = 2;
-    int64_t npts = fRow/dim;
+    int64_t npts = fRow/fDim;
 
     REAL maxel;
     TPZVec<REAL> interval(2);
@@ -386,12 +384,11 @@ void TPZSolveMatrix::PrincipalStress(TPZFMatrix<REAL> &sigma_trial, TPZFMatrix<R
 }
 
 void TPZSolveMatrix::ProjectSigma(TPZFMatrix<REAL> &total_strain, TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &sigma_projected) {
-    int dim = 2;
-    int npts = fRow/dim;
+    int npts = fRow/fDim;
 
     sigma_projected.Resize(3*npts,1);
     sigma_projected.Zero();
-    TPZFMatrix<REAL> elastic_strain_np1(dim*dim*npts);
+    TPZFMatrix<REAL> elastic_strain_np1(fDim*fRow);
 
     TPZVec<int> m_type(npts,0);
     TPZVec<REAL> m_hardening(npts, 0.);
