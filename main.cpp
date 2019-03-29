@@ -34,6 +34,7 @@
 #include "TPZSolveMatrix.h"
 #include "TPZSolveVector.h"
 #include "TElastoPlasticData.h"
+#include "TRKSolution.h"
 
 #ifdef USING_TBB
 #include "tbb/parallel_for_each.h"
@@ -68,6 +69,9 @@ void AcceptPseudoTimeStepSolution(TPZAnalysis * an, TPZCompMesh * cmesh);
 /// Post process
 void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData material, int n_threads);
 
+///RK Approximation
+void RKApproximation (TElastoPlasticData wellbore_material, int npoints, std::ostream &out);
+
 int main(int argc, char *argv[]) {
     int pOrder = 3; // Computational mesh order
 
@@ -80,6 +84,11 @@ int main(int argc, char *argv[]) {
     TElastoPlasticData wellbore_material = WellboreConfig();
     TPZCompMesh *cmesh = CmeshElastoplasticity(gmesh, pOrder, wellbore_material);
 //    TPZCompMesh *cmesh_noboundary = CmeshElastoplasticityNoBoundary(gmesh, pOrder);
+
+// Runge Kutta approximation
+    int np = 100;
+    ofstream rkfile("rkdata.txt");
+    RKApproximation(wellbore_material, np, rkfile);
 
 // Defines the analysis
     bool optimizeBandwidth = true;
@@ -163,12 +172,14 @@ TElastoPlasticData WellboreConfig(){
     TBCData bc_inner, bc_outer, bc_ux_fixed, bc_uy_fixed;
     bc_inner.SetId(2);
     bc_inner.SetType(6);
-    bc_inner.SetValue({-10.}); /// tr(sigma)/3
+    bc_inner.SetInitialValue(-50.);
+    bc_inner.SetValue({-10.-bc_inner.InitialValue()}); /// tr(sigma)/3
     
     bc_outer.SetId(3);
     bc_outer.SetType(6);
-    bc_outer.SetValue({-50.}); /// tr(sigma)/3
-    
+    bc_outer.SetInitialValue({-50.}); /// tr(sigma)/3
+    bc_outer.SetValue({-50.-bc_outer.InitialValue()}); /// tr(sigma)/3
+
     bc_ux_fixed.SetId(4);
     bc_ux_fixed.SetType(3);
     bc_ux_fixed.SetValue({1,0});
@@ -183,7 +194,7 @@ TElastoPlasticData WellboreConfig(){
     bc_data.push_back(bc_uy_fixed);
     
     TElastoPlasticData rock;
-    rock.SetParameters(LER, mc_phi, mc_cohesion);
+    rock.SetMaterialParameters(LER, mc_phi, mc_cohesion);
     rock.SetId(1);
 
     rock.SetBoundaryData(bc_data);
@@ -473,22 +484,22 @@ TPZCompMesh *CmeshElasticityNoBoundary(TPZGeoMesh *gmesh, int pOrder) {
 //    return cmesh;
 }
 
-TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int p_order, TElastoPlasticData & material_data) {
+TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int p_order, TElastoPlasticData & wellbore_material) {
 
 // Creates the computational mesh
     TPZCompMesh * cmesh = new TPZCompMesh(gmesh);
     cmesh->SetDefaultOrder(p_order);
     int dim = gmesh->Dimension();
-    int matid = material_data.Id();
+    int matid = wellbore_material.Id();
     
     // Mohr Coulomb data
-    REAL mc_cohesion    = material_data.Cohesion();
-    REAL mc_phi         = material_data.FrictionAngle();
+    REAL mc_cohesion    = wellbore_material.Cohesion();
+    REAL mc_phi         = wellbore_material.FrictionAngle();
     REAL mc_psi         = mc_phi;
 
     // ElastoPlastic Material using Mohr Coulomb
     // Elastic predictor
-    TPZElasticResponse ER = material_data.ElasticResponse();
+    TPZElasticResponse ER = wellbore_material.ElasticResponse();
 
     TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse> LEMC;
     LEMC.SetElasticResponse(ER);
@@ -512,15 +523,15 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int p_order, TElastoPlasti
     TPZFNMatrix<3,REAL> val1(dim,dim), val2(dim,dim);
     val1.Zero();
     val2.Zero();
-    int n_bc = material_data.BoundaryData().size();
+    int n_bc = wellbore_material.BoundaryData().size();
     for (int i = 0; i < n_bc; i++) {
-        int bc_id = material_data.BoundaryData()[i].Id();
-        int type = material_data.BoundaryData()[i].Type();
+        int bc_id = wellbore_material.BoundaryData()[i].Id();
+        int type = wellbore_material.BoundaryData()[i].Type();
         
-        int n_values = material_data.BoundaryData()[i].Value().size();
+        int n_values = wellbore_material.BoundaryData()[i].Value().size();
 
         for (int k = 0; k < n_values; k++) {
-            val2(k,0) = material_data.BoundaryData()[i].Value()[k];
+            val2(k,0) = wellbore_material.BoundaryData()[i].Value()[k];
         }
         TPZMaterial *bc = material->CreateBC(material, bc_id, type, val1, val2);
         cmesh->InsertMaterialObject(bc);
@@ -919,4 +930,56 @@ TPZFMatrix<REAL> Residual(TPZCompMesh *cmesh, TPZCompMesh *cmesh_noboundary) {
     TPZFMatrix<STATE> res;
     an_d.Solver().Matrix()->Multiply(cmesh->Solution(), res);
     return res;
+}
+
+void RKApproximation (TElastoPlasticData wellbore_material, int npoints, std::ostream &out) {
+    REAL rw = 0.1;
+    REAL re = 4.;
+    REAL theta = 0.;
+
+    //Initial stress and wellbore pressure
+    REAL sigma0 = wellbore_material.BoundaryData()[0].InitialValue();
+    REAL pw = wellbore_material.BoundaryData()[0].Value()[0] + sigma0;
+
+    //Outer stress
+    TPZTensor<REAL> sigmaXYZ;
+    REAL sigma = wellbore_material.BoundaryData()[1].Value()[0] + sigma0;
+    sigmaXYZ.Identity();
+    sigmaXYZ.Multiply(sigma,1);
+
+    // Mohr Coulomb data
+    REAL mc_cohesion    = wellbore_material.Cohesion();
+    REAL mc_phi         = wellbore_material.FrictionAngle();
+    REAL mc_psi         = mc_phi;
+
+    // ElastoPlastic Material using Mohr Coulomb
+    // Elastic predictor
+    TPZElasticResponse ER = wellbore_material.ElasticResponse();
+
+    TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse> LEMC;
+    LEMC.SetElasticResponse(ER);
+    LEMC.fYC.SetUp(mc_phi, mc_psi, mc_cohesion, ER);
+    int PlaneStrain = 1;
+    LEMC.fN.m_eps_t.Zero();
+    LEMC.fN.m_eps_p.Zero();
+
+    TPZElastoPlasticMem default_memory;
+    default_memory.m_ER = ER;
+    default_memory.m_sigma.Zero();
+    default_memory.m_elastoplastic_state = LEMC.fN;
+
+    // Creates elastoplatic material
+    TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem > * material = new TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem >(wellbore_material.Id(),PlaneStrain);
+    material->SetPlasticityModel(LEMC);
+    material->SetDefaultMem(default_memory);
+
+    TRKSolution rkmethod;
+    rkmethod.SetWellboreRadius(rw);
+    rkmethod.SetExternRadius(re);
+    rkmethod.SetMaterial(material);
+    rkmethod.SetStressXYZ(sigmaXYZ,theta);
+    rkmethod.SetInitialStress(sigma0);
+    rkmethod.SetWellborePressure(pw);
+
+    rkmethod.RKProcess(npoints,out);
 }

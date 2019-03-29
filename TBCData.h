@@ -25,6 +25,8 @@ protected:
     /// The boundary data
     std::vector<REAL> m_value;
 
+    REAL m_initial_value;
+
 public:
     
     /// Default constructor
@@ -50,6 +52,10 @@ public:
     void SetValue (std::vector<REAL> m_value);
 
     std::vector<REAL> Value ();
+
+    void SetInitialValue (REAL initv);
+
+    REAL InitialValue();
 };
 
 #endif /* TBCData_h */

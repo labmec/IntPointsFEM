@@ -52,7 +52,7 @@ public:
 
     int Id ();
 
-    void SetParameters (TPZElasticResponse ER, REAL phi, REAL c);
+    void SetMaterialParameters (TPZElasticResponse ER, REAL phi, REAL c);
 
     TPZElasticResponse ElasticResponse ();
 

@@ -13,9 +13,10 @@ TBCData::TBCData(){
 
 TBCData::TBCData(const TBCData &  other){
     
-    m_id    = other.m_id;
-    m_type  = other.m_type;
-    m_value = other.m_value;
+    m_id            = other.m_id;
+    m_type          = other.m_type;
+    m_value         = other.m_value;
+    m_initial_value = other.m_initial_value;
 }
 
 TBCData & TBCData::operator=(const TBCData &  other){
@@ -25,9 +26,10 @@ TBCData & TBCData::operator=(const TBCData &  other){
         return *this;
     }
     
-    m_id    = other.m_id;
-    m_type  = other.m_type;
-    m_value = other.m_value;
+    m_id            = other.m_id;
+    m_type          = other.m_type;
+    m_value         = other.m_value;
+    m_initial_value = other.m_initial_value;
     
     return *this;
 }
@@ -58,4 +60,12 @@ void TBCData::SetValue (std::vector<REAL> value) {
 
 std::vector<REAL> TBCData::Value () {
     return m_value;
+}
+
+void TBCData::SetInitialValue (REAL initv) {
+    m_initial_value = initv;
+}
+
+REAL TBCData::InitialValue() {
+    return m_initial_value;
 }

@@ -57,7 +57,7 @@ int TElastoPlasticData::Id () {
     return m_id;
 }
 
-void TElastoPlasticData::SetParameters (TPZElasticResponse ER, REAL phi, REAL c) {
+void TElastoPlasticData::SetMaterialParameters (TPZElasticResponse ER, REAL phi, REAL c) {
     m_LER = ER;
     m_MC_phi = phi;
     m_MC_c = c;
