@@ -52,7 +52,7 @@ TPZCompMesh *CmeshElastoplasticityNoBoundary(TPZGeoMesh *gmesh, int pOrder);
 TElastoPlasticData WellboreConfig();
 
 /// Residual calculation
-TPZSolveMatrix SetDataStructure(TPZCompMesh *cmesh);
+TPZSolveMatrix SetDataStructure(TPZCompMesh *cmesh, TElastoPlasticData wellbore_material);
 void ComputeResidual (TPZSolveMatrix SolMat, TPZCompMesh * cmesh);
 TPZFMatrix<REAL> ResidualWithoutBoundary(TPZCompMesh *cmesh, TPZCompMesh *cmesh_noboundary);
 
@@ -66,7 +66,7 @@ void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData material, int n_threads)
 void RKApproximation (TElastoPlasticData wellbore_material, int npoints, std::ostream &outbool, bool euler = false);
 
 int main(int argc, char *argv[]) {
-    int pOrder = 3; // Computational mesh order
+    int pOrder = 2; // Computational mesh order
 
 // Generates the geometry
     std::string file("wellbore.msh");
@@ -108,8 +108,8 @@ int main(int argc, char *argv[]) {
 //    TPZFMatrix<REAL> residual = Residual(cmesh, cmesh_noboundary);
 
 // Calculates residual using matrix operations and check if the result is ok
-//    TPZSolveMatrix SolMat = SetDataStructure(cmesh);
-//    ComputeResidual(SolMat, cmesh);
+    TPZSolveMatrix SolMat = SetDataStructure(cmesh, wellbore_material);
+    ComputeResidual(SolMat, cmesh);
 
     return 0;
 }
@@ -153,24 +153,26 @@ void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData wellbore_material, int n
 TElastoPlasticData WellboreConfig(){
     TPZElasticResponse LER;
     
-    REAL Ey = 2000.0;
-    REAL nu = 0.2;
+//    REAL Ey = 2000.0;
+//    REAL nu = 0.2;
+    REAL Ey = 22821;
+    REAL nu = 0.33;
     LER.SetEngineeringData(Ey, nu);
     
-    REAL mc_cohesion    = 1000000000000.0;
-    REAL mc_phi         = (20.0*M_PI/180);
+    REAL mc_cohesion    = 7.76;
+    REAL mc_phi         = (41.5*M_PI/180);
     
 
     std::vector<TBCData> bc_data;
     TBCData bc_inner, bc_outer, bc_ux_fixed, bc_uy_fixed;
     bc_inner.SetId(2);
     bc_inner.SetType(6);
-    bc_inner.SetInitialValue(-50.);
-    bc_inner.SetValue({-10.-bc_inner.InitialValue()}); /// tr(sigma)/3
-    
+    bc_inner.SetInitialValue(30.);
+    bc_inner.SetValue({-40.9-bc_inner.InitialValue()}); /// tr(sigma)/3
+
     bc_outer.SetId(3);
     bc_outer.SetType(6);
-    bc_outer.SetInitialValue({-50.}); /// tr(sigma)/3
+    bc_outer.SetInitialValue({30}); /// tr(sigma)/3
     bc_outer.SetValue({-50.-bc_outer.InitialValue()}); /// tr(sigma)/3
 
     bc_ux_fixed.SetId(4);
@@ -373,7 +375,7 @@ TPZCompMesh *CmeshElastoplasticityNoBoundary(TPZGeoMesh * gmesh, int p_order) {
     return cmesh;
 }
 
-TPZSolveMatrix SetDataStructure(TPZCompMesh *cmesh) {
+TPZSolveMatrix SetDataStructure(TPZCompMesh *cmesh, TElastoPlasticData wellbore_material) {
 
     int dim_mesh = (cmesh->Reference())->Dimension(); // Mesh dimension
     int64_t nelem_c = cmesh->NElements(); // Number of computational elements
@@ -493,6 +495,8 @@ TPZSolveMatrix SetDataStructure(TPZCompMesh *cmesh) {
     SolMat.SetMeshDimension(dim_mesh);
     SolMat.SetWeightVector(weight);
 
+    SolMat.SetMaterialData(wellbore_material);
+
     return SolMat;
 }
 
@@ -504,13 +508,16 @@ void ComputeResidual(TPZSolveMatrix SolMat, TPZCompMesh * cmesh){
     TPZFMatrix<REAL> nodal_forces_global2(neq, 1, 0.);
     TPZFMatrix<REAL> sigma_trial;
     TPZFMatrix<REAL> eigenvalues;
+    TPZFMatrix<REAL> eigenvectors;
     TPZFMatrix<REAL> nodal_forces_vec;
+    TPZFMatrix<REAL> gather_solution;
     TPZFMatrix<REAL> delta_strain;
     TPZFMatrix<REAL> total_strain(cmesh->Dimension() * SolMat.Rows(), 1, 0.);
     TPZFMatrix<REAL> plastic_strain(cmesh->Dimension() * SolMat.Rows(), 1, 0.);
     TPZFMatrix<REAL> elastic_strain(cmesh->Dimension() * SolMat.Rows(), 1, 0.);
     TPZFMatrix<REAL> phi;
     TPZFMatrix<REAL> sigma_projected;
+    TPZFMatrix<REAL> sigma;
 
     #ifdef __CUDACC__
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;
@@ -518,11 +525,16 @@ void ComputeResidual(TPZSolveMatrix SolMat, TPZCompMesh * cmesh){
     #endif
 
     std::cout << "\n\nSOLVING WITH CPU" << std::endl;
-    SolMat.DeltaStrain(solution, delta_strain);
+    SolMat.GatherSolution(solution, gather_solution);
+    SolMat.DeltaStrain(gather_solution, delta_strain);
+    SolMat.TotalStrain(delta_strain, total_strain);
     SolMat.ElasticStrain(delta_strain, total_strain, plastic_strain, elastic_strain);
-    SolMat.SigmaTrial(delta_strain, sigma_trial);
-    SolMat.PrincipalStress(sigma_trial, eigenvalues);
-    SolMat.ProjectSigma(total_strain, plastic_strain, eigenvalues, sigma_projected);
+    SolMat.ComputeStress(delta_strain, sigma_trial);
+    SolMat.SpectralDecomposition(sigma_trial, eigenvalues, eigenvectors);
+    SolMat.ProjectSigma(eigenvalues, sigma_projected, plastic_strain);
+    SolMat.StressCompleteTensor(eigenvalues, eigenvectors, sigma);
+    SolMat.ComputeStrain(sigma, elastic_strain);
+    plastic_strain = total_strain - elastic_strain;
 }
 
 TPZFMatrix<REAL> ResidualWithoutBoundary(TPZCompMesh *cmesh, TPZCompMesh *cmesh_noboundary) {

@@ -36,7 +36,7 @@ void Normalize(double *sigma, double &maxel) {
     }
 }
 
-void Interval(double *sigma, double *interval) {
+void TPZSolveMatrix::Interval(double *sigma, double *interval) {
     TPZVec<REAL> lower_vec(3);
     TPZVec<REAL> upper_vec(3);
 
@@ -66,7 +66,7 @@ void Interval(double *sigma, double *interval) {
     }
 }
 
-void NewtonIterations(double *interval, double *sigma, double *eigenvalues, double &maxel) {
+void TPZSolveMatrix::NewtonIterations(double *interval, double *sigma, double *eigenvalues, double &maxel) {
     int numiterations = 20;
     REAL tol = 10e-8;
 
@@ -571,8 +571,9 @@ void TPZSolveMatrix::ColoringElements(TPZCompMesh * cmesh) const {
             TPZCompEl *cel = cmesh->Element(iel);
             if (!cel || cel->Dimension() != cmesh->Dimension()) continue;
 
-            if (fElemColor[it] != -1) continue;
             it++;
+            if (fElemColor[it-1] != -1) continue;
+
             TPZStack<int64_t> connectlist;
             cmesh->Element(iel)->BuildConnectList(connectlist);
             int64_t ncon = connectlist.size();
@@ -586,7 +587,7 @@ void TPZSolveMatrix::ColoringElements(TPZCompMesh * cmesh) const {
                 continue;
             }
             fElemColor[it-1] = contcolor;
-            //cel->Reference()->SetMaterialId(contcolor);
+//            cel->Reference()->SetMaterialId(contcolor);
 
             for (icon = 0; icon < ncon; icon++) {
                 connects_vec[connectlist[icon]] = 1;
