@@ -431,7 +431,7 @@ TPZSolveMatrix SetDataStructure(TPZCompMesh *cmesh) {
 
     int64_t cont1 = 0;
     int64_t cont2 = 0;
-
+    it = 0;
     for (auto iel : cel_indexes) {
         //Verification
         TPZCompEl *cel = cmesh->Element(iel);
@@ -462,7 +462,8 @@ TPZSolveMatrix SetDataStructure(TPZCompMesh *cmesh) {
                     elmatrix(inpts * dim + idim, inf) = dphix(idim, inf);
             }
         }
-        SolMat.SetElementMatrix(iel, elmatrix);
+        SolMat.SetElementMatrix(it, elmatrix);
+        it++;
 
         //Indexes vector
         int64_t ncon = cel->NConnects();

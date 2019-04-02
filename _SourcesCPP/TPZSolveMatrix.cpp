@@ -565,12 +565,14 @@ void TPZSolveMatrix::ColoringElements(TPZCompMesh * cmesh) const {
 
     while (needstocontinue)
     {
+        int it = 0;
         needstocontinue = false;
         for (int64_t iel = 0; iel < nelem_c; iel++) {
             TPZCompEl *cel = cmesh->Element(iel);
             if (!cel || cel->Dimension() != cmesh->Dimension()) continue;
 
-            if (fElemColor[iel] != -1) continue;
+            if (fElemColor[it] != -1) continue;
+            it++;
             TPZStack<int64_t> connectlist;
             cmesh->Element(iel)->BuildConnectList(connectlist);
             int64_t ncon = connectlist.size();
@@ -583,7 +585,7 @@ void TPZSolveMatrix::ColoringElements(TPZCompMesh * cmesh) const {
                 needstocontinue = true;
                 continue;
             }
-            fElemColor[iel] = contcolor;
+            fElemColor[it-1] = contcolor;
             //cel->Reference()->SetMaterialId(contcolor);
 
             for (icon = 0; icon < ncon; icon++) {
