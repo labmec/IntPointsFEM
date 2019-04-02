@@ -153,26 +153,25 @@ void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData wellbore_material, int n
 TElastoPlasticData WellboreConfig(){
     TPZElasticResponse LER;
     
-//    REAL Ey = 2000.0;
-//    REAL nu = 0.2;
-    REAL Ey = 22821;
-    REAL nu = 0.33;
+    REAL Ey = 2000.0;
+    REAL nu = 0.2;
+
     LER.SetEngineeringData(Ey, nu);
     
-    REAL mc_cohesion    = 7.76;
-    REAL mc_phi         = (41.5*M_PI/180);
+    REAL mc_cohesion    = 10000000000.0;
+    REAL mc_phi         = (20*M_PI/180);
     
 
     std::vector<TBCData> bc_data;
     TBCData bc_inner, bc_outer, bc_ux_fixed, bc_uy_fixed;
     bc_inner.SetId(2);
     bc_inner.SetType(6);
-    bc_inner.SetInitialValue(30.);
-    bc_inner.SetValue({-40.9-bc_inner.InitialValue()}); /// tr(sigma)/3
+    bc_inner.SetInitialValue(-50.);
+    bc_inner.SetValue({-10.-bc_inner.InitialValue()}); /// tr(sigma)/3
 
     bc_outer.SetId(3);
     bc_outer.SetType(6);
-    bc_outer.SetInitialValue({30}); /// tr(sigma)/3
+    bc_outer.SetInitialValue({-50.}); /// tr(sigma)/3
     bc_outer.SetValue({-50.-bc_outer.InitialValue()}); /// tr(sigma)/3
 
     bc_ux_fixed.SetId(4);
@@ -518,6 +517,7 @@ void ComputeResidual(TPZSolveMatrix SolMat, TPZCompMesh * cmesh){
     TPZFMatrix<REAL> phi;
     TPZFMatrix<REAL> sigma_projected;
     TPZFMatrix<REAL> sigma;
+    TPZFMatrix<REAL> nodal_forces;
 
     #ifdef __CUDACC__
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;
@@ -532,9 +532,10 @@ void ComputeResidual(TPZSolveMatrix SolMat, TPZCompMesh * cmesh){
     SolMat.ComputeStress(delta_strain, sigma_trial);
     SolMat.SpectralDecomposition(sigma_trial, eigenvalues, eigenvectors);
     SolMat.ProjectSigma(eigenvalues, sigma_projected, plastic_strain);
-    SolMat.StressCompleteTensor(eigenvalues, eigenvectors, sigma);
+    SolMat.StressCompleteTensor(sigma_projected, eigenvectors, sigma);
     SolMat.ComputeStrain(sigma, elastic_strain);
     plastic_strain = total_strain - elastic_strain;
+    SolMat.NodalForces(sigma, nodal_forces);
 }
 
 TPZFMatrix<REAL> ResidualWithoutBoundary(TPZCompMesh *cmesh, TPZCompMesh *cmesh_noboundary) {

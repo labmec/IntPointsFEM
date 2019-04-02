@@ -10,6 +10,7 @@
 #include "pzinterpolationspace.h"
 #include "pzcmesh.h"
 
+#include "TElastoPlasticData.h"
 #ifdef USING_MKL
 #include "mkl.h"
 #endif
@@ -63,6 +64,7 @@ public:
         fIndexesColor = copy.fIndexesColor;
         fDim = copy.fDim;
         fWeight = copy.fWeight;
+        fMaterialData = copy.fMaterialData;
 
 #ifdef __CUDACC__
         d_fStorage = copy.d_fStorage;
@@ -98,6 +100,7 @@ public:
         fIndexesColor = copy.fIndexesColor;
         fDim = copy.fDim;
         fWeight = copy.fWeight;
+        fMaterialData = copy.fMaterialData;
 
 #ifdef __CUDACC__
         d_fStorage = copy.d_fStorage;
@@ -176,6 +179,10 @@ public:
         fWeight = wvec;
     }
 
+    void SetMaterialData (TElastoPlasticData materialdata) {
+        fMaterialData = materialdata;
+    }
+
     //USING CUDA
     void AllocateMemory(TPZCompMesh *cmesh);
  
@@ -196,19 +203,36 @@ public:
     void ColoredAssembleCUDA(TPZFMatrix<REAL> &nodal_forces_vec, TPZFMatrix<REAL> &nodal_forces_global);
 
     //Elastoplasticity
+    void GatherSolution(TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &gather_solution);
+
     void DeltaStrain(TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &deltastrain);
 
+    void TotalStrain (TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &total_strain);
     void ElasticStrain (TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &total_strain, TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &elastic_strain);
 
-    void SigmaTrial(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &sigma_trial);
-
-    void PrincipalStress(TPZFMatrix<REAL> &sigma_trial, TPZFMatrix<REAL> &eigenvalues);
-
-    void ProjectSigma(TPZFMatrix<REAL> &total_strain, TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &sigma_projected);
+    void ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &sigma);
 
 
+    void SpectralDecomposition(TPZFMatrix<REAL> &sigma_trial, TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &eigenvectors);
+    void Normalize(double *sigma, double &maxel);
+    void Interval(double *sigma, double *interval);
+    void NewtonIterations(double *interval, double *sigma, double *eigenvalues, double &maxel);
+    void Eigenvectors(double *sigma, double *eigenvalues, double *eigenvectors);
 
-    void Multiply(const TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &deltastrain) const;
+
+    void ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &sigma_projected, TPZFMatrix<REAL> &plastic_strain);
+    bool PhiPlane(double *eigenvalues, double *sigma_projected);
+    bool ReturnMappingMainPlane(double *eigenvalues, double *sigma_projected, double &m_hardening);
+    bool ReturnMappingRightEdge(double *eigenvalues, double *sigma_projected, double &m_hardening);
+    bool ReturnMappingLeftEdge(double *eigenvalues, double *sigma_projected, double &m_hardening);
+    void ReturnMappingApex(double *eigenvalues, double *sigma_projected, double &m_hardening);
+
+    void StressCompleteTensor(TPZFMatrix<REAL> &sigma_projected, TPZFMatrix<REAL> &eigenvectors, TPZFMatrix<REAL> &sigma);
+
+    void ComputeStrain( TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &elastic_strain);
+
+    void NodalForces(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &nodal_forces);
+
 
     void MultiplyTranspose(TPZFMatrix<REAL> &intpoint_solution, TPZFMatrix<REAL> &nodal_forces_vec);
 
@@ -252,6 +276,9 @@ protected:
 
 /// Weight Vector
     TPZStack<REAL> fWeight;
+
+/// material data
+    TElastoPlasticData fMaterialData;
 
 /// Parameters stored on device
 #ifdef __CUDACC__
