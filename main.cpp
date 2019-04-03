@@ -56,6 +56,12 @@ TPZSolveMatrix SetDataStructure(TPZCompMesh *cmesh, TElastoPlasticData wellbore_
 void ComputeResidual (TPZSolveMatrix SolMat, TPZCompMesh * cmesh);
 TPZFMatrix<REAL> ResidualWithoutBoundary(TPZCompMesh *cmesh, TPZCompMesh *cmesh_noboundary);
 
+///Set Analysis
+TPZAnalysis * Analysis(TPZCompMesh * cmesh, int n_threads);
+
+///Solve using Newton method
+void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance);
+
 /// Accept solution
 void AcceptPseudoTimeStepSolution(TPZAnalysis * an, TPZCompMesh * cmesh);
 
@@ -85,22 +91,16 @@ int main(int argc, char *argv[]) {
     RKApproximation(wellbore_material, np, rkfile, euler);
 
 // Defines the analysis
-    bool optimizeBandwidth = true;
     int n_threads = 12;
-    TPZAnalysis * an = new TPZAnalysis(cmesh, optimizeBandwidth);
-    TPZSymetricSpStructMatrix strskyl(cmesh);
-    strskyl.SetNumThreads(n_threads);
-    an->SetStructuralMatrix(strskyl);
+    TPZAnalysis *analysis = Analysis(cmesh,n_threads);
 
-    /// TODO:: Needs to implement a global Newton solver
-// Solve
-    TPZStepSolver<STATE> step;
-    step.SetDirect(ELDLt);
-    an->SetSolver(step);
-    an->Assemble();
-    an->Solve();
-    an->LoadSolution();
-    AcceptPseudoTimeStepSolution(an, cmesh);
+//Calculates the solution using Newton method
+    int n_iterations = 20;
+    REAL tolerance = 1.e-5;
+    Solution(analysis, n_iterations, tolerance);
+
+///Accept solution
+    AcceptPseudoTimeStepSolution(analysis, cmesh);
 
 // Post process
     PostProcess(cmesh, wellbore_material, n_threads);
@@ -113,6 +113,48 @@ int main(int argc, char *argv[]) {
     ComputeResidual(SolMat, cmesh);
 
     return 0;
+}
+
+void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
+    bool stop_criterion_Q = false;
+    REAL norm_res;
+    int neq = analysis->Solution().Rows();
+    TPZFMatrix<REAL> x(neq, 1, 0.), dx;
+
+    analysis->Assemble();
+
+    for (int i = 0; i < n_iterations; i++) {
+        analysis->Solve();
+        dx = analysis->Solution();
+        x += dx;
+        analysis->LoadSolution(x);
+        analysis->AssembleResidual();
+        norm_res = Norm(analysis->Rhs());
+        stop_criterion_Q = norm_res < tolerance;
+
+        if (stop_criterion_Q) {
+            std::cout << "Nonlinear process converged with residue norm = " << norm_res << std::endl;
+            std::cout << "Number of iterations = " << i + 1 << std::endl;
+            break;
+        }
+        analysis->Assemble();
+    }
+
+    if (stop_criterion_Q == false) {
+        std::cout << "Nonlinear process not converged with residue norm = " << norm_res << std::endl;
+    }
+}
+
+TPZAnalysis *Analysis(TPZCompMesh *cmesh, int n_threads) {
+    bool optimizeBandwidth = true;
+    TPZAnalysis *analysis = new TPZAnalysis(cmesh, optimizeBandwidth);
+    TPZSymetricSpStructMatrix strskyl(cmesh);
+    strskyl.SetNumThreads(n_threads);
+    analysis->SetStructuralMatrix(strskyl);
+    TPZStepSolver<STATE> step;
+    step.SetDirect(ELDLt);
+    analysis->SetSolver(step);
+    return analysis;
 }
 
 void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData wellbore_material, int n_threads) {
@@ -537,6 +579,7 @@ void ComputeResidual(TPZSolveMatrix SolMat, TPZCompMesh * cmesh){
     SolMat.ComputeStrain(sigma, elastic_strain);
     plastic_strain = total_strain - elastic_strain;
     SolMat.NodalForces(sigma, nodal_forces);
+    SolMat.ColoredAssemble(nodal_forces,nodal_forces_global1);
 }
 
 TPZFMatrix<REAL> ResidualWithoutBoundary(TPZCompMesh *cmesh, TPZCompMesh *cmesh_noboundary) {
