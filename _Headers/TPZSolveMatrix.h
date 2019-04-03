@@ -232,8 +232,6 @@ public:
 
     void ColoredAssemble(TPZFMatrix<REAL> &nodal_forces_vec, TPZFMatrix<REAL> &nodal_forces_global);
 
-    void TraditionalAssemble(TPZFMatrix<REAL> &nodal_forces_vec, TPZFMatrix<REAL> &nodal_forces_global) const;
-
     void ColoringElements(TPZCompMesh *cmesh) const;
 
 protected:

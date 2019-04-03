@@ -643,20 +643,6 @@ void TPZSolveMatrix::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFM
     nodal_forces_global.Resize(neq, 1);
 }
 
-void TPZSolveMatrix::TraditionalAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) const {
-#ifdef USING_TBB
-    parallel_for(size_t(0),size_t(fRow),size_t(1),[&](size_t ir)
-             {
-                 nodal_forces_global(fIndexes[ir], 0) += nodal_forces_vec(ir, 0);
-             }
-);
-#else
-    for (int64_t ir=0; ir<fRow; ir++) {
-        nodal_forces_global(fIndexes[ir], 0) += nodal_forces_vec(ir, 0);
-    }
-#endif
-}
-
 void TPZSolveMatrix::ColoringElements(TPZCompMesh * cmesh) const {
     int64_t nelem_c = cmesh->NElements();
     int64_t nconnects = cmesh->NConnects();
