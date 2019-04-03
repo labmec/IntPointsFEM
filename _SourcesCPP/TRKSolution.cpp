@@ -9,13 +9,29 @@ TRKSolution::TRKSolution() {
 }
 
 TRKSolution::TRKSolution(const TRKSolution &  other) {
-    /// TODO:: NV please implement it
-    DebugStop();
+    m_material = other.m_material;
+    m_re = other.m_re;
+    m_rw = other.m_rw;
+    m_sigma = other.m_sigma;
+    m_pw = other.m_pw;
+    m_sigma0 = other.m_sigma0;
+    m_theta = other.m_theta;
 }
 
 TRKSolution & TRKSolution::operator=(const TRKSolution &  other) {
-    /// TODO:: NV please implement it
-    DebugStop();
+    /// check for self-assignment
+    if(&other == this){
+        return *this;
+    }
+    m_material = other.m_material;
+    m_re = other.m_re;
+    m_rw = other.m_rw;
+    m_sigma = other.m_sigma;
+    m_pw = other.m_pw;
+    m_sigma0 = other.m_sigma0;
+    m_theta = other.m_theta;
+
+    return *this;
 }
 
 TRKSolution::~TRKSolution() {

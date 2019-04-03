@@ -16,17 +16,17 @@ class TRKSolution {
 protected:
     TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem > *m_material;
 
-    REAL m_re;
+    REAL m_re = -1;
 
-    REAL m_rw;
+    REAL m_rw = -1;
 
     TPZTensor<REAL> m_sigma;
 
-    REAL m_pw;
+    REAL m_pw = -1;
 
-    REAL m_sigma0;
+    REAL m_sigma0 = -1;
 
-    REAL m_theta;
+    REAL m_theta = -1;
 
 public:
     /// Default constructor
