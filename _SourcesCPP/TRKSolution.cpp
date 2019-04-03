@@ -9,11 +9,13 @@ TRKSolution::TRKSolution() {
 }
 
 TRKSolution::TRKSolution(const TRKSolution &  other) {
-
+    /// TODO:: NV please implement it
+    DebugStop();
 }
 
 TRKSolution & TRKSolution::operator=(const TRKSolution &  other) {
-
+    /// TODO:: NV please implement it
+    DebugStop();
 }
 
 TRKSolution::~TRKSolution() {
@@ -81,7 +83,7 @@ void TRKSolution::F (REAL r, REAL ur, REAL sigma_r, REAL &d_ur, REAL &d_sigmar) 
     d_sigmar = (-sigma_r + (2*G*ur/r + lambda*(ur/r + (r*sigma_r-lambda*ur)/(r*(lambda + 2*G)))))/r;
 }
 
-void TRKSolution::ParametersAtRe (TPZFNMatrix<3,REAL> &sigma, REAL &u_re) {
+void TRKSolution::ParametersAtRe(TPZFNMatrix<3,REAL> &sigma, REAL &u_re) {
     REAL nu = m_material->GetDefaultMemory().m_ER.Poisson();
     REAL G = m_material->GetDefaultMemory().m_ER.G();
 

@@ -92,6 +92,7 @@ int main(int argc, char *argv[]) {
     strskyl.SetNumThreads(n_threads);
     an->SetStructuralMatrix(strskyl);
 
+    /// TODO:: Needs to implement a global Newton solver
 // Solve
     TPZStepSolver<STATE> step;
     step.SetDirect(ELDLt);
@@ -200,7 +201,7 @@ TPZGeoMesh * ReadGeometry(std::string geometry_file) {
     TPZGmshReader Geometry;
     REAL l = 1.0;
     Geometry.SetCharacteristiclength(l);
-    Geometry.SetFormatVersion("4.0");
+    Geometry.SetFormatVersion("4.1");
     TPZGeoMesh * geometry = Geometry.GeometricGmshMesh(geometry_file);
     Geometry.PrintPartitionSummary(std::cout);
 #ifdef PZDEBUG
