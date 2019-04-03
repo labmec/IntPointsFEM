@@ -597,70 +597,29 @@ void TPZSolveMatrix::StressCompleteTensor(TPZFMatrix<REAL> &sigma_projected, TPZ
 
 void TPZSolveMatrix::NodalForces(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &nodal_forces) {
     int64_t nelem = fRowSizes.size();
+    int64_t npts = fRow/fDim;
     nodal_forces.Resize(fRow,1);
     nodal_forces.Zero();
 
     for (int iel = 0; iel < nelem; iel++) {
-        TPZVec<REAL> sigma_x(fRowSizes[iel]);
-        TPZVec<REAL> sigma_y(fRowSizes[iel]);
+        TPZFMatrix<REAL> sigma_x(fRowSizes[iel], 1);
+        TPZFMatrix<REAL> sigma_y(fRowSizes[iel], 1);
 
         for (int icol = 0; icol < fColSizes[iel]; icol++) {
-            sigma_x[2*icol] = sigma(4*icol + 0,0);
-            sigma_x[2*icol+1] = sigma(4*icol + 3,0);
+            sigma_x(2 * icol, 0) = sigma(4 * icol + 4 * fColFirstIndex[iel] + 0, 0);
+            sigma_x(2 * icol + 1, 0) = sigma(4 * icol + 4 * fColFirstIndex[iel] + 3, 0);
 
-            sigma_y[2*icol] = sigma(4*icol + 3,0);
-            sigma_y[2*icol+1] = sigma(4*icol + 1,0);
+            sigma_y(2 * icol, 0) = sigma(4 * icol + 4 * fColFirstIndex[iel] + 3, 0);
+            sigma_y(2 * icol + 1, 0) = sigma(4 * icol + 4 * fColFirstIndex[iel] + 1, 0);
+        }
+
+        for (int i = 0; i < fColSizes[iel]; i++) {
+            for (int k = 0; k < fRowSizes[iel]; k++) {
+                nodal_forces(i + fColFirstIndex[iel], 0) += fStorage[k + i * fRowSizes[iel] + fMatrixPosition[iel]] * sigma_x(k, 0);
+                nodal_forces(i + fColFirstIndex[iel] + npts, 0) +=  fStorage[k + i * fRowSizes[iel] + fMatrixPosition[iel]] * sigma_y(k, 0);
+            }
         }
     }
-}
-
-void TPZSolveMatrix::MultiplyTranspose(TPZFMatrix<STATE>  &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec) {
-int64_t nelem = fRowSizes.size();
-int64_t npts_tot = fRow;
-nodal_forces_vec.Resize(npts_tot,1);
-nodal_forces_vec.Zero();
-
-#ifdef USING_TBB
-parallel_for(size_t(0),size_t(nelem),size_t(1),[&](size_t iel)
-                  {
-                        int64_t pos = fMatrixPosition[iel];
-                        int64_t rows = fRowSizes[iel];
-                        int64_t cols = fColSizes[iel];
-                        int64_t cont_rows = fRowFirstIndex[iel];
-                        int64_t cont_cols = fColFirstIndex[iel];
-                        TPZFMatrix<REAL> elmatrix(rows,cols,&fStorage[pos],rows*cols);
-
-                        // Forças nodais na direção x
-                        TPZFMatrix<REAL> fvx(rows,1, &intpoint_solution(cont_rows,0),rows);
-                        TPZFMatrix<STATE> nodal_forcex(cols, 1, &nodal_forces_vec(cont_cols, 0), cols);
-                        elmatrix.MultAdd(fvx,nodal_forcex,nodal_forcex,1,0,1);
-
-                        // Forças nodais na direção y
-                        TPZFMatrix<REAL> fvy(rows,1, &intpoint_solution(cont_rows+npts_tot,0),rows);
-                        TPZFMatrix<STATE> nodal_forcey(cols, 1, &nodal_forces_vec(cont_cols + npts_tot/2, 0), cols);
-                        elmatrix.MultAdd(fvy,nodal_forcey,nodal_forcey,1,0,1);
-                  }
-                  );
-#else
-for (int64_t iel = 0; iel < nelem; iel++) {
-    int64_t pos = fMatrixPosition[iel];
-    int64_t rows = fRowSizes[iel];
-    int64_t cols = fColSizes[iel];
-    int64_t cont_rows = fRowFirstIndex[iel];
-    int64_t cont_cols = fColFirstIndex[iel];
-    TPZFMatrix<REAL> elmatrix(rows,cols,&fStorage[pos],rows*cols);
-
-    // Nodal forces in x direction
-    TPZFMatrix<REAL> fvx(rows,1, &intpoint_solution(cont_rows,0),rows);
-    TPZFMatrix<STATE> nodal_forcex(cols, 1, &nodal_forces_vec(cont_cols, 0), cols);
-    elmatrix.MultAdd(fvx,nodal_forcex,nodal_forcex,1,0,1);
-
-    // Nodal forces in y direction
-    TPZFMatrix<REAL> fvy(rows,1, &intpoint_solution(cont_rows+npts_tot,0),rows);
-    TPZFMatrix<STATE> nodal_forcey(cols, 1, &nodal_forces_vec(cont_cols + npts_tot/2, 0), cols);
-    elmatrix.MultAdd(fvy,nodal_forcey,nodal_forcey,1,0,1);
-}
-#endif
 }
 
 void TPZSolveMatrix::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) {
