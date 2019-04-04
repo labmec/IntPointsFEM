@@ -20,17 +20,17 @@ using namespace tbb;
 void TPZSolveMatrix::Eigenvectors(double *sigma, double *eigenvalues, double *eigenvectors) {
     TPZVec<int> multiplicity(3);
     if (eigenvalues[0] == eigenvalues[1] && eigenvalues[1] == eigenvalues[2] || sigma[3] < 1e-8) {
-        eigenvectors[0] = 1;
-        eigenvectors[1] = 0;
-        eigenvectors[2] = 0;
+        eigenvectors[0] = 1.;
+        eigenvectors[1] = 0.;
+        eigenvectors[2] = 0.;
 
-        eigenvectors[3] = 0;
-        eigenvectors[4] = 1;
-        eigenvectors[5] = 0;
+        eigenvectors[3] = 0.;
+        eigenvectors[4] = 1.;
+        eigenvectors[5] = 0.;
 
-        eigenvectors[6] = 0;
-        eigenvectors[7] = 0;
-        eigenvectors[8] = 1;
+        eigenvectors[6] = 0.;
+        eigenvectors[7] = 0.;
+        eigenvectors[8] = 1.;
     }
     else {
         if (eigenvalues[0] != eigenvalues[1] && eigenvalues[0] != eigenvalues[2]) {
@@ -183,7 +183,7 @@ void TPZSolveMatrix::Interval(double *sigma, double *interval) {
 
 void TPZSolveMatrix::NewtonIterations(double *interval, double *sigma, double *eigenvalues, double &maxel) {
     int numiterations = 20;
-    REAL tol = 10e-8;
+    REAL tol = 10e-12;
 
     REAL res, f, df, x;
     int it;
