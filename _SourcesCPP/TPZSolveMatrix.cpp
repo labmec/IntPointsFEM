@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include "TPZTensor.h"
 #include "TPZVTKGeoMesh.h"
+#include "pzintel.h"
 
 #ifdef USING_MKL
 #include <mkl.h>
@@ -280,8 +281,6 @@ bool TPZSolveMatrix::ReturnMappingRightEdge(double *eigenvalues, double *sigma_p
     const REAL sinphi = sin(mc_phi);
     const REAL sinpsi = sin(mc_psi);
     const REAL cosphi = cos(mc_phi);
-    const REAL sinphi2 = sinphi*sinphi;
-    const REAL cosphi2 = 1. - sinphi2;
 
     TPZVec<REAL> gamma(2, 0.), phi(2, 0.), sigma_bar(2, 0.), ab(2, 0.);
 
@@ -412,8 +411,6 @@ void TPZSolveMatrix::ReturnMappingApex(double *eigenvalues, double *sigma_projec
     REAL mc_cohesion = fMaterialData.Cohesion();
     REAL K = fMaterialData.ElasticResponse().K();
 
-    const REAL sinpsi = sin(mc_psi);
-    const REAL cosphi = cos(mc_phi);
     const REAL cotphi = 1. / tan(mc_phi);
 
     REAL ptrnp1 = 0.;
@@ -448,7 +445,7 @@ void TPZSolveMatrix::ReturnMappingApex(double *eigenvalues, double *sigma_projec
 
 //Gather solution
 void TPZSolveMatrix::GatherSolution(TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &gather_solution) {
-    int64_t n_globalsol = fDim*fCol;
+    int64_t n_globalsol = fCmesh->Dimension()*fNphis;
 
     gather_solution.Resize(n_globalsol,1);
     gather_solution.Zero();
@@ -460,7 +457,7 @@ void TPZSolveMatrix::GatherSolution(TPZFMatrix<REAL> &global_solution, TPZFMatri
 //Strain
 void TPZSolveMatrix::DeltaStrain(TPZFMatrix<REAL> &expandsolution, TPZFMatrix<REAL> &delta_strain) {
     int64_t nelem = fRowSizes.size();
-    int64_t n_globalsol = fDim*fCol;
+    int64_t n_globalsol = fCmesh->Dimension()*fNphis;
 
     delta_strain.Resize(2*n_globalsol,1);
     delta_strain.Zero();
@@ -478,10 +475,21 @@ void TPZSolveMatrix::DeltaStrain(TPZFMatrix<REAL> &expandsolution, TPZFMatrix<RE
 }
 
 void TPZSolveMatrix::TotalStrain (TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &total_strain) {
+    int64_t size = fCmesh->Dimension()*fCmesh->Dimension()*fNpts;
+    total_strain.Resize(size,1);
+    total_strain.Zero();
+
     total_strain = total_strain + delta_strain;
 }
 
 void TPZSolveMatrix::ElasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &total_strain, TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &elastic_strain) {
+    int64_t size = fCmesh->Dimension()*fCmesh->Dimension()*fNpts;
+    plastic_strain.Resize(size,1);
+    plastic_strain.Zero();
+
+    elastic_strain.Resize(size,1);
+    elastic_strain.Zero();
+
     elastic_strain = total_strain - plastic_strain;
 }
 
@@ -489,8 +497,7 @@ void TPZSolveMatrix::ElasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<RE
 void TPZSolveMatrix::ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &sigma) {
     REAL E = fMaterialData.ElasticResponse().E();
     REAL nu = fMaterialData.ElasticResponse().Poisson();
-    int64_t npts = fRow/fDim;
-    sigma.Resize(4*npts,1);
+    sigma.Resize(4*fNpts,1);
 
 #ifdef USING_TBB
     parallel_for(size_t(0),size_t(npts_tot/2),size_t(1),[&](size_t ipts)
@@ -503,12 +510,12 @@ void TPZSolveMatrix::ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<
                       );
 #else
 
-    for (int64_t ipts=0; ipts < npts; ipts++) {
+    for (int64_t ipts=0; ipts < fNpts; ipts++) {
         //plane strain
-        sigma(4*ipts,0) = fWeight[ipts]*(elastic_strain(2*ipts,0)*E*(1.-nu)/((1.-2*nu)*(1.+nu)) + elastic_strain(2*ipts+2*npts+1,0)*E*nu/((1.-2*nu)*(1.+nu))); // Sigma xx
-        sigma(4*ipts+1,0) = fWeight[ipts]*(elastic_strain(2*ipts+2*npts+1,0)*E*(1.-nu)/((1.-2*nu)*(1.+nu)) + elastic_strain(2*ipts,0)*E*nu/((1.-2*nu)*(1.+nu))); // Sigma yy
-        sigma(4*ipts+2,0) = fWeight[ipts]*(E*nu/((1.+nu)*(1.-2*nu))*(elastic_strain(2*ipts,0) + elastic_strain(2*ipts+2*npts+1,0))); // Sigma zz
-        sigma(4*ipts+3,0) = fWeight[ipts]*E/(2*(1.+nu))*(elastic_strain(2*ipts+1,0)+elastic_strain(2*ipts+2*npts,0)); // Sigma xy
+        sigma(4*ipts,0) = fWeight[ipts]*(elastic_strain(2*ipts,0)*E*(1.-nu)/((1.-2*nu)*(1.+nu)) + elastic_strain(2*ipts+2*fNpts+1,0)*E*nu/((1.-2*nu)*(1.+nu))); // Sigma xx
+        sigma(4*ipts+1,0) = fWeight[ipts]*(elastic_strain(2*ipts+2*fNpts+1,0)*E*(1.-nu)/((1.-2*nu)*(1.+nu)) + elastic_strain(2*ipts,0)*E*nu/((1.-2*nu)*(1.+nu))); // Sigma yy
+        sigma(4*ipts+2,0) = fWeight[ipts]*(E*nu/((1.+nu)*(1.-2*nu))*(elastic_strain(2*ipts,0) + elastic_strain(2*ipts+2*fNpts+1,0))); // Sigma zz
+        sigma(4*ipts+3,0) = fWeight[ipts]*E/(2*(1.+nu))*(elastic_strain(2*ipts+1,0)+elastic_strain(2*ipts+2*fNpts,0)); // Sigma xy
 
 //    sigma(2*ipts,0) = weight[ipts]*E/(1.-nu*nu)*(result(2*ipts,0)+nu*result(2*ipts+npts_tot+1,0)); // Sigma x
 //    sigma(2*ipts+1,0) = weight[ipts]*E/(1.-nu*nu)*(1.-nu)/2*(result(2*ipts+1,0)+result(2*ipts+npts_tot,0))*0.5; // Sigma xy
@@ -522,25 +529,23 @@ void TPZSolveMatrix::ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<
 void TPZSolveMatrix::ComputeStrain(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &elastic_strain) {
     REAL E = fMaterialData.ElasticResponse().E();
     REAL nu = fMaterialData.ElasticResponse().Poisson();
-    int64_t npts = fRow/fDim;
+    int dim = fCmesh->Dimension();
 
-    for (int ipts = 0; ipts < npts; ipts++) {
+    for (int ipts = 0; ipts < fNpts; ipts++) {
         elastic_strain(2 * ipts + 0, 0) = 1. / E * (sigma(4*ipts + 0, 0) - nu * (sigma(4*ipts + 1, 0) + sigma(4*ipts + 2, 0))); //exx
         elastic_strain(2 * ipts + 1, 0) = (1. + nu) / E * sigma(4*ipts + 3, 0); //exy
-        elastic_strain(2 * ipts + fRow + 0, 0) = (1. + nu) / E * sigma(4*ipts + 3, 0); //exy
-        elastic_strain(2 * ipts + fRow + 1, 0) = 1. / E * (sigma(4*ipts + 1, 0) - nu * (sigma(4*ipts + 0, 0) + sigma(4*ipts + 2, 0))); //eyy
+        elastic_strain(2 * ipts + dim*fNpts + 0, 0) = (1. + nu) / E * sigma(4*ipts + 3, 0); //exy
+        elastic_strain(2 * ipts + dim*fNpts + 1, 0) = 1. / E * (sigma(4*ipts + 1, 0) - nu * (sigma(4*ipts + 0, 0) + sigma(4*ipts + 2, 0))); //eyy
     }
 }
 
 void TPZSolveMatrix::SpectralDecomposition(TPZFMatrix<REAL> &sigma_trial, TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &eigenvectors) {
-    int64_t npts = fRow/fDim;
-
     REAL maxel;
     TPZVec<REAL> interval(2);
-    eigenvalues.Resize(3*npts,1);
-    eigenvectors.Resize(9*npts,1);
+    eigenvalues.Resize(3*fNpts,1);
+    eigenvectors.Resize(9*fNpts,1);
 
-    for (int64_t ipts = 0; ipts < npts; ipts++) {
+    for (int64_t ipts = 0; ipts < fNpts; ipts++) {
         Normalize(&sigma_trial(4*ipts, 0), maxel);
         Interval(&sigma_trial(4*ipts, 0), &interval[0]);
         NewtonIterations(&interval[0], &sigma_trial(4*ipts, 0), &eigenvalues(3*ipts, 0), maxel);
@@ -549,19 +554,19 @@ void TPZSolveMatrix::SpectralDecomposition(TPZFMatrix<REAL> &sigma_trial, TPZFMa
 }
 
 void TPZSolveMatrix::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &sigma_projected, TPZFMatrix<REAL> &plastic_strain) {
-    int npts = fRow/fDim;
+    int dim = fCmesh->Dimension();
 
     REAL mc_psi = fMaterialData.FrictionAngle();
 
-    sigma_projected.Resize(3*npts,1);
+    sigma_projected.Resize(3*fNpts,1);
     sigma_projected.Zero();
-    TPZFMatrix<REAL> elastic_strain_np1(fDim*fRow);
+    TPZFMatrix<REAL> elastic_strain_np1(dim*dim*fNpts);
 
-    TPZVec<int> m_type(npts,0);
-    TPZVec<REAL> m_hardening(npts, 0.);
+    TPZVec<int> m_type(fNpts,0);
+    TPZVec<REAL> m_hardening(fNpts, 0.);
     bool check = false;
 
-    for (int ipts = 0; ipts < npts; ipts++) {
+    for (int ipts = 0; ipts < fNpts; ipts++) {
         m_type[ipts] = 0;
         check = PhiPlane(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0)); //elastic domain
         if (!check) { //plastic domain
@@ -584,10 +589,9 @@ void TPZSolveMatrix::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL
 }
 
 void TPZSolveMatrix::StressCompleteTensor(TPZFMatrix<REAL> &sigma_projected, TPZFMatrix<REAL> &eigenvectors, TPZFMatrix<REAL> &sigma){
-    int npts = fRow/fDim;
-    sigma.Resize(4*npts,1);
+    sigma.Resize(4*fNpts,1);
 
-    for (int ipts = 0; ipts < npts; ipts++) {
+    for (int ipts = 0; ipts < fNpts; ipts++) {
         sigma(4*ipts + 0,0) = sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 0,0)*eigenvectors(9*ipts + 0,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 3,0)*eigenvectors(9*ipts + 3,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 6,0)*eigenvectors(9*ipts + 6,0);
         sigma(4*ipts + 1,0) = sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 1,0)*eigenvectors(9*ipts + 1,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 4,0)*eigenvectors(9*ipts + 4,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 7,0)*eigenvectors(9*ipts + 7,0);
         sigma(4*ipts + 2,0) = sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 2,0)*eigenvectors(9*ipts + 2,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 5,0)*eigenvectors(9*ipts + 5,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 8,0)*eigenvectors(9*ipts + 8,0);
@@ -597,8 +601,8 @@ void TPZSolveMatrix::StressCompleteTensor(TPZFMatrix<REAL> &sigma_projected, TPZ
 
 void TPZSolveMatrix::NodalForces(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &nodal_forces) {
     int64_t nelem = fRowSizes.size();
-    int64_t npts = fRow/fDim;
-    nodal_forces.Resize(fRow,1);
+    int64_t npts = fNpts;
+    nodal_forces.Resize(fCmesh->Dimension()*fNpts,1);
     nodal_forces.Zero();
 
     for (int iel = 0; iel < nelem; iel++) {
@@ -625,8 +629,9 @@ void TPZSolveMatrix::NodalForces(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &noda
 void TPZSolveMatrix::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) {
     int64_t ncolor = *std::max_element(fElemColor.begin(), fElemColor.end())+1;
     int64_t sz = fIndexes.size();
-    int64_t neq = nodal_forces_global.Rows();
+    int64_t neq = fCmesh->NEquations();
     nodal_forces_global.Resize(neq*ncolor,1);
+    nodal_forces_global.Zero();
 
 
     cblas_dsctr(sz, nodal_forces_vec, &fIndexesColor[0], &nodal_forces_global(0,0));
@@ -643,9 +648,9 @@ void TPZSolveMatrix::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFM
     nodal_forces_global.Resize(neq, 1);
 }
 
-void TPZSolveMatrix::ColoringElements(TPZCompMesh * cmesh) const {
-    int64_t nelem_c = cmesh->NElements();
-    int64_t nconnects = cmesh->NConnects();
+void TPZSolveMatrix::ColoringElements() const {
+    int64_t nelem_c = fCmesh->NElements();
+    int64_t nconnects = fCmesh->NConnects();
     TPZVec<int64_t> connects_vec(nconnects,0);
 
     int64_t contcolor = 0;
@@ -656,14 +661,14 @@ void TPZSolveMatrix::ColoringElements(TPZCompMesh * cmesh) const {
         int it = 0;
         needstocontinue = false;
         for (int64_t iel = 0; iel < nelem_c; iel++) {
-            TPZCompEl *cel = cmesh->Element(iel);
-            if (!cel || cel->Dimension() != cmesh->Dimension()) continue;
+            TPZCompEl *cel = fCmesh->Element(iel);
+            if (!cel || cel->Dimension() != fCmesh->Dimension()) continue;
 
             it++;
             if (fElemColor[it-1] != -1) continue;
 
             TPZStack<int64_t> connectlist;
-            cmesh->Element(iel)->BuildConnectList(connectlist);
+            fCmesh->Element(iel)->BuildConnectList(connectlist);
             int64_t ncon = connectlist.size();
 
             int64_t icon;
@@ -686,49 +691,133 @@ void TPZSolveMatrix::ColoringElements(TPZCompMesh * cmesh) const {
     }
 
     int64_t nelem = fRowSizes.size();
-    int64_t neq = cmesh->NEquations();
+    int64_t neq = fCmesh->NEquations();
     for (int64_t iel = 0; iel < nelem; iel++) {
         int64_t cols = fColSizes[iel];
         int64_t cont_cols = fColFirstIndex[iel];
 
         for (int64_t icols = 0; icols < cols; icols++) {
             fIndexesColor[cont_cols + icols] = fIndexes[cont_cols + icols] + fElemColor[iel]*neq;
-            fIndexesColor[cont_cols+fRow/2 + icols] = fIndexes[cont_cols + fRow/2 + icols] + fElemColor[iel]*neq;
+            fIndexesColor[cont_cols+ fNphis + icols] = fIndexes[cont_cols + fNphis + icols] + fElemColor[iel]*neq;
         }
     }
 }
 
+void TPZSolveMatrix::SetDataStructure(){
+    int dim_mesh = (fCmesh->Reference())->Dimension(); // Mesh dimension
+    int64_t nelem_c = fCmesh->NElements(); // Number of computational elements
+    std::vector<int64_t> cel_indexes;
 
-void TPZSolveMatrix::AllocateMemory(TPZCompMesh *cmesh){
-    return;
+// Number of domain geometric elements
+    for (int64_t i = 0; i < nelem_c; i++) {
+        TPZCompEl *cel = fCmesh->Element(i);
+        if (!cel) continue;
+        TPZGeoEl *gel = fCmesh->Element(i)->Reference();
+        if (!gel || gel->Dimension() != dim_mesh) continue;
+        cel_indexes.push_back(cel->Index());
+    }
+
+    if (cel_indexes.size() == 0) {
+        DebugStop();
+    }
+
+// RowSizes and ColSizes vectors
+    int64_t nelem = cel_indexes.size();
+    TPZVec<MKL_INT> rowsizes(nelem);
+    TPZVec<MKL_INT> colsizes(nelem);
+
+    int64_t npts_tot = 0;
+    int64_t nf_tot = 0;
+    int it = 0;
+    for (auto iel : cel_indexes) {
+        //Verification
+        TPZCompEl *cel = fCmesh->Element(iel);
+
+        //Integration rule
+        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement * >(cel);
+        if (!cel_inter) DebugStop();
+        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
+
+        int64_t npts = int_rule->NPoints(); // number of integration points of the element
+        int64_t dim = cel_inter->Dimension(); //dimension of the element
+        int64_t nf = cel_inter->NShapeF(); // number of shape functions of the element
+
+        rowsizes[it] = dim * npts;
+        colsizes[it] = nf;
+
+        it++;
+
+        npts_tot += npts;
+        nf_tot += nf;
+    }
+    this->SetNumberofIntPoints(npts_tot);
+    this->SetNumberofPhis(nf_tot);
+    this->SetRowandColSizes(rowsizes, colsizes);
+
+// Dphi matrix, weight and indexes vectors
+    TPZFMatrix<REAL> elmatrix;
+    TPZStack<REAL> weight;
+    TPZManVector<MKL_INT> indexes(dim_mesh * nf_tot);
+
+    int64_t cont1 = 0;
+    int64_t cont2 = 0;
+    it = 0;
+    for (auto iel : cel_indexes) {
+        //Verification
+        TPZCompEl *cel = fCmesh->Element(iel);
+
+        //Integration rule
+        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement * >(cel);
+        if (!cel_inter) DebugStop();
+        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
+
+        int64_t npts = int_rule->NPoints(); // number of integration points of the element
+        int64_t dim = cel_inter->Dimension(); //dimension of the element
+        int64_t nf = cel_inter->NShapeF(); // number of shape functions of the element
+
+        TPZMaterialData data;
+        cel_inter->InitMaterialData(data);
+
+        elmatrix.Resize(dim * npts, nf);
+        for (int64_t inpts = 0; inpts < npts; inpts++) {
+            TPZManVector<REAL> qsi(dim, 1);
+            REAL w;
+            int_rule->Point(inpts, qsi, w);
+            cel_inter->ComputeRequiredData(data, qsi);
+            weight.Push(w * std::abs(data.detjac)); //weight = w * detjac
+
+            TPZFMatrix<REAL> &dphix = data.dphix;
+            for (int inf = 0; inf < nf; inf++) {
+                for (int idim = 0; idim < dim; idim++)
+                    elmatrix(inpts * dim + idim, inf) = dphix(idim, inf);
+            }
+        }
+        this->SetElementMatrix(it, elmatrix);
+        it++;
+
+        //Indexes vector
+        int64_t ncon = cel->NConnects();
+        for (int64_t icon = 0; icon < ncon; icon++) {
+            int64_t id = cel->ConnectIndex(icon);
+            TPZConnect &df = fCmesh->ConnectVec()[id];
+            int64_t conid = df.SequenceNumber();
+            if (df.NElConnected() == 0 || conid < 0 || fCmesh->Block().Size(conid) == 0) continue;
+            else {
+                int64_t pos = fCmesh->Block().Position(conid);
+                int64_t nsize = fCmesh->Block().Size(conid);
+                for (int64_t isize = 0; isize < nsize; isize++) {
+                    if (isize % 2 == 0) {
+                        indexes[cont1] = pos + isize;
+                        cont1++;
+                    } else {
+                        indexes[cont2 + nf_tot] = pos + isize;
+                        cont2++;
+                    }
+                }
+            }
+        }
+    }
+    this->SetIndexes(indexes);
+    this->ColoringElements();
+    this->SetWeightVector(weight);
 }
-
-void TPZSolveMatrix::FreeMemory(){
-    return;
-}
-
-void TPZSolveMatrix::cuSparseHandle(){
-    return;
-}
-
-void TPZSolveMatrix::cuBlasHandle(){
-    return;
-}
-
-void TPZSolveMatrix::MultiplyCUDA(const TPZFMatrix<STATE> &global_solution, TPZFMatrix<STATE> &result) const{
-    return;
-}
-
-void TPZSolveMatrix::ComputeSigmaCUDA(TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<REAL> &sigma){
-    return;
-}
-
-void TPZSolveMatrix::MultiplyTransposeCUDA(TPZFMatrix<STATE> &intpoint_solution, TPZFMatrix<STATE> &nodal_forces_vec){
-    return;
-}
-
-void TPZSolveMatrix::ColoredAssembleCUDA(TPZFMatrix<STATE> &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global){
-    return;
-}
-
-

@@ -9,8 +9,8 @@
 #include "pzfmatrix.h"
 #include "pzinterpolationspace.h"
 #include "pzcmesh.h"
-
 #include "TElastoPlasticData.h"
+
 #ifdef USING_MKL
 #include "mkl.h"
 #endif
@@ -19,14 +19,15 @@
 #include <cuda.h>
 #include <cublas_v2.h>
 #include <cusparse.h>
-#include "mkl.h"
 #endif
 
-class TPZSolveMatrix : public TPZMatrix<STATE> {
+class TPZSolveMatrix {
 
 public:
 
-    TPZSolveMatrix() : TPZMatrix<STATE>() {
+    TPZSolveMatrix() {
+        fNpts = -1;
+        fNphis = -1;
         fStorage.resize(0);
         fColSizes.resize(0);
         fRowSizes.resize(0);
@@ -36,23 +37,24 @@ public:
         fElemColor.resize(0);
         fIndexes.resize(0);
         fIndexesColor.resize(0);
-        fDim = -1;
         fWeight.resize(0);
 
     }
 
-    TPZSolveMatrix(int64_t rows, int64_t cols, TPZVec<int> rowsizes, TPZVec<int> colsizes) : TPZMatrix(rows, cols) { //rows = dim * npts_tot, cols = nf_tot
-        SetParameters(rowsizes, colsizes);
-        cuSparseHandle();
-        cuBlasHandle();
+    TPZSolveMatrix(TPZCompMesh *cmesh, TElastoPlasticData materialdata) {
+        SetCompMesh(cmesh);
+        SetMaterialData(materialdata);
+        SetDataStructure();
     }
-
 
     ~TPZSolveMatrix() {
 
     }
 
-    TPZSolveMatrix(const TPZSolveMatrix &copy) : TPZMatrix<STATE>(copy) {
+    TPZSolveMatrix(const TPZSolveMatrix &copy) {
+        fCmesh = copy.fCmesh;
+        fNpts = copy.fNpts;
+        fNphis = copy.fNphis;
         fStorage = copy.fStorage;
         fColSizes = copy.fColSizes;
         fRowSizes = copy.fRowSizes;
@@ -62,7 +64,6 @@ public:
         fElemColor = copy.fElemColor;
         fIndexes = copy.fIndexes;
         fIndexesColor = copy.fIndexesColor;
-        fDim = copy.fDim;
         fWeight = copy.fWeight;
         fMaterialData = copy.fMaterialData;
 
@@ -88,7 +89,7 @@ public:
     }
 
     TPZSolveMatrix &operator=(const TPZSolveMatrix &copy) {
-        TPZMatrix::operator=(copy);
+        fCmesh = copy.fCmesh;
         fStorage = copy.fStorage;
         fColSizes = copy.fColSizes;
         fRowSizes = copy.fRowSizes;
@@ -98,7 +99,6 @@ public:
         fElemColor = copy.fElemColor;
         fIndexes = copy.fIndexes;
         fIndexesColor = copy.fIndexesColor;
-        fDim = copy.fDim;
         fWeight = copy.fWeight;
         fMaterialData = copy.fMaterialData;
 
@@ -124,11 +124,7 @@ public:
         return *this;
     }
 
-    TPZMatrix<STATE> *Clone() const {
-        return new TPZSolveMatrix(*this);
-    }
-
-    void SetParameters(TPZVec<int> rowsize, TPZVec<int> colsize) {
+    void SetRowandColSizes(TPZVec<int> rowsize, TPZVec<int> colsize) {
         int64_t nelem = rowsize.size();
 
         fRowSizes.resize(nelem);
@@ -171,8 +167,16 @@ public:
         fIndexesColor.resize(indsize);
     }
 
-    void SetMeshDimension (int dim) {
-        fDim = dim;
+    void SetNumberofIntPoints(int64_t npts) {
+        fNpts = npts;
+    }
+
+    void SetNumberofPhis(int64_t nphis) {
+        fNphis = nphis;
+    }
+
+    void SetCompMesh(TPZCompMesh *cmesh) {
+        fCmesh = cmesh;
     }
 
     void SetWeightVector (TPZStack<REAL> wvec) {
@@ -183,24 +187,7 @@ public:
         fMaterialData = materialdata;
     }
 
-    //USING CUDA
-    void AllocateMemory(TPZCompMesh *cmesh);
- 
-    void FreeMemory();
-
-    void cuSparseHandle();
-
-    void cuBlasHandle();
-
-    void MultiplyInThreadsCUDA(TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &result) const;
-
-    void MultiplyCUDA(const TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &result) const;
-
-    void ComputeSigmaCUDA(TPZStack<REAL> &weight, TPZFMatrix<REAL> &result, TPZFMatrix<REAL> &sigma);
-
-    void MultiplyTransposeCUDA(TPZFMatrix<REAL> &intpoint_solution, TPZFMatrix<REAL> &nodal_forces_vec);
-
-    void ColoredAssembleCUDA(TPZFMatrix<REAL> &nodal_forces_vec, TPZFMatrix<REAL> &nodal_forces_global);
+    void SetDataStructure();
 
     void GatherSolution(TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &gather_solution);
 
@@ -232,9 +219,16 @@ public:
 
     void ColoredAssemble(TPZFMatrix<REAL> &nodal_forces_vec, TPZFMatrix<REAL> &nodal_forces_global);
 
-    void ColoringElements(TPZCompMesh *cmesh) const;
+    void ColoringElements() const;
 
 protected:
+    TPZCompMesh *fCmesh;
+
+///total number of int points
+    int64_t fNpts;
+
+///total number of phis
+    int64_t fNphis;
 
 /// vector containing the matrix coefficients
     TPZVec<REAL> fStorage;
@@ -262,9 +256,6 @@ protected:
 
 /// position in the fIndex vector of each element
     TPZVec<int> fColFirstIndex;
-
-/// Mesh Dimension
-    int fDim;
 
 /// Weight Vector
     TPZStack<REAL> fWeight;

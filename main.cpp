@@ -52,8 +52,7 @@ TPZCompMesh *CmeshElastoplasticityNoBoundary(TPZGeoMesh *gmesh, int pOrder);
 TElastoPlasticData WellboreConfig();
 
 /// Residual calculation
-TPZSolveMatrix SetDataStructure(TPZCompMesh *cmesh, TElastoPlasticData wellbore_material);
-void ComputeResidual (TPZSolveMatrix SolMat, TPZCompMesh * cmesh);
+void ComputeResidual (TPZCompMesh * cmesh, TElastoPlasticData & wellbore_material);
 TPZFMatrix<REAL> ResidualWithoutBoundary(TPZCompMesh *cmesh, TPZCompMesh *cmesh_noboundary);
 
 ///Set Analysis
@@ -103,14 +102,13 @@ int main(int argc, char *argv[]) {
     AcceptPseudoTimeStepSolution(analysis, cmesh);
 
 // Post process
-    PostProcess(cmesh, wellbore_material, n_threads);
+//    PostProcess(cmesh, wellbore_material, n_threads);
 
 // Calculates residual without boundary conditions
 //    TPZFMatrix<REAL> residual = Residual(cmesh, cmesh_noboundary);
 
 // Calculates residual using matrix operations and check if the result is ok
-    TPZSolveMatrix SolMat = SetDataStructure(cmesh, wellbore_material);
-    ComputeResidual(SolMat, cmesh);
+    ComputeResidual(cmesh, wellbore_material);
 
     return 0;
 }
@@ -160,7 +158,7 @@ TPZAnalysis *Analysis(TPZCompMesh *cmesh, int n_threads) {
 void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData wellbore_material, int n_threads) {
     int div = 1;
     TPZPostProcAnalysis * post_processor = new TPZPostProcAnalysis;
-    post_processor->SetCompMesh(cmesh);
+    post_processor->SetCompMesh(cmesh, true);
 
     int n_regions = 1;
     TPZManVector<int,1> post_mat_id(n_regions);
@@ -417,146 +415,19 @@ TPZCompMesh *CmeshElastoplasticityNoBoundary(TPZGeoMesh * gmesh, int p_order) {
     return cmesh;
 }
 
-TPZSolveMatrix SetDataStructure(TPZCompMesh *cmesh, TElastoPlasticData wellbore_material) {
+void ComputeResidual(TPZCompMesh * cmesh, TElastoPlasticData & wellbore_material){
+    TPZSolveMatrix solmat(cmesh, wellbore_material);
 
-    int dim_mesh = (cmesh->Reference())->Dimension(); // Mesh dimension
-    int64_t nelem_c = cmesh->NElements(); // Number of computational elements
-    std::vector<int64_t> cel_indexes;
-
-// Number of domain geometric elements
-    for (int64_t i = 0; i < nelem_c; i++) {
-        TPZCompEl *cel = cmesh->Element(i);
-        if (!cel) continue;
-        TPZGeoEl *gel = cmesh->Element(i)->Reference();
-        if (!gel || gel->Dimension() != dim_mesh) continue;
-        cel_indexes.push_back(cel->Index());
-    }
-
-    if (cel_indexes.size() == 0) {
-        DebugStop();
-    }
-
-// RowSizes and ColSizes vectors
-    int64_t nelem = cel_indexes.size();
-    TPZVec<MKL_INT> rowsizes(nelem);
-    TPZVec<MKL_INT> colsizes(nelem);
-
-    int64_t npts_tot = 0;
-    int64_t nf_tot = 0;
-    int it = 0;
-    for (auto iel : cel_indexes) {
-        //Verification
-        TPZCompEl *cel = cmesh->Element(iel);
-
-        //Integration rule
-        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement * >(cel);
-        if (!cel_inter) DebugStop();
-        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
-
-        int64_t npts = int_rule->NPoints(); // number of integration points of the element
-        int64_t dim = cel_inter->Dimension(); //dimension of the element
-        int64_t nf = cel_inter->NShapeF(); // number of shape functions of the element
-
-        rowsizes[it] = dim * npts;
-        colsizes[it] = nf;
-
-        it++;
-
-        npts_tot += npts;
-        nf_tot += nf;
-    }
-
-    TPZSolveMatrix SolMat = TPZSolveMatrix(dim_mesh * npts_tot, nf_tot, rowsizes, colsizes);
-
-// Dphi matrix, weight and indexes vectors
-    TPZFMatrix<REAL> elmatrix;
-    TPZStack<REAL> weight;
-    TPZManVector<MKL_INT> indexes(dim_mesh * nf_tot);
-
-    int64_t cont1 = 0;
-    int64_t cont2 = 0;
-    it = 0;
-    for (auto iel : cel_indexes) {
-        //Verification
-        TPZCompEl *cel = cmesh->Element(iel);
-
-        //Integration rule
-        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement * >(cel);
-        if (!cel_inter) DebugStop();
-        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
-
-        int64_t npts = int_rule->NPoints(); // number of integration points of the element
-        int64_t dim = cel_inter->Dimension(); //dimension of the element
-        int64_t nf = cel_inter->NShapeF(); // number of shape functions of the element
-
-        TPZMaterialData data;
-        cel_inter->InitMaterialData(data);
-
-        elmatrix.Resize(dim * npts, nf);
-        for (int64_t inpts = 0; inpts < npts; inpts++) {
-            TPZManVector<REAL> qsi(dim, 1);
-            REAL w;
-            int_rule->Point(inpts, qsi, w);
-            cel_inter->ComputeRequiredData(data, qsi);
-            weight.Push(w * std::abs(data.detjac)); //weight = w * detjac
-
-            TPZFMatrix<REAL> &dphix = data.dphix;
-            for (int inf = 0; inf < nf; inf++) {
-                for (int idim = 0; idim < dim; idim++)
-                    elmatrix(inpts * dim + idim, inf) = dphix(idim, inf);
-            }
-        }
-        SolMat.SetElementMatrix(it, elmatrix);
-        it++;
-
-        //Indexes vector
-        int64_t ncon = cel->NConnects();
-        for (int64_t icon = 0; icon < ncon; icon++) {
-            int64_t id = cel->ConnectIndex(icon);
-            TPZConnect &df = cmesh->ConnectVec()[id];
-            int64_t conid = df.SequenceNumber();
-            if (df.NElConnected() == 0 || conid < 0 || cmesh->Block().Size(conid) == 0) continue;
-            else {
-                int64_t pos = cmesh->Block().Position(conid);
-                int64_t nsize = cmesh->Block().Size(conid);
-                for (int64_t isize = 0; isize < nsize; isize++) {
-                    if (isize % 2 == 0) {
-                        indexes[cont1] = pos + isize;
-                        cont1++;
-                    } else {
-                        indexes[cont2 + nf_tot] = pos + isize;
-                        cont2++;
-                    }
-                }
-            }
-        }
-    }
-    SolMat.SetIndexes(indexes);
-    SolMat.ColoringElements(cmesh);
-
-    SolMat.SetMeshDimension(dim_mesh);
-    SolMat.SetWeightVector(weight);
-
-    SolMat.SetMaterialData(wellbore_material);
-
-    return SolMat;
-}
-
-void ComputeResidual(TPZSolveMatrix SolMat, TPZCompMesh * cmesh){
-    TPZFMatrix<REAL> solution = cmesh->Solution();
-    int neq = cmesh->NEquations();
-
-    TPZFMatrix<REAL> nodal_forces_global1(neq, 1, 0.);
-    TPZFMatrix<REAL> nodal_forces_global2(neq, 1, 0.);
+    TPZFMatrix<REAL> nodal_forces_global1;
     TPZFMatrix<REAL> sigma_trial;
     TPZFMatrix<REAL> eigenvalues;
     TPZFMatrix<REAL> eigenvectors;
     TPZFMatrix<REAL> nodal_forces_vec;
     TPZFMatrix<REAL> gather_solution;
     TPZFMatrix<REAL> delta_strain;
-    TPZFMatrix<REAL> total_strain(cmesh->Dimension() * SolMat.Rows(), 1, 0.);
-    TPZFMatrix<REAL> plastic_strain(cmesh->Dimension() * SolMat.Rows(), 1, 0.);
-    TPZFMatrix<REAL> elastic_strain(cmesh->Dimension() * SolMat.Rows(), 1, 0.);
+    TPZFMatrix<REAL> total_strain;
+    TPZFMatrix<REAL> plastic_strain;
+    TPZFMatrix<REAL> elastic_strain;
     TPZFMatrix<REAL> phi;
     TPZFMatrix<REAL> sigma_projected;
     TPZFMatrix<REAL> sigma;
@@ -566,20 +437,23 @@ void ComputeResidual(TPZSolveMatrix SolMat, TPZCompMesh * cmesh){
     std::cout << "\n\nSOLVING WITH GPU" << std::endl;
 
     #endif
+    TPZFMatrix<REAL> solution = cmesh->Solution();
 
     std::cout << "\n\nSOLVING WITH CPU" << std::endl;
-    SolMat.GatherSolution(solution, gather_solution);
-    SolMat.DeltaStrain(gather_solution, delta_strain);
-    SolMat.TotalStrain(delta_strain, total_strain);
-    SolMat.ElasticStrain(delta_strain, total_strain, plastic_strain, elastic_strain);
-    SolMat.ComputeStress(delta_strain, sigma_trial);
-    SolMat.SpectralDecomposition(sigma_trial, eigenvalues, eigenvectors);
-    SolMat.ProjectSigma(eigenvalues, sigma_projected, plastic_strain);
-    SolMat.StressCompleteTensor(sigma_projected, eigenvectors, sigma);
-    SolMat.ComputeStrain(sigma, elastic_strain);
+    solmat.GatherSolution(solution, gather_solution);
+    gather_solution.Print(std::cout);
+    solmat.DeltaStrain(gather_solution, delta_strain);
+    solmat.TotalStrain(delta_strain, total_strain);
+    solmat.ElasticStrain(delta_strain, total_strain, plastic_strain, elastic_strain);
+    solmat.ComputeStress(delta_strain, sigma_trial);
+    solmat.SpectralDecomposition(sigma_trial, eigenvalues, eigenvectors);
+    solmat.ProjectSigma(eigenvalues, sigma_projected, plastic_strain);
+    solmat.StressCompleteTensor(sigma_projected, eigenvectors, sigma);
+    solmat.ComputeStrain(sigma, elastic_strain);
     plastic_strain = total_strain - elastic_strain;
-    SolMat.NodalForces(sigma, nodal_forces);
-    SolMat.ColoredAssemble(nodal_forces,nodal_forces_global1);
+    solmat.NodalForces(sigma, nodal_forces);
+    solmat.ColoredAssemble(nodal_forces,nodal_forces_global1);
+    nodal_forces_global1.Print(std::cout);
 }
 
 TPZFMatrix<REAL> ResidualWithoutBoundary(TPZCompMesh *cmesh, TPZCompMesh *cmesh_noboundary) {
