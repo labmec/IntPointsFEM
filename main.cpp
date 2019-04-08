@@ -71,8 +71,9 @@ void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData material, int n_threads)
 void RKApproximation (TElastoPlasticData wellbore_material, int npoints, std::ostream &outbool, bool euler = false);
 
 int main(int argc, char *argv[]) {
-    int pOrder = 2; // Computational mesh order
-
+    
+    int pOrder = 1; // Computational mesh order
+    
 // Generates the geometry
     std::string file("wellbore.msh");
     TPZGeoMesh *gmesh = ReadGeometry(file);
@@ -94,15 +95,12 @@ int main(int argc, char *argv[]) {
     TPZAnalysis *analysis = Analysis(cmesh,n_threads);
 
 //Calculates the solution using Newton method
-    int n_iterations = 20;
-    REAL tolerance = 1.e-5;
+    int n_iterations = 10;
+    REAL tolerance = 1.e-8;
     Solution(analysis, n_iterations, tolerance);
 
-///Accept solution
-    AcceptPseudoTimeStepSolution(analysis, cmesh);
-
-// Post process
-//    PostProcess(cmesh, wellbore_material, n_threads);
+    // Post process
+    PostProcess(cmesh, wellbore_material, n_threads);
 
 // Calculates residual without boundary conditions
 //    TPZFMatrix<REAL> residual = Residual(cmesh, cmesh_noboundary);
@@ -117,20 +115,21 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
     bool stop_criterion_Q = false;
     REAL norm_res;
     int neq = analysis->Solution().Rows();
-    TPZFMatrix<REAL> x(neq, 1, 0.), dx;
+    TPZFMatrix<REAL> du(neq, 1, 0.), delta_du;
 
     analysis->Assemble();
 
     for (int i = 0; i < n_iterations; i++) {
         analysis->Solve();
-        dx = analysis->Solution();
-        x += dx;
-        analysis->LoadSolution(x);
+        delta_du = analysis->Solution();
+        du += delta_du;
+        analysis->LoadSolution(du);
         analysis->AssembleResidual();
         norm_res = Norm(analysis->Rhs());
         stop_criterion_Q = norm_res < tolerance;
 
         if (stop_criterion_Q) {
+            AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
             std::cout << "Nonlinear process converged with residue norm = " << norm_res << std::endl;
             std::cout << "Number of iterations = " << i + 1 << std::endl;
             break;
@@ -212,7 +211,7 @@ TElastoPlasticData WellboreConfig(){
 
     bc_outer.SetId(3);
     bc_outer.SetType(6);
-    bc_outer.SetInitialValue({-50.}); /// tr(sigma)/3
+    bc_outer.SetInitialValue(-50.0); /// tr(sigma)/3
     bc_outer.SetValue({-50.-bc_outer.InitialValue()}); /// tr(sigma)/3
 
     bc_ux_fixed.SetId(4);
