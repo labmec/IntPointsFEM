@@ -1,4 +1,5 @@
 #include "TPZSolveMatrix.h"
+#include "TPZTensor.h"
 #include "pzmatrix.h"
 #include <mkl.h>
 #include <stdlib.h>
@@ -17,9 +18,14 @@ using namespace tbb;
 #endif
 
 //Spectral decomposition
-void TPZSolveMatrix::Eigenvectors(double *sigma, double *eigenvalues, double *eigenvectors) {
+void TPZSolveMatrix::Eigenvectors(double *sigma, double *eigenvalues, double *eigenvectors, double &maxel) {
+    sigma[0]*=maxel;
+    sigma[1]*=maxel;
+    sigma[2]*=maxel;
+    sigma[3]*=maxel;
+
     TPZVec<int> multiplicity(3);
-    if (eigenvalues[0] == eigenvalues[1] && eigenvalues[1] == eigenvalues[2] || sigma[3] < 1e-8) {
+    if ((eigenvalues[0] == eigenvalues[1]) && (eigenvalues[1] == eigenvalues[2]) || (fabs(sigma[3]) < 1.e-8)) {
         eigenvectors[0] = 1.;
         eigenvectors[1] = 0.;
         eigenvectors[2] = 0.;
@@ -212,7 +218,9 @@ void TPZSolveMatrix::NewtonIterations(double *interval, double *sigma, double *e
     eigenvalues[1] *= maxel;
     eigenvalues[2] *= maxel;
 
-    std::sort(eigenvalues, eigenvalues+3, [](int i, int j) { return abs(i) > abs(j); }); //store eigenvalues in descending order (absolute value)
+//    std::sort(eigenvalues, eigenvalues+3, [](int i, int j) { return i > j; }); //store eigenvalues in descending order (absolute value)
+    std::sort(eigenvalues, eigenvalues+3, greater<REAL>()); //store eigenvalues in descending order (absolute value)
+
 }
 
 //Project Sigma
@@ -464,13 +472,28 @@ void TPZSolveMatrix::DeltaStrain(TPZFMatrix<REAL> &expandsolution, TPZFMatrix<RE
 
     for (int64_t iel = 0; iel < nelem; iel++) {
         for (int i = 0; i < fRowSizes[iel]; i++) {
-            for (int j = 0; j < 1; j++) {
                 for (int k = 0; k < fColSizes[iel]; k++) {
-                    delta_strain(j * fRowSizes[iel] + i + fRowFirstIndex[iel], 0) += fStorage[k * fRowSizes[iel] + i + fMatrixPosition[iel]] * expandsolution(j * fColSizes[iel] + k + fColFirstIndex[iel],0);
-                    delta_strain(j * fRowSizes[iel] + i + fRowFirstIndex[iel] + n_globalsol, 0) += fStorage[k * fRowSizes[iel] + i + fMatrixPosition[iel]] * expandsolution(j * fColSizes[iel] + k + fColFirstIndex[iel] + n_globalsol/2,0);
+                    delta_strain(i + fRowFirstIndex[iel], 0) += fStorage[k * fRowSizes[iel] + i + fMatrixPosition[iel]] * expandsolution(k + fColFirstIndex[iel],0);
+                    delta_strain(i + fRowFirstIndex[iel] + n_globalsol, 0) += fStorage[k * fRowSizes[iel] + i + fMatrixPosition[iel]] * expandsolution(k + fColFirstIndex[iel] + n_globalsol/2,0);
                 }
-            }
         }
+    }
+}
+
+void TPZSolveMatrix::DeltaStrainXYZ(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &delta_strainXYZ) {
+    delta_strain.Print(std::cout);
+    int64_t n_globalsol = fCmesh->Dimension()*fNphis;
+    int64_t size = fCmesh->Dimension()*fCmesh->Dimension()*fNpts;
+    delta_strainXYZ.Resize(size,1);
+    delta_strainXYZ.Zero();
+
+    for (int ipts = 0; ipts < fNpts; ++ipts) {
+        REAL dxy = fAxes[4 * ipts + 2] * delta_strain[2 * ipts] + fAxes[4 * ipts + 2 + 1] * delta_strain[2 * ipts + 1];
+        REAL dyx = fAxes[4 * ipts] * delta_strain[2 * ipts + n_globalsol] + fAxes[4 * ipts + 1] * delta_strain[2 * ipts + n_globalsol + 1];
+        delta_strainXYZ(2 * ipts, 0) = fAxes[4 * ipts] * delta_strain[2 * ipts] + fAxes[4 * ipts + 1] * delta_strain[2 * ipts + 1];
+        delta_strainXYZ(2 * ipts + 1, 0) = (dxy + dyx) / 2;
+        delta_strainXYZ(2 * ipts + n_globalsol, 0) = (dxy + dyx) / 2;
+        delta_strainXYZ(2 * ipts + n_globalsol + 1, 0) = fAxes[4 * ipts + 2] * delta_strain[2 * ipts + n_globalsol] + fAxes[4 * ipts + 2 + 1] * delta_strain[2 * ipts + n_globalsol + 1];
     }
 }
 
@@ -512,10 +535,11 @@ void TPZSolveMatrix::ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<
 
     for (int64_t ipts=0; ipts < fNpts; ipts++) {
         //plane strain
-        sigma(4*ipts,0) = fWeight[ipts]*(elastic_strain(2*ipts,0)*E*(1.-nu)/((1.-2*nu)*(1.+nu)) + elastic_strain(2*ipts+2*fNpts+1,0)*E*nu/((1.-2*nu)*(1.+nu))); // Sigma xx
-        sigma(4*ipts+1,0) = fWeight[ipts]*(elastic_strain(2*ipts+2*fNpts+1,0)*E*(1.-nu)/((1.-2*nu)*(1.+nu)) + elastic_strain(2*ipts,0)*E*nu/((1.-2*nu)*(1.+nu))); // Sigma yy
-        sigma(4*ipts+2,0) = fWeight[ipts]*(E*nu/((1.+nu)*(1.-2*nu))*(elastic_strain(2*ipts,0) + elastic_strain(2*ipts+2*fNpts+1,0))); // Sigma zz
-        sigma(4*ipts+3,0) = fWeight[ipts]*E/(2*(1.+nu))*(elastic_strain(2*ipts+1,0)+elastic_strain(2*ipts+2*fNpts,0)); // Sigma xy
+//        fWeight[ipts]*
+        sigma(4*ipts,0) = (elastic_strain(2*ipts,0)*E*(1.-nu)/((1.-2*nu)*(1.+nu)) + elastic_strain(2*ipts+2*fNpts+1,0)*E*nu/((1.-2*nu)*(1.+nu))); // Sigma xx
+        sigma(4*ipts+1,0) = (elastic_strain(2*ipts+2*fNpts+1,0)*E*(1.-nu)/((1.-2*nu)*(1.+nu)) + elastic_strain(2*ipts,0)*E*nu/((1.-2*nu)*(1.+nu))); // Sigma yy
+        sigma(4*ipts+2,0) = (E*nu/((1.+nu)*(1.-2*nu))*(elastic_strain(2*ipts,0) + elastic_strain(2*ipts+2*fNpts+1,0))); // Sigma zz
+        sigma(4*ipts+3,0) = E/(2*(1.+nu))*(elastic_strain(2*ipts+1,0)+elastic_strain(2*ipts+2*fNpts,0)); // Sigma xy
 
 //    sigma(2*ipts,0) = weight[ipts]*E/(1.-nu*nu)*(result(2*ipts,0)+nu*result(2*ipts+npts_tot+1,0)); // Sigma x
 //    sigma(2*ipts+1,0) = weight[ipts]*E/(1.-nu*nu)*(1.-nu)/2*(result(2*ipts+1,0)+result(2*ipts+npts_tot,0))*0.5; // Sigma xy
@@ -549,7 +573,7 @@ void TPZSolveMatrix::SpectralDecomposition(TPZFMatrix<REAL> &sigma_trial, TPZFMa
         Normalize(&sigma_trial(4*ipts, 0), maxel);
         Interval(&sigma_trial(4*ipts, 0), &interval[0]);
         NewtonIterations(&interval[0], &sigma_trial(4*ipts, 0), &eigenvalues(3*ipts, 0), maxel);
-        Eigenvectors(&sigma_trial(4*ipts, 0), &eigenvalues(3*ipts, 0), &eigenvectors(9*ipts,0));
+        Eigenvectors(&sigma_trial(4*ipts, 0), &eigenvalues(3*ipts, 0), &eigenvectors(9*ipts,0),maxel);
     }
 }
 
@@ -590,37 +614,29 @@ void TPZSolveMatrix::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL
 
 void TPZSolveMatrix::StressCompleteTensor(TPZFMatrix<REAL> &sigma_projected, TPZFMatrix<REAL> &eigenvectors, TPZFMatrix<REAL> &sigma){
     sigma.Resize(4*fNpts,1);
+    int dim = fCmesh->Dimension();
 
     for (int ipts = 0; ipts < fNpts; ipts++) {
-        sigma(4*ipts + 0,0) = sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 0,0)*eigenvectors(9*ipts + 0,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 3,0)*eigenvectors(9*ipts + 3,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 6,0)*eigenvectors(9*ipts + 6,0);
-        sigma(4*ipts + 1,0) = sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 1,0)*eigenvectors(9*ipts + 1,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 4,0)*eigenvectors(9*ipts + 4,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 7,0)*eigenvectors(9*ipts + 7,0);
-        sigma(4*ipts + 2,0) = sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 2,0)*eigenvectors(9*ipts + 2,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 5,0)*eigenvectors(9*ipts + 5,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 8,0)*eigenvectors(9*ipts + 8,0);
-        sigma(4*ipts + 3,0) = sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 0,0)*eigenvectors(9*ipts + 1,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 3,0)*eigenvectors(9*ipts + 4,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 6,0)*eigenvectors(9*ipts + 7,0);
+        sigma(2*ipts + 0,0) = fWeight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 0,0)*eigenvectors(9*ipts + 0,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 3,0)*eigenvectors(9*ipts + 3,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 6,0)*eigenvectors(9*ipts + 6,0));
+        sigma(2*ipts + 1,0) = fWeight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 0,0)*eigenvectors(9*ipts + 1,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 3,0)*eigenvectors(9*ipts + 4,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 6,0)*eigenvectors(9*ipts + 7,0));
+        sigma(2*ipts + dim*fNpts,0) = sigma(2*ipts + 1,0);
+        sigma(2*ipts + dim*fNpts + 1,0) = fWeight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 1,0)*eigenvectors(9*ipts + 1,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 4,0)*eigenvectors(9*ipts + 4,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 7,0)*eigenvectors(9*ipts + 7,0));
     }
 }
 
 void TPZSolveMatrix::NodalForces(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &nodal_forces) {
     int64_t nelem = fRowSizes.size();
     int64_t npts = fNpts;
-    nodal_forces.Resize(fCmesh->Dimension()*fNpts,1);
+    int dim = fCmesh->Dimension();
+    int64_t size = dim*fNpts;
+    nodal_forces.Resize(size,1);
     nodal_forces.Zero();
 
     for (int iel = 0; iel < nelem; iel++) {
-        TPZFMatrix<REAL> sigma_x(fRowSizes[iel], 1);
-        TPZFMatrix<REAL> sigma_y(fRowSizes[iel], 1);
-
-        for (int icol = 0; icol < fColSizes[iel]; icol++) {
-            sigma_x(2 * icol, 0) = sigma(4 * icol + 4 * fColFirstIndex[iel] + 0, 0);
-            sigma_x(2 * icol + 1, 0) = sigma(4 * icol + 4 * fColFirstIndex[iel] + 3, 0);
-
-            sigma_y(2 * icol, 0) = sigma(4 * icol + 4 * fColFirstIndex[iel] + 3, 0);
-            sigma_y(2 * icol + 1, 0) = sigma(4 * icol + 4 * fColFirstIndex[iel] + 1, 0);
-        }
-
         for (int i = 0; i < fColSizes[iel]; i++) {
             for (int k = 0; k < fRowSizes[iel]; k++) {
-                nodal_forces(i + fColFirstIndex[iel], 0) += fStorage[k + i * fRowSizes[iel] + fMatrixPosition[iel]] * sigma_x(k, 0);
-                nodal_forces(i + fColFirstIndex[iel] + npts, 0) +=  fStorage[k + i * fRowSizes[iel] + fMatrixPosition[iel]] * sigma_y(k, 0);
+                nodal_forces(i + fColFirstIndex[iel], 0) += fStorage[k + i * fRowSizes[iel] + fMatrixPosition[iel]] * sigma(k + fRowFirstIndex[iel], 0);
+                nodal_forces(i + fColFirstIndex[iel] + size/dim, 0) +=  fStorage[k + i * fRowSizes[iel] + fMatrixPosition[iel]] * sigma(k + fRowFirstIndex[iel] + size, 0);
             }
         }
     }
@@ -689,6 +705,7 @@ void TPZSolveMatrix::ColoringElements() const {
         contcolor++;
         connects_vec.Fill(0);
     }
+
 
     int64_t nelem = fRowSizes.size();
     int64_t neq = fCmesh->NEquations();
@@ -786,10 +803,15 @@ void TPZSolveMatrix::SetDataStructure(){
             cel_inter->ComputeRequiredData(data, qsi);
             weight.Push(w * std::abs(data.detjac)); //weight = w * detjac
 
-            TPZFMatrix<REAL> &dphix = data.dphix;
+            TPZFMatrix<REAL> axes = data.axes;
+            TPZFMatrix<REAL> dphix = data.dphix;
+            TPZFMatrix<REAL> dphiXY;
+            axes.Transpose();
+            axes.Multiply(dphix,dphiXY);
+
             for (int inf = 0; inf < nf; inf++) {
                 for (int idim = 0; idim < dim; idim++)
-                    elmatrix(inpts * dim + idim, inf) = dphix(idim, inf);
+                    elmatrix(inpts * dim + idim, inf) = dphiXY(idim, inf);
             }
         }
         this->SetElementMatrix(it, elmatrix);
@@ -818,6 +840,6 @@ void TPZSolveMatrix::SetDataStructure(){
         }
     }
     this->SetIndexes(indexes);
-    this->ColoringElements();
     this->SetWeightVector(weight);
+    this->ColoringElements();
 }

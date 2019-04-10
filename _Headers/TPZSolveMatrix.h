@@ -52,6 +52,7 @@ public:
     }
 
     TPZSolveMatrix(const TPZSolveMatrix &copy) {
+        fAxes = copy.fAxes;
         fCmesh = copy.fCmesh;
         fNpts = copy.fNpts;
         fNphis = copy.fNphis;
@@ -89,6 +90,7 @@ public:
     }
 
     TPZSolveMatrix &operator=(const TPZSolveMatrix &copy) {
+        fAxes = copy.fAxes;
         fCmesh = copy.fCmesh;
         fStorage = copy.fStorage;
         fColSizes = copy.fColSizes;
@@ -160,6 +162,10 @@ public:
         elmatloc = elmat;
     }
 
+    void SetAxesVector(TPZStack<REAL> axes) {
+        fAxes = axes;
+    }
+
     void SetIndexes(TPZVec<MKL_INT> indexes) {
         int64_t indsize = indexes.size();
         fIndexes.resize(indsize);
@@ -192,6 +198,7 @@ public:
     void GatherSolution(TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &gather_solution);
 
     void DeltaStrain(TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &deltastrain);
+    void DeltaStrainXYZ(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &delta_strainXYZ);
 
     void TotalStrain (TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &total_strain);
     void ElasticStrain (TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &total_strain, TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &elastic_strain);
@@ -202,7 +209,7 @@ public:
     void Normalize(double *sigma, double &maxel);
     void Interval(double *sigma, double *interval);
     void NewtonIterations(double *interval, double *sigma, double *eigenvalues, double &maxel);
-    void Eigenvectors(double *sigma, double *eigenvalues, double *eigenvectors);
+    void Eigenvectors(double *sigma, double *eigenvalues, double *eigenvectors, double &maxel);
 
     void ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &sigma_projected, TPZFMatrix<REAL> &plastic_strain);
     bool PhiPlane(double *eigenvalues, double *sigma_projected);
@@ -222,6 +229,8 @@ public:
     void ColoringElements() const;
 
 protected:
+    TPZStack<REAL> fAxes;
+
     TPZCompMesh *fCmesh;
 
 ///total number of int points
