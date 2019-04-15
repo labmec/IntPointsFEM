@@ -164,5 +164,6 @@ if(USING_CUDA)
     target_link_libraries(IntegrationPointExperiments pz ${PTHREAD_LIB} ${CUDA_cublas_LIBRARY} ${CUDA_cusparse_LIBRARY} ${CUDA_cudadevrt_LIBRARY})
 else()
     target_link_libraries(IntegrationPointExperiments pz ${PTHREAD_LIB})
+    configure_file(gmsh/wellbore.msh wellbore.msh COPYONLY)
 endif(USING_CUDA)
 
