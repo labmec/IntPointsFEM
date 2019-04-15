@@ -13,7 +13,9 @@
 
 
 class TRKSolution {
+    
 protected:
+    
     TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem > *m_material;
 
     REAL m_re = -1;
@@ -28,7 +30,12 @@ protected:
 
     REAL m_theta = -1;
 
+    int m_n_points = 0;
+    
+    TPZVec<TPZElastoPlasticMem> m_memory_vector;
+
 public:
+    
     /// Default constructor
     TRKSolution();
 
@@ -45,9 +52,9 @@ public:
 
     TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem > * Material();
 
-    void SetExternRadius(REAL re);
+    void SetExternalRadius(REAL re);
 
-    REAL ExternRadius();
+    REAL ExternalRadius();
 
     void SetWellboreRadius(REAL rw);
 

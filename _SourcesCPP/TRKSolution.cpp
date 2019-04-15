@@ -16,6 +16,8 @@ TRKSolution::TRKSolution(const TRKSolution &  other) {
     m_pw = other.m_pw;
     m_sigma0 = other.m_sigma0;
     m_theta = other.m_theta;
+    m_n_points = other.m_n_points;
+    m_memory_vector.resize(0);
 }
 
 TRKSolution & TRKSolution::operator=(const TRKSolution &  other) {
@@ -30,6 +32,8 @@ TRKSolution & TRKSolution::operator=(const TRKSolution &  other) {
     m_pw = other.m_pw;
     m_sigma0 = other.m_sigma0;
     m_theta = other.m_theta;
+    m_n_points = other.m_n_points;
+    m_memory_vector = other.m_memory_vector;
 
     return *this;
 }
@@ -46,11 +50,11 @@ TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>
     return m_material;
 }
 
-void TRKSolution::SetExternRadius(REAL re) {
+void TRKSolution::SetExternalRadius(REAL re) {
     m_re = re;
 }
 
-REAL TRKSolution::ExternRadius() {
+REAL TRKSolution::ExternalRadius() {
     return m_re;
 }
 
