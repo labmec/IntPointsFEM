@@ -31,7 +31,7 @@
 #include "TPZSandlerExtended.h"
 #include "TPZYCMohrCoulombPV.h"
 
-#include "TPZSolveMatrix.h"
+#include "TPZIntPointsFEM.h"
 #include "TElastoPlasticData.h"
 #include "TRKSolution.h"
 
@@ -93,21 +93,20 @@ int main(int argc, char *argv[]) {
     TPZAnalysis *analysis = Analysis(cmesh,n_threads);
     TPZAnalysis *analysis_npts = Analysis(cmesh_npts,n_threads);
 
-//Calculates the solution using Newton method
+// Newton method parameters
     int n_iterations = 30;
-    REAL tolerance = 1.e-3; /// NVB this tolerance is more apropriated for nonlinear problems
-    Solution(analysis, n_iterations, tolerance);
+    REAL tolerance = 1.e-3;
 
-//Post process
-    if (render_vtk_Q) {
+// Solution using pz
+    Solution(analysis, n_iterations, tolerance);
+    if (render_vtk_Q) { //Post process
         std::string vtk_file = "Approximation.vtk";
         PostProcess(cmesh, wellbore_material, n_threads, vtk_file);
     }
 
-// Calculates the solution using all intg points at once
+// Solution using integration points method
     SolutionAllPoints(analysis_npts, n_iterations, tolerance, wellbore_material);
-    //Post process
-    if (render_vtk_Q) {
+    if (render_vtk_Q) { //Post process
         std::string vtk_file = "Approximation_IntPointFEM.vtk";
         PostProcess(cmesh, wellbore_material, n_threads, vtk_file);
     }
@@ -419,7 +418,7 @@ void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
     int neq = analysis->Solution().Rows();
     TPZFMatrix<REAL> du(neq, 1, 0.), delta_du;
 
-    TPZSolveMatrix solmat(analysis->Mesh(), wellbore_material.Id());
+    TPZIntPointsFEM solveintpoints(analysis->Mesh(), wellbore_material.Id());
     analysis->Solution().Zero();
     analysis->Assemble();
 
@@ -427,10 +426,10 @@ void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
         analysis->Solve();
         delta_du = analysis->Solution();
         du += delta_du;
-        solmat.LoadSolution(du);
-        solmat.AssembleResidual();
+        solveintpoints.LoadSolution(du);
+        solveintpoints.AssembleResidual();
         norm_delta_du = Norm(delta_du);
-        norm_res = Norm(solmat.Rhs());
+        norm_res = Norm(solveintpoints.Rhs());
         stop_criterion_Q = norm_res < tolerance;
         std::cout << "Nonlinear process :: delta_du norm = " << norm_delta_du << std::endl;
         std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
@@ -443,7 +442,7 @@ void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
             break;
         }
 //        analysis->Assemble();
-        analysis->Rhs() = solmat.Rhs();
+        analysis->Rhs() = solveintpoints.Rhs();
         
     }
 

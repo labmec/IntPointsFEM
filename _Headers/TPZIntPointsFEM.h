@@ -3,8 +3,8 @@
  * @brief Contains the TPZSolveMatrix class which implements a solution based on a matrix procedure.
  */
 
-#ifndef TPZSolveMatrix_h
-#define TPZSolveMatrix_h
+#ifndef TPZIntPointsFEM_h
+#define TPZIntPointsFEM_h
 #include "pzmatrix.h"
 #include "pzfmatrix.h"
 #include "pzinterpolationspace.h"
@@ -24,17 +24,15 @@
 #include <cusparse.h>
 #endif
 
-// TODO:: NVB rename it
-class TPZSolveMatrix {
+class TPZIntPointsFEM {
 
 public:
 
-    TPZSolveMatrix() {
+    TPZIntPointsFEM() {
         fDim = -1;
         fRhs = fRhs.Resize(0,0);
         fRhsBoundary.Resize(0,0);
         fBoundaryElements.resize(0);
-        fTotalStrain.Resize(0,0);
         fPlasticStrain.Resize(0,0);
         fSolution.Resize(0,0);
         fNpts = -1;
@@ -51,29 +49,26 @@ public:
         fWeight.resize(0);
     }
 
-    TPZSolveMatrix(TPZCompMesh *cmesh, int materialid) {
+    TPZIntPointsFEM(TPZCompMesh *cmesh, int materialid) {
         SetCompMesh(cmesh);
         SetMaterialId(materialid);
         SetDataStructure();
         AssembleRhsBoundary();
 
         fDim = fCmesh->Dimension();
-        fTotalStrain.Resize(fDim * fNpts, 1);
         fPlasticStrain.Resize(fDim * fNpts, 1);
-        fTotalStrain.Zero();
         fPlasticStrain.Zero();
     }
 
-    ~TPZSolveMatrix() {
+    ~TPZIntPointsFEM() {
 
     }
 
-    TPZSolveMatrix(const TPZSolveMatrix &copy) {
+    TPZIntPointsFEM(const TPZIntPointsFEM &copy) {
         fDim = copy.fDim;
         fRhs = copy.fRhs;
         fRhsBoundary = copy.fRhsBoundary;
         fBoundaryElements = copy.fBoundaryElements;
-        fTotalStrain = copy.fTotalStrain;
         fPlasticStrain = copy.fPlasticStrain;
         fSolution = copy.fSolution;
         fCmesh = copy.fCmesh;
@@ -112,12 +107,11 @@ public:
 #endif
     }
 
-    TPZSolveMatrix &operator=(const TPZSolveMatrix &copy) {
+    TPZIntPointsFEM &operator=(const TPZIntPointsFEM &copy) {
         fDim = copy.fDim;
         fRhs = copy.fRhs;
         fRhsBoundary = copy.fRhsBoundary;
         fBoundaryElements = copy.fBoundaryElements;
-        fTotalStrain = copy.fTotalStrain;
         fPlasticStrain = copy.fPlasticStrain;
         fSolution = copy.fSolution;
         fCmesh = copy.fCmesh;
@@ -237,9 +231,8 @@ public:
 
     void DeltaStrain(TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &deltastrain);
 
-    void TotalStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &total_strain);
-    void ElasticStrain(TPZFMatrix<REAL> &total_strain, TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &elastic_strain);
-    void PlasticStrain(TPZFMatrix<REAL> &total_strain, TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &plastic_strain);
+    void ElasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &elastic_strain);
+    void PlasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &plastic_strain);
 
     void ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &sigma);
 
@@ -282,9 +275,6 @@ protected:
 
 ///boundary elements vector
     TPZStack<int64_t> fBoundaryElements;
-
-///total strain
-    TPZFMatrix<REAL> fTotalStrain;
 
 ///plastic strain
     TPZFMatrix<REAL> fPlasticStrain;
@@ -361,4 +351,4 @@ protected:
 
 };
 
-#endif /* TPZSolveMatrix_h */
+#endif /* TPZIntPointsFEM_h */
