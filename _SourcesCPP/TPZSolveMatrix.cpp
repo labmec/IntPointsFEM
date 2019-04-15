@@ -486,7 +486,7 @@ void TPZSolveMatrix::DeltaStrain(TPZFMatrix<REAL> &expandsolution, TPZFMatrix<RE
 }
 
 void TPZSolveMatrix::TotalStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &total_strain) {
-    total_strain = total_strain + delta_strain;
+    total_strain = 0.0*total_strain + delta_strain;
 }
 
 void TPZSolveMatrix::ElasticStrain(TPZFMatrix<REAL> &total_strain, TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &elastic_strain) {

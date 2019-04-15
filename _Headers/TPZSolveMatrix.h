@@ -24,6 +24,7 @@
 #include <cusparse.h>
 #endif
 
+// TODO:: NVB rename it
 class TPZSolveMatrix {
 
 public:
@@ -222,11 +223,11 @@ public:
         fMaterial = dynamic_cast<TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse> , TPZElastoPlasticMem> *>(material);
     }
 
-    void LoadSolution (TPZFMatrix<REAL> sol) {
+    void LoadSolution (TPZFMatrix<REAL> & sol) {
         fSolution = sol;
     }
 
-     TPZFMatrix<REAL> Rhs() {
+     TPZFMatrix<REAL> & Rhs() {
         return fRhs;
     }
 

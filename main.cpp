@@ -57,15 +57,18 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance);
 /// Accept solution
 void AcceptPseudoTimeStepSolution(TPZAnalysis * an, TPZCompMesh * cmesh);
 
+/// Print mesh memory data
+void PrintMemory(TPZCompMesh * cmesh);
+
 /// Post process
-void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData material, int n_threads);
+void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData material, int n_threads, std::string vtk_file);
 
 ///RK Approximation
 void RKApproximation (TElastoPlasticData wellbore_material, int npoints, std::ostream &outbool, bool euler = false);
 
 int main(int argc, char *argv[]) {
     
-    int pOrder = 3; // Computational mesh order
+    int pOrder = 1; // Computational mesh order
     bool render_vtk_Q = true;
     
 // Generates the geometry
@@ -92,17 +95,22 @@ int main(int argc, char *argv[]) {
 
 //Calculates the solution using Newton method
     int n_iterations = 30;
-    REAL tolerance = 1.e-4; /// NVB this tolerance is more apropriated for nonlinear problems
+    REAL tolerance = 1.e-3; /// NVB this tolerance is more apropriated for nonlinear problems
     Solution(analysis, n_iterations, tolerance);
 
 //Post process
     if (render_vtk_Q) {
-        PostProcess(cmesh, wellbore_material, n_threads);
+        std::string vtk_file = "Approximation.vtk";
+        PostProcess(cmesh, wellbore_material, n_threads, vtk_file);
     }
 
 // Calculates the solution using all intg points at once
     SolutionAllPoints(analysis_npts, n_iterations, tolerance, wellbore_material);
-
+    //Post process
+    if (render_vtk_Q) {
+        std::string vtk_file = "Approximation_IntPointFEM.vtk";
+        PostProcess(cmesh, wellbore_material, n_threads, vtk_file);
+    }
     return 0;
 }
 
@@ -125,13 +133,16 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
         analysis->AssembleResidual();
         norm_delta_du = Norm(delta_du);
         norm_res = Norm(analysis->Rhs());
-//        analysis->Rhs().Print(std::cout);
         stop_criterion_Q = norm_res < tolerance;
         std::cout << "Nonlinear process :: delta_du norm = " << norm_delta_du << std::endl;
         std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
+//        std::cout << "Iteration = " << i + 1 << std::endl;
+//        analysis->Rhs().Print("rpz = ",std::cout,EMathematicaInput);
+//        PrintMemory(analysis->Mesh());
         if (stop_criterion_Q) {
 
             AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
+//            PrintMemory(analysis->Mesh());
             std::cout << "Nonlinear process converged with residue norm = " << norm_res << std::endl;
             std::cout << "Number of iterations = " << i + 1 << std::endl;
             break;
@@ -156,7 +167,7 @@ TPZAnalysis *Analysis(TPZCompMesh *cmesh, int n_threads) {
     return analysis;
 }
 
-void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData wellbore_material, int n_threads) {
+void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData wellbore_material, int n_threads, std::string vtk_file) {
     int div = 0;
     TPZPostProcAnalysis * post_processor = new TPZPostProcAnalysis;
     post_processor->SetCompMesh(cmesh, true);
@@ -183,9 +194,6 @@ void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData wellbore_material, int n
         names.push_back(i);
     }
 
-
-    std::string vtk_file("Approximation.vtk");
-
     post_processor->SetPostProcessVariables(post_mat_id, names);
     TPZFStructMatrix structmatrix(post_processor->Mesh());
     structmatrix.SetNumThreads(n_threads);
@@ -204,10 +212,10 @@ TElastoPlasticData WellboreConfig(){
 
     LER.SetEngineeringData(Ey, nu);
 
-    REAL mc_cohesion    = 10000000000.0;
-    REAL mc_phi         = (20*M_PI/180);
-//    REAL mc_cohesion    = 10.0;
+//    REAL mc_cohesion    = 10000000000.0;
 //    REAL mc_phi         = (20*M_PI/180);
+    REAL mc_cohesion    = 5.0;
+    REAL mc_phi         = (20*M_PI/180);
 
     /// NVB it is important to check the correct sign for ef in TPZMatElastoPlastic and TPZMatElastoPlastic2D materials. It is better to avoid problems with tensile state of stress.
 
@@ -322,6 +330,24 @@ void AcceptPseudoTimeStepSolution(TPZAnalysis * an, TPZCompMesh * cmesh){
     
 }
 
+void PrintMemory(TPZCompMesh * cmesh){
+    
+    std::map<int, TPZMaterial *> & refMatVec = cmesh->MaterialVec();
+    std::map<int, TPZMaterial * >::iterator mit;
+    TPZMatWithMem<TPZElastoPlasticMem> * pMatWithMem;
+    for(mit=refMatVec.begin(); mit!= refMatVec.end(); mit++)
+    {
+        pMatWithMem = dynamic_cast<TPZMatWithMem<TPZElastoPlasticMem> *>( mit->second );
+        if(pMatWithMem != NULL)
+        {
+            for(auto memory: *pMatWithMem->GetMemory()){
+                memory.Print();
+            }
+        }
+    }
+    
+}
+
 TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int p_order, TElastoPlasticData & wellbore_material) {
 
 // Creates the computational mesh
@@ -389,12 +415,12 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int p_order, TElastoPlasti
 
 void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance, TElastoPlasticData & wellbore_material){
     bool stop_criterion_Q = false;
-    REAL norm_res;
+    REAL norm_res, norm_delta_du;
     int neq = analysis->Solution().Rows();
     TPZFMatrix<REAL> du(neq, 1, 0.), delta_du;
 
     TPZSolveMatrix solmat(analysis->Mesh(), wellbore_material.Id());
-
+    analysis->Solution().Zero();
     analysis->Assemble();
 
     for (int i = 0; i < n_iterations; i++) {
@@ -403,15 +429,22 @@ void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
         du += delta_du;
         solmat.LoadSolution(du);
         solmat.AssembleResidual();
+        norm_delta_du = Norm(delta_du);
         norm_res = Norm(solmat.Rhs());
         stop_criterion_Q = norm_res < tolerance;
-
+        std::cout << "Nonlinear process :: delta_du norm = " << norm_delta_du << std::endl;
+        std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
+//        PrintMemory(analysis->Mesh());
         if (stop_criterion_Q) {
+            AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
+//            PrintMemory(analysis->Mesh());
             std::cout << "Nonlinear process converged with residue norm = " << norm_res << std::endl;
             std::cout << "Number of iterations = " << i + 1 << std::endl;
             break;
         }
-        analysis->Assemble();
+//        analysis->Assemble();
+        analysis->Rhs() = solmat.Rhs();
+        
     }
 
     if (stop_criterion_Q == false) {
