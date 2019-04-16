@@ -842,7 +842,3 @@ void TPZIntPointsFEM::AssembleRhsBoundary() {
             fRhsBoundary.AddFel(ef.fMat, ef.fSourceIndex, ef.fDestinationIndex);
         }
 }
-
-void TPZIntPointsFEM::TransferDataStructure() {
-
-}

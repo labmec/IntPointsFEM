@@ -18,12 +18,6 @@
 #include "mkl.h"
 #endif
 
-#ifdef __CUDACC__
-#include <cuda.h>
-#include <cublas_v2.h>
-#include <cusparse.h>
-#endif
-
 class TPZIntPointsFEM {
 
 public:
@@ -58,8 +52,6 @@ public:
         fDim = fCmesh->Dimension();
         fPlasticStrain.Resize(fDim * fNpts, 1);
         fPlasticStrain.Zero();
-
-        TransferDataStructure();
     }
 
     ~TPZIntPointsFEM() {
@@ -87,22 +79,6 @@ public:
         fIndexesColor = copy.fIndexesColor;
         fWeight = copy.fWeight;
         fMaterial = copy.fMaterial;
-
-#ifdef __CUDACC__
-        dSolution = copy.dSolution;
-        dRhsBoundary = copy.dRhsBoundary;
-        dPlasticStrain = copy.dPlasticStrain;
-        dStorage = copy.dStorage;
-        dColSizes = copy.dColSizes;
-        dRowSizes = copy.dRowSizes;
-        dMatrixPosition = copy.dMatrixPosition;
-        dColFirstIndex = copy.dColFirstIndex;
-        dRowFirstIndex = copy.dRowFirstIndex;
-        dElemColor = copy.dElemColor;
-        dIndexes = copy.dIndexes;
-        dIndexesColor = copy.dIndexesColor;
-        dWeight = copy.dWeight;
-#endif
     }
 
     TPZIntPointsFEM &operator=(const TPZIntPointsFEM &copy) {
@@ -124,22 +100,6 @@ public:
         fIndexesColor = copy.fIndexesColor;
         fWeight = copy.fWeight;
         fMaterial = copy.fMaterial;
-
-#ifdef __CUDACC__
-        dSolution = copy.dSolution;
-        dRhsBoundary = copy.dRhsBoundary;
-        dPlasticStrain = copy.dPlasticStrain;
-        dStorage = copy.dStorage;
-        dColSizes = copy.dColSizes;
-        dRowSizes = copy.dRowSizes;
-        dMatrixPosition = copy.dMatrixPosition;
-        dColFirstIndex = copy.dColFirstIndex;
-        dRowFirstIndex = copy.dRowFirstIndex;
-        dElemColor = copy.dElemColor;
-        dIndexes = copy.dIndexes;
-        dIndexesColor = copy.dIndexesColor;
-        dWeight = copy.dWeight;
-#endif
         return *this;
     }
 
@@ -218,8 +178,6 @@ public:
      TPZFMatrix<REAL> & Rhs() {
         return fRhs;
     }
-
-    void TransferDataStructure();
 
     void SetDataStructure();
 
@@ -319,35 +277,6 @@ protected:
 
 /// material
     TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse>, TPZElastoPlasticMem> *fMaterial;
-
-/// Parameters stored on device
-#ifdef __CUDACC__
-    REAL *dSolution;
-    REAL *dRhsBoundary;
-    REAL *dPlasticStrain;
-    REAL *dStorage;
-    int *dColSizes;
-    int *dRowSizes;
-    int *dMatrixPosition;
-    int *dColFirstIndex;
-    int *dRowFirstIndex;
-    int *dElemColor;
-    int *dIndexes;
-    int *dIndexesColor;
-
-    REAL *dGlobalSolution;
-    REAL *dExpandSolution;
-    REAL *dResult;
-    REAL *dWeight;
-    REAL *dSigma;
-    REAL *dNodalForces;
-    REAL *dGlobalForces;
-
-    //library handles
-    cusparseHandle_t handle_cusparse;
-    cublasHandle_t handle_cublas;
-#endif
-
 };
 
 #endif /* TPZIntPointsFEM_h */
