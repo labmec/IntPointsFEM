@@ -58,6 +58,8 @@ public:
         fDim = fCmesh->Dimension();
         fPlasticStrain.Resize(fDim * fNpts, 1);
         fPlasticStrain.Zero();
+
+        TransferDataStructure();
     }
 
     ~TPZIntPointsFEM() {
@@ -87,23 +89,19 @@ public:
         fMaterial = copy.fMaterial;
 
 #ifdef __CUDACC__
-        d_fStorage = copy.d_fStorage;
-        d_fColSizes = copy.d_fColSizes;
-        d_fRowSizes = copy.d_fRowSizes;
-        d_fMatrixPosition = copy.d_fMatrixPosition;
-        d_fColFirstIndex = copy.d_fColFirstIndex;
-        d_fRowFirstIndex = copy.d_fRowFirstIndex;
-        d_fElemColor = copy.d_fElemColor;
-        d_fIndexes = copy.d_fIndexes;
-        d_fIndexesColor = copy.d_fIndexesColor;
-
-        d_GlobalSolution = copy.d_GlobalSolution;
-        d_ExpandSolution = copy.d_ExpandSolution;
-        d_Result = copy.d_Result;
-        d_Weight = copy.d_Weight;
-        d_Sigma = copy.d_Sigma;
-        d_NodalForces = copy.d_NodalForces;
-        d_GlobalForces = copy.d_GlobalForces;
+        dSolution = copy.dSolution;
+        dRhsBoundary = copy.dRhsBoundary;
+        dPlasticStrain = copy.dPlasticStrain;
+        dStorage = copy.dStorage;
+        dColSizes = copy.dColSizes;
+        dRowSizes = copy.dRowSizes;
+        dMatrixPosition = copy.dMatrixPosition;
+        dColFirstIndex = copy.dColFirstIndex;
+        dRowFirstIndex = copy.dRowFirstIndex;
+        dElemColor = copy.dElemColor;
+        dIndexes = copy.dIndexes;
+        dIndexesColor = copy.dIndexesColor;
+        dWeight = copy.dWeight;
 #endif
     }
 
@@ -128,23 +126,19 @@ public:
         fMaterial = copy.fMaterial;
 
 #ifdef __CUDACC__
-        d_fStorage = copy.d_fStorage;
-        d_fColSizes = copy.d_fColSizes;
-        d_fRowSizes = copy.d_fRowSizes;
-        d_fMatrixPosition = copy.d_fMatrixPosition;
-        d_fColFirstIndex = copy.d_fColFirstIndex;
-        d_fRowFirstIndex = copy.d_fRowFirstIndex;
-        d_fElemColor = copy.d_fElemColor;
-        d_fIndexes = copy.d_fIndexes;
-        d_fIndexesColor = copy.d_fIndexesColor;
-        d_Weight = copy.d_Weight;
-
-        d_GlobalSolution = copy.d_GlobalSolution;
-        d_ExpandSolution = copy.d_ExpandSolution;
-        d_Result = copy.d_Result;
-        d_Sigma = copy.d_Sigma;
-        d_NodalForces = copy.d_NodalForces;
-        d_GlobalForces = copy.d_GlobalForces;
+        dSolution = copy.dSolution;
+        dRhsBoundary = copy.dRhsBoundary;
+        dPlasticStrain = copy.dPlasticStrain;
+        dStorage = copy.dStorage;
+        dColSizes = copy.dColSizes;
+        dRowSizes = copy.dRowSizes;
+        dMatrixPosition = copy.dMatrixPosition;
+        dColFirstIndex = copy.dColFirstIndex;
+        dRowFirstIndex = copy.dRowFirstIndex;
+        dElemColor = copy.dElemColor;
+        dIndexes = copy.dIndexes;
+        dIndexesColor = copy.dIndexesColor;
+        dWeight = copy.dWeight;
 #endif
         return *this;
     }
@@ -224,6 +218,8 @@ public:
      TPZFMatrix<REAL> & Rhs() {
         return fRhs;
     }
+
+    void TransferDataStructure();
 
     void SetDataStructure();
 
@@ -326,23 +322,26 @@ protected:
 
 /// Parameters stored on device
 #ifdef __CUDACC__
-    REAL *d_fStorage;
-    int *d_fColSizes;
-    int *d_fRowSizes;
-    int *d_fMatrixPosition;
-    int *d_fColFirstIndex;
-    int *d_fRowFirstIndex;
-    int *d_fElemColor;
-    int *d_fIndexes;
-    int *d_fIndexesColor;
+    REAL *dSolution;
+    REAL *dRhsBoundary;
+    REAL *dPlasticStrain;
+    REAL *dStorage;
+    int *dColSizes;
+    int *dRowSizes;
+    int *dMatrixPosition;
+    int *dColFirstIndex;
+    int *dRowFirstIndex;
+    int *dElemColor;
+    int *dIndexes;
+    int *dIndexesColor;
 
-    REAL *d_GlobalSolution;
-    REAL *d_ExpandSolution;
-    REAL *d_Result;
-    REAL *d_Weight;
-    REAL *d_Sigma;
-    REAL *d_NodalForces;
-    REAL *d_GlobalForces;
+    REAL *dGlobalSolution;
+    REAL *dExpandSolution;
+    REAL *dResult;
+    REAL *dWeight;
+    REAL *dSigma;
+    REAL *dNodalForces;
+    REAL *dGlobalForces;
 
     //library handles
     cusparseHandle_t handle_cusparse;
