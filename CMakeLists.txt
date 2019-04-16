@@ -154,10 +154,9 @@ if(USING_CUDA)
     set(CUDA_NVCC_FLAGS -gencode arch=compute_35,code=sm_35)	
 
     file(GLOB cuda *.cu)
-    list(REMOVE_ITEM sources ${CMAKE_CURRENT_SOURCE_DIR}/TPZIntPointsFEM.cpp ${CMAKE_CURRENT_SOURCE_DIR}/TPZIntPointsFEM.h)
+    list(REMOVE_ITEM sources ${CMAKE_CURRENT_SOURCE_DIR}/TPZIntPointsFEM.cpp)
     set(main_SRCS ${sources} ${headers} ${cuda})
 else()
-    list(REMOVE_ITEM sources ${CMAKE_CURRENT_SOURCE_DIR}/TPZIntPointsFEMGPU.h)
     set(main_SRCS ${sources} ${headers})
 endif(USING_CUDA)
 

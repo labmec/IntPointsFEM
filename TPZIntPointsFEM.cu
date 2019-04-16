@@ -462,15 +462,24 @@ void TPZIntPointsFEM::ReturnMappingApex(double *eigenvalues, double *sigma_proje
 
 //Gather solution
 void TPZIntPointsFEM::GatherSolution(TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &gather_solution) {
-    gather_solution.Resize(fNpts,1);
-    gather_solution.Zero();
-
-    cblas_dgthr(fDim*fNphis, global_solution, &gather_solution(0,0), &fIndexes[0]);
+//    gather_solution.Resize(fNpts,1);
+//    gather_solution.Zero();
+//#ifdef __CUDACC__
+//    REAL *dgather_solution;
+//	cudaMemset(dgather_solution, 0, fNpts * sizeof(REAL));
+//    cusparseDgthr(handle_cusparse, fDim*fNphis, global_solution, &dgather_solution[0], &fIndexes[0], CUSPARSE_INDEX_BASE_ZERO);
+//    cudaMemcpy(&gather_solution(0, 0), dgather_solution, fNpts * sizeof(REAL), cudaMemcpyDeviceToHost);
+//
+//    gather_solution.Print(std::cout);
+//#else
+//
+//    cblas_dgthr(fDim*fNphis, global_solution, &gather_solution(0,0), &fIndexes[0]);
+//#endif
 }
 
 //Strain
 void TPZIntPointsFEM::DeltaStrain(TPZFMatrix<REAL> &expandsolution, TPZFMatrix<REAL> &delta_strain) {
-    int64_t nelem = fRowSizes.size();
+    int64_t nelem = sizeof(fRowSizes)/sizeof(int);
 
     delta_strain.Resize(fDim*fNpts,1);
     delta_strain.Zero();
@@ -579,7 +588,7 @@ void TPZIntPointsFEM::StressCompleteTensor(TPZFMatrix<REAL> &sigma_projected, TP
 }
 
 void TPZIntPointsFEM::NodalForces(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &nodal_forces) {
-    int64_t nelem = fRowSizes.size();
+    int64_t nelem = sizeof(fRowSizes)/sizeof(int);
     nodal_forces.Resize(fDim*fNphis,1);
     nodal_forces.Zero();
 
@@ -595,7 +604,7 @@ void TPZIntPointsFEM::NodalForces(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &nod
 
 void TPZIntPointsFEM::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) {
     int64_t ncolor = *std::max_element(fElemColor.begin(), fElemColor.end())+1;
-    int64_t sz = fIndexes.size();
+    int64_t sz = sizeof(fIndexes)/sizeof(int);
     int64_t neq = fCmesh->NEquations();
     nodal_forces_global.Resize(neq*ncolor,1);
     nodal_forces_global.Zero();
@@ -660,7 +669,7 @@ void TPZIntPointsFEM::ColoringElements() const {
 //    TPZVTKGeoMesh::PrintGMeshVTK(fCmesh->Reference(),file);
 
 
-    int64_t nelem = fRowSizes.size();
+    int64_t nelem = sizeof(fRowSizes)/sizeof(int);
     int64_t neq = fCmesh->NEquations();
     for (int64_t iel = 0; iel < nelem; iel++) {
         int64_t cols = fColSizes[iel];
@@ -674,6 +683,16 @@ void TPZIntPointsFEM::ColoringElements() const {
 }
 
 void TPZIntPointsFEM::AssembleResidual() {
+
+    //residual assemble
+#ifdef __CUDACC__
+//	TPZFMatrix<REAL> *solution;
+//    TPZFMatrix<REAL> *gather_solution;
+//	cudaMalloc((void**)&solution, fSolution.Rows()*sizeof(REAL));
+//	cudaMalloc((void**)&gather_solution, fNpts*sizeof(REAL));
+//	cudaMemcpyAsync(solution, &fSolution(0,0), fSolution.Rows()*sizeof(TPZFMatrix<REAL>),cudaMemcpyHostToDevice,0);
+//    GatherSolution(*solution, *gather_solution);
+#else
     TPZFMatrix<REAL> gather_solution;
     TPZFMatrix<REAL> delta_strain;
     TPZFMatrix<REAL> elastic_strain;
@@ -685,7 +704,6 @@ void TPZIntPointsFEM::AssembleResidual() {
     TPZFMatrix<REAL> nodal_forces;
     TPZFMatrix<REAL> residual;
 
-    //residual assemble
     GatherSolution(fSolution, gather_solution);
     DeltaStrain(gather_solution, delta_strain);
     ElasticStrain(delta_strain, fPlasticStrain, elastic_strain);
@@ -701,6 +719,8 @@ void TPZIntPointsFEM::AssembleResidual() {
     PlasticStrain(delta_strain, elastic_strain, fPlasticStrain);
 
     fRhs = residual + fRhsBoundary;
+#endif
+
 }
 
 void TPZIntPointsFEM::SetDataStructure(){
@@ -830,8 +850,10 @@ void TPZIntPointsFEM::SetDataStructure(){
 
 void TPZIntPointsFEM::AssembleRhsBoundary() {
     int64_t neq = fCmesh->NEquations();
+
     fRhsBoundary.Resize(neq, 1);
     fRhsBoundary.Zero();
+
 
         for (auto iel : fBoundaryElements) {
             TPZCompEl *cel = fCmesh->Element(iel);
@@ -842,3 +864,4 @@ void TPZIntPointsFEM::AssembleRhsBoundary() {
             fRhsBoundary.AddFel(ef.fMat, ef.fSourceIndex, ef.fDestinationIndex);
         }
 }
+

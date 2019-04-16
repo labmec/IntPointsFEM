@@ -72,7 +72,7 @@ int main(int argc, char *argv[]) {
     bool render_vtk_Q = true;
     
 // Generates the geometry
-    std::string file("wellbore.msh");
+    std::string file("/home/natalia/cuda-workspace/IntPointsFEM-build/wellbore.msh");
 //    std::string file("wellbore_quad.msh");
     TPZGeoMesh *gmesh = ReadGeometry(file);
     PrintGeometry(gmesh);
@@ -211,9 +211,8 @@ TElastoPlasticData WellboreConfig(){
 
     LER.SetEngineeringData(Ey, nu);
 
-//    REAL mc_cohesion    = 10000000000.0;
-//    REAL mc_phi         = (20*M_PI/180);
-    REAL mc_cohesion    = 5.0;
+    REAL mc_cohesion    = 10000000000.0;
+//    REAL mc_cohesion    = 5.0;
     REAL mc_phi         = (20*M_PI/180);
 
     /// NVB it is important to check the correct sign for ef in TPZMatElastoPlastic and TPZMatElastoPlastic2D materials. It is better to avoid problems with tensile state of stress.
@@ -419,36 +418,35 @@ void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
     TPZFMatrix<REAL> du(neq, 1, 0.), delta_du;
 
     TPZIntPointsFEM solveintpoints(analysis->Mesh(), wellbore_material.Id());
-    analysis->Solution().Zero();
-    analysis->Assemble();
-
-    for (int i = 0; i < n_iterations; i++) {
-        analysis->Solve();
-        delta_du = analysis->Solution();
-        du += delta_du;
-        solveintpoints.LoadSolution(du);
-        solveintpoints.AssembleResidual();
-        norm_delta_du = Norm(delta_du);
-        norm_res = Norm(solveintpoints.Rhs());
-        stop_criterion_Q = norm_res < tolerance;
-        std::cout << "Nonlinear process :: delta_du norm = " << norm_delta_du << std::endl;
-        std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
-//        PrintMemory(analysis->Mesh());
-        if (stop_criterion_Q) {
-            AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
-//            PrintMemory(analysis->Mesh());
-            std::cout << "Nonlinear process converged with residue norm = " << norm_res << std::endl;
-            std::cout << "Number of iterations = " << i + 1 << std::endl;
-            break;
-        }
-//        analysis->Assemble();
-        analysis->Rhs() = solveintpoints.Rhs();
-        
-    }
-
-    if (stop_criterion_Q == false) {
-        std::cout << "Nonlinear process not converged with residue norm = " << norm_res << std::endl;
-    }
+//    analysis->Solution().Zero();
+//    analysis->Assemble();
+//    for (int i = 0; i < n_iterations; i++) {
+//        analysis->Solve();
+//        delta_du = analysis->Solution();
+//        du += delta_du;
+//        solveintpoints.LoadSolution(du);
+//        solveintpoints.AssembleResidual();
+//        norm_delta_du = Norm(delta_du);
+//        norm_res = Norm(solveintpoints.Rhs());
+//        stop_criterion_Q = norm_res < tolerance;
+//        std::cout << "Nonlinear process :: delta_du norm = " << norm_delta_du << std::endl;
+//        std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
+////        PrintMemory(analysis->Mesh());
+//        if (stop_criterion_Q) {
+//            AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
+////            PrintMemory(analysis->Mesh());
+//            std::cout << "Nonlinear process converged with residue norm = " << norm_res << std::endl;
+//            std::cout << "Number of iterations = " << i + 1 << std::endl;
+//            break;
+//        }
+////        analysis->Assemble();
+//        analysis->Rhs() = solveintpoints.Rhs();
+//
+//    }
+//
+//    if (stop_criterion_Q == false) {
+//        std::cout << "Nonlinear process not converged with residue norm = " << norm_res << std::endl;
+//    }
 }
 
 void RKApproximation (TElastoPlasticData wellbore_material, int npoints, std::ostream &out, bool euler) {

@@ -18,40 +18,38 @@
 #include "mkl.h"
 #endif
 
+#ifdef __CUDACC__
+#include <cublas_v2.h>
+#include <cusparse.h>
+#endif
+
 class TPZIntPointsFEM {
 
 public:
 
     TPZIntPointsFEM() {
-        fDim = -1;
-        fRhs = fRhs.Resize(0,0);
-        fRhsBoundary.Resize(0,0);
-        fBoundaryElements.resize(0);
-        fPlasticStrain.Resize(0,0);
-        fSolution.Resize(0,0);
-        fNpts = -1;
-        fNphis = -1;
-        fStorage.resize(0);
-        fColSizes.resize(0);
-        fRowSizes.resize(0);
-        fMatrixPosition.resize(0);
-        fColFirstIndex.resize(0);
-        fRowFirstIndex.resize(0);
-        fElemColor.resize(0);
-        fIndexes.resize(0);
-        fIndexesColor.resize(0);
-        fWeight.resize(0);
     }
 
     TPZIntPointsFEM(TPZCompMesh *cmesh, int materialid) {
         SetCompMesh(cmesh);
         SetMaterialId(materialid);
         SetDataStructure();
+        std::cout << "oioioi" << std::endl;
         AssembleRhsBoundary();
 
+
+
         fDim = fCmesh->Dimension();
+#ifdef __CUDACC__
+        cuSparseHandle();
+        cuBlasHandle();
+
+		cudaMalloc(&fPlasticStrain, fDim * fNpts * sizeof(REAL));
+		cudaMemset(fPlasticStrain, 0, fDim * fNpts * sizeof(REAL));
+#else
         fPlasticStrain.Resize(fDim * fNpts, 1);
         fPlasticStrain.Zero();
+#endif
     }
 
     ~TPZIntPointsFEM() {
@@ -106,25 +104,36 @@ public:
     void SetRowandColSizes(TPZVec<int> rowsize, TPZVec<int> colsize) {
         int64_t nelem = rowsize.size();
 
+#ifdef __CUDACC__
+        cudaMallocManaged(&fRowSizes, nelem*sizeof(int));
+        cudaMallocManaged(&fColSizes, nelem*sizeof(int));
+        cudaMallocManaged(&fMatrixPosition, (nelem + 1)*sizeof(int));
+        cudaMallocManaged(&fRowFirstIndex, (nelem + 1)*sizeof(int));
+        cudaMallocManaged(&fColFirstIndex, (nelem + 1)*sizeof(int));
+ #else
         fRowSizes.resize(nelem);
         fColSizes.resize(nelem);
         fMatrixPosition.resize(nelem + 1);
         fRowFirstIndex.resize(nelem + 1);
         fColFirstIndex.resize(nelem + 1);
-
-        fRowSizes = rowsize;
-        fColSizes = colsize;
+#endif
 
         fMatrixPosition[0] = 0;
         fRowFirstIndex[0] = 0;
         fColFirstIndex[0] = 0;
 
         for (int64_t iel = 0; iel < nelem; ++iel) {
+        	fRowSizes[iel] = rowsize[iel];
+        	fColSizes[iel] = colsize[iel];
             fMatrixPosition[iel + 1] = fMatrixPosition[iel] + fRowSizes[iel] * fColSizes[iel];
             fRowFirstIndex[iel + 1] = fRowFirstIndex[iel] + fRowSizes[iel];
             fColFirstIndex[iel + 1] = fColFirstIndex[iel] + fColSizes[iel];
         }
+#ifdef __CUDACC__
+        cudaMallocManaged(&fStorage, fMatrixPosition[nelem]*sizeof(REAL));
+ #else
         fStorage.resize(fMatrixPosition[nelem]);
+#endif
         fElemColor.resize(nelem);
         fElemColor.Fill(-1);
     }
@@ -133,7 +142,6 @@ public:
         int64_t rows = fRowSizes[iel];
         int64_t cols = fColSizes[iel];
         int64_t pos = fMatrixPosition[iel];
-        int64_t nelem = fRowSizes.size();
 
         TPZFMatrix<REAL> elmatloc(rows, cols, &fStorage[pos], rows*cols);
         elmatloc = elmat;
@@ -141,9 +149,18 @@ public:
 
     void SetIndexes(TPZVec<MKL_INT> indexes) {
         int64_t indsize = indexes.size();
+
+#ifdef __CUDACC__
+    	cudaMalloc(&fIndexes, indsize*sizeof(int));
+    	cudaMemcpyAsync	(fIndexes, &indexes[0], indsize*sizeof(int),cudaMemcpyHostToDevice,0);
+    	cudaMalloc(&fIndexesColor, indsize*sizeof(int));
+ #else
         fIndexes.resize(indsize);
         fIndexes = indexes;
         fIndexesColor.resize(indsize);
+#endif
+
+
     }
 
     void SetNumberofIntPoints(int64_t npts) {
@@ -177,6 +194,7 @@ public:
 
      TPZFMatrix<REAL> & Rhs() {
         return fRhs;
+
     }
 
     void SetDataStructure();
@@ -219,64 +237,59 @@ public:
 
     void AssembleRhsBoundary();
 
+    void cuSparseHandle() {
+#ifdef __CUDACC__
+        cusparseCreate (&handle_cusparse);
+#endif
+    }
+
+    void cuBlasHandle() {
+#ifdef __CUDACC__
+        cublasCreate (&handle_cublas);
+#endif
+    }
+
+
 protected:
     int fDim;
-///rhs
-    TPZFMatrix<REAL> fRhs;
-
-///boundary rhs
-    TPZFMatrix<REAL> fRhsBoundary;
-
-///boundary elements vector
     TPZStack<int64_t> fBoundaryElements;
-
-///plastic strain
-    TPZFMatrix<REAL> fPlasticStrain;
-
-/// solution
-    TPZFMatrix<REAL> fSolution;
-
-/// computational mesh
     TPZCompMesh *fCmesh;
-
-///total number of int points
     int64_t fNpts;
-
-///total number of phis
     int64_t fNphis;
-
-/// vector containing the matrix coefficients
-    TPZVec<REAL> fStorage;
-
-/// number of rows of each block matrix
-    TPZVec<int> fRowSizes;
-
-/// number of columns of each block matrix
-    TPZVec<int> fColSizes;
-
-/// indexes vector in x and y direction
-    TPZVec<MKL_INT> fIndexes;
-
-/// indexes vector in x and y direction by color
-    TPZVec<MKL_INT> fIndexesColor;
-
-/// color indexes of each element
     TPZVec<int64_t> fElemColor;
-
-/// position of the matrix of the elements
-    TPZVec<int> fMatrixPosition;
-
-/// position of the result vector
-    TPZVec<int> fRowFirstIndex;
-
-/// position in the fIndex vector of each element
-    TPZVec<int> fColFirstIndex;
-
-/// Weight Vector
-    TPZStack<REAL> fWeight;
-
-/// material
     TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse>, TPZElastoPlasticMem> *fMaterial;
+    TPZFMatrix<REAL> fRhs;
+    TPZFMatrix<REAL> fRhsBoundary;
+	TPZFMatrix<REAL> fSolution;
+//	TPZFMatrix<REAL> fPlasticStrain;
+
+#ifdef __CUDACC__
+    REAL *fPlasticStrain;
+    REAL *fStorage;
+    int *fColSizes;
+    int *fRowSizes;
+    int *fMatrixPosition;
+    int *fColFirstIndex;
+    int *fRowFirstIndex;
+    int *fIndexes;
+    int *fIndexesColor;
+    REAL *fWeight;
+
+    cusparseHandle_t handle_cusparse;
+    cublasHandle_t handle_cublas;
+#else
+    TPZFMatrix<REAL> fPlasticStrain;
+	TPZVec<REAL> fStorage;
+	TPZVec<int> fRowSizes;
+	TPZVec<int> fColSizes;
+	TPZVec<int> fMatrixPosition;
+	TPZVec<int> fRowFirstIndex;
+	TPZVec<int> fColFirstIndex;
+	TPZVec<MKL_INT> fIndexes;
+	TPZVec<MKL_INT> fIndexesColor;
+	TPZStack<REAL> fWeight;
+#endif
+
 };
 
 #endif /* TPZIntPointsFEM_h */
