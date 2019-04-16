@@ -73,21 +73,22 @@ public:
     void SetInitialStress(REAL sigma0);
 
     REAL InitialStress();
+    
+    void SetNumberOfPoints(int n_points);
+    
+    int GetNumberOfPoints();
 
     void CreateMaterial();
+    
+    void FillPointsMemory();
 
-    void F (REAL r, REAL ur, REAL sigma_r, REAL &d_ur, REAL &d_sigmar);
+    void F (REAL r, REAL ur, REAL sigma_r, REAL &d_ur, REAL &d_sigmar, REAL & lambda, REAL & G);
 
     void ParametersAtRe (TPZFNMatrix<3,REAL> &sigma, REAL &u_re);
 
-    void RKProcess(int np, std::ostream &out, bool euler);
-
-
-
-
-
-
-
+    void RKProcess(std::ostream &out, bool euler);
+    
+    void RKProcessII(std::ostream &out, bool euler);
 
 };
 

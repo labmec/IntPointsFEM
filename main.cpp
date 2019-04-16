@@ -495,12 +495,14 @@ void RKApproximation (TElastoPlasticData wellbore_material, int npoints, std::os
 
     TRKSolution rkmethod;
     rkmethod.SetWellboreRadius(rw);
-    rkmethod.SetExternRadius(re);
+    rkmethod.SetExternalRadius(re);
+    rkmethod.SetNumberOfPoints(npoints);
     rkmethod.SetMaterial(material);
     rkmethod.SetStressXYZ(sigmaXYZ,theta);
     rkmethod.SetInitialStress(sigma0);
     rkmethod.SetWellborePressure(pw);
+    rkmethod.FillPointsMemory();
 
-    rkmethod.RKProcess(npoints,out, euler);
+    rkmethod.RKProcess(out, euler);
 }
 

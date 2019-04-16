@@ -95,17 +95,32 @@ REAL TRKSolution::InitialStress() {
     return m_sigma0;
 }
 
-void TRKSolution::F (REAL r, REAL ur, REAL sigma_r, REAL &d_ur, REAL &d_sigmar) {
-    REAL lambda = m_material->GetDefaultMemory().m_ER.Lambda();
-    REAL G = m_material->GetDefaultMemory().m_ER.G();
+void TRKSolution::SetNumberOfPoints(int n_points) {
+    m_n_points = n_points;
+}
 
+int TRKSolution::GetNumberOfPoints() {
+    return m_n_points;
+}
+
+void TRKSolution::FillPointsMemory(){
+    m_memory_vector.Resize(m_n_points);
+    for (auto & item : m_memory_vector) {
+        item = m_material->GetDefaultMemory();
+    }
+}
+
+void TRKSolution::F (REAL r, REAL ur, REAL sigma_r, REAL &d_ur, REAL &d_sigmar, REAL & lambda, REAL & G) {
+    
     d_ur = (r*sigma_r-lambda*ur)/(r*lambda+2*G*r);
     d_sigmar = (-sigma_r + (2*G*ur/r + lambda*(ur/r + (r*sigma_r-lambda*ur)/(r*(lambda + 2*G)))))/r;
 }
 
 void TRKSolution::ParametersAtRe(TPZFNMatrix<3,REAL> &sigma, REAL &u_re) {
-    REAL nu = m_material->GetDefaultMemory().m_ER.Poisson();
-    REAL G = m_material->GetDefaultMemory().m_ER.G();
+    
+    int p_index = 0; /// Parameters are Re are associated with index 0
+    REAL nu = m_memory_vector[p_index].m_ER.Poisson();
+    REAL G = m_memory_vector[p_index].m_ER.G();
 
     sigma.Resize(1,3);
 
@@ -118,17 +133,20 @@ void TRKSolution::ParametersAtRe(TPZFNMatrix<3,REAL> &sigma, REAL &u_re) {
 
     // Displacement at re
     u_re = -(m_re * sigma(0,2) - m_re * sigma(0,1)) / (2 * G);
+    
+    
 }
 
-void TRKSolution::RKProcess(int np, std::ostream &out, bool euler) {
-    REAL h = (m_rw - m_re) / np;
-
-    REAL lambda = m_material->GetDefaultMemory().m_ER.Lambda();
-    REAL G = m_material->GetDefaultMemory().m_ER.G();
-
-    TPZVec<REAL> r(np+1);
-    TPZVec<REAL> u(np+1);
-    TPZFNMatrix<3,REAL> sigma(np+1,3,0.);
+void TRKSolution::RKProcess(std::ostream &out, bool euler) {
+    
+    if (m_n_points <= 0) {
+        DebugStop();
+    }
+    
+    REAL h = (m_rw - m_re) / m_n_points;
+    TPZVec<REAL> r(m_n_points+1);
+    TPZVec<REAL> u(m_n_points+1);
+    TPZFNMatrix<3,REAL> sigma(m_n_points+1,3,0.);
 
     // Displacement and stress at re
     TPZFNMatrix<3,REAL> sigma_re;
@@ -141,25 +159,31 @@ void TRKSolution::RKProcess(int np, std::ostream &out, bool euler) {
     sigma(0,1) = sigma_re(0,1);
     sigma(0,2) = sigma_re(0,2);
 
-    for (int i = 0; i < np; i++) {
+    for (int i = 0; i < m_n_points; i++) {
         REAL du_k1;
         REAL dsigma_rr_k1;
-
+        
+        /// Assuming that Lamé parameters suffer small change between two points
+        // http://www.ecs.umass.edu/~arwade/courses/str-mech/polar.pdf
+        REAL lambda = m_memory_vector[i].m_ER.Lambda();
+        REAL G = m_memory_vector[i].m_ER.G();
+        
         //k1
-        F(r[i], u[i], sigma(i,0), du_k1, dsigma_rr_k1);
+        F(r[i], u[i], sigma(i,0), du_k1, dsigma_rr_k1, lambda, G);
 
         if (euler == false) {
             REAL du_k2, du_k3, du_k4;
             REAL dsigma_rr_k2, dsigma_rr_k3, dsigma_rr_k4;
             //k2
-            F(r[i] + h / 2., u[i] + h * du_k1 / 2., sigma(i, 0) + h * dsigma_rr_k1 / 2., du_k2, dsigma_rr_k2);
+            F(r[i] + h / 2., u[i] + h * du_k1 / 2., sigma(i, 0) + h * dsigma_rr_k1 / 2., du_k2, dsigma_rr_k2, lambda, G);
 
             //k3
-            F(r[i] + h / 2., u[i] + h * du_k2 / 2., sigma(i, 0) + h * dsigma_rr_k2 / 2., du_k3, dsigma_rr_k3);
+            F(r[i] + h / 2., u[i] + h * du_k2 / 2., sigma(i, 0) + h * dsigma_rr_k2 / 2., du_k3, dsigma_rr_k3, lambda, G);
 
             //k4
-            F(r[i] + h, u[i] + h * du_k3, sigma(i, 0) + h * dsigma_rr_k3, du_k4, dsigma_rr_k4);
+            F(r[i] + h, u[i] + h * du_k3, sigma(i, 0) + h * dsigma_rr_k3, du_k4, dsigma_rr_k4, lambda, G);
 
+            
             //u_ip1, sigma_ip1
             u[i + 1] = u[i] + 1. / 6. * h * (du_k1 + 2. * du_k2 + 2. * du_k3 + du_k4);
             sigma(i+1,0) = sigma(i,0) + 1. / 6. * h * (dsigma_rr_k1 + 2. * dsigma_rr_k2 + 2. * dsigma_rr_k3 + dsigma_rr_k4);
@@ -176,7 +200,73 @@ void TRKSolution::RKProcess(int np, std::ostream &out, bool euler) {
     }
 
     out << "radius" << "  " << "u" << "   " << "sigma_rr" << "   " << "sigma_tt" << "   " << "sigma_zz" << std::endl;
-    for (int i = 0; i < np; i++) {
+    for (int i = 0; i < m_n_points; i++) {
+        out << r[i] << "  " << u[i] << "   " << sigma(i,0) << "   " << sigma(i,1) << "   " << sigma(i,2) << std::endl;
+    }
+}
+
+void TRKSolution::RKProcessII(std::ostream &out, bool euler) {
+    
+    if (m_n_points <= 0) {
+        DebugStop();
+    }
+    
+    REAL h = (m_rw - m_re) / m_n_points;
+    TPZVec<REAL> r(m_n_points+1);
+    TPZVec<REAL> u(m_n_points+1);
+    TPZFNMatrix<3,REAL> sigma(m_n_points+1,3,0.);
+    
+    // Displacement and stress at re
+    TPZFNMatrix<3,REAL> sigma_re;
+    REAL u_re;
+    ParametersAtRe(sigma_re, u_re);
+    
+    r[0] = m_re;
+    u[0] = u_re;
+    sigma(0,0) = sigma_re(0,0);
+    sigma(0,1) = sigma_re(0,1);
+    sigma(0,2) = sigma_re(0,2);
+    
+    for (int i = 0; i < m_n_points; i++) {
+        REAL du_k1;
+        REAL dsigma_rr_k1;
+        
+        /// Assuming that Lamé parameters suffer small change between two points
+        REAL lambda = m_memory_vector[i].m_ER.Lambda();
+        REAL G = m_memory_vector[i].m_ER.G();
+        
+        //k1
+        F(r[i], u[i], sigma(i,0), du_k1, dsigma_rr_k1, lambda, G);
+        
+        if (euler == false) {
+            REAL du_k2, du_k3, du_k4;
+            REAL dsigma_rr_k2, dsigma_rr_k3, dsigma_rr_k4;
+            //k2
+            F(r[i] + h / 2., u[i] + h * du_k1 / 2., sigma(i, 0) + h * dsigma_rr_k1 / 2., du_k2, dsigma_rr_k2, lambda, G);
+            
+            //k3
+            F(r[i] + h / 2., u[i] + h * du_k2 / 2., sigma(i, 0) + h * dsigma_rr_k2 / 2., du_k3, dsigma_rr_k3, lambda, G);
+            
+            //k4
+            F(r[i] + h, u[i] + h * du_k3, sigma(i, 0) + h * dsigma_rr_k3, du_k4, dsigma_rr_k4, lambda, G);
+            
+            //u_ip1, sigma_ip1
+            u[i + 1] = u[i] + 1. / 6. * h * (du_k1 + 2. * du_k2 + 2. * du_k3 + du_k4);
+            sigma(i+1,0) = sigma(i,0) + 1. / 6. * h * (dsigma_rr_k1 + 2. * dsigma_rr_k2 + 2. * dsigma_rr_k3 + dsigma_rr_k4);
+            
+        } else if (euler == true) {
+            //u_ip1, sigma_ip1
+            u[i + 1] = u[i] + h * du_k1;
+            sigma(i+1,0) = sigma(i,0) + h * dsigma_rr_k1;
+        }
+        
+        r[i + 1] = r[i] + h;
+        sigma(i+1,1) = 2 * G * u[i + 1] / r[i + 1] + lambda * (u[i + 1] / r[i + 1] + (r[i + 1] * sigma(i+1,0) - lambda * u[i + 1]) / (r[i + 1] * (lambda + 2 * G)));
+        sigma(i+1,2) = (-lambda*(lambda* (sigma(i+1,0) - 2* sigma(i+1,0) - sigma(i+1,1)) - 2 *G *(sigma(i+1,0) + sigma(i+1,1))))/(2*(lambda + G)*(lambda + 2*G));
+    }
+    
+    out << "radius" << "  " << "u" << "   " << "sigma_rr" << "   " << "sigma_tt" << "   " << "sigma_zz" << std::endl;
+    for (int i = 0; i < m_n_points; i++) {
         out << r[i] << "  " << u[i] << "   " << sigma(i,0) << "   " << sigma(i,1) << "   " << sigma(i,2) << std::endl;
     }
 }
