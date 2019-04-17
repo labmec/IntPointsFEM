@@ -68,7 +68,7 @@ void RKApproximation (TElastoPlasticData wellbore_material, int npoints, std::os
 
 int main(int argc, char *argv[]) {
     
-    int pOrder = 1; // Computational mesh order
+    int pOrder = 2; // Computational mesh order
     bool render_vtk_Q = true;
     
 // Generates the geometry
@@ -83,10 +83,12 @@ int main(int argc, char *argv[]) {
     TPZCompMesh *cmesh_npts = CmeshElastoplasticity(gmesh, pOrder, wellbore_material);
 
 // Runge Kutta approximation
-    int np = 100;
-    ofstream rkfile("rkdata.txt");
-    bool euler = true;
-    RKApproximation(wellbore_material, np, rkfile, euler);
+    {
+        int np = 100;
+        ofstream rkfile("rkdata.txt");
+        bool euler = true;
+        RKApproximation(wellbore_material, np, rkfile, euler);
+    }
 
 // Defines the analysis
     int n_threads = 0;
@@ -212,10 +214,10 @@ TElastoPlasticData WellboreConfig(){
 
     LER.SetEngineeringData(Ey, nu);
 
-//    REAL mc_cohesion    = 10000000000.0;
-//    REAL mc_phi         = (20*M_PI/180);
-    REAL mc_cohesion    = 5.0;
+    REAL mc_cohesion    = 10000000000.0;
     REAL mc_phi         = (20*M_PI/180);
+//    REAL mc_cohesion    = 5.0;
+//    REAL mc_phi         = (20*M_PI/180);
 
     /// NVB it is important to check the correct sign for ef in TPZMatElastoPlastic and TPZMatElastoPlastic2D materials. It is better to avoid problems with tensile state of stress.
 
@@ -498,11 +500,12 @@ void RKApproximation (TElastoPlasticData wellbore_material, int npoints, std::os
     rkmethod.SetExternalRadius(re);
     rkmethod.SetNumberOfPoints(npoints);
     rkmethod.SetMaterial(material);
+    rkmethod.SetElastoPlasticModel(LEMC);
     rkmethod.SetStressXYZ(sigmaXYZ,theta);
     rkmethod.SetInitialStress(sigma0);
     rkmethod.SetWellborePressure(pw);
     rkmethod.FillPointsMemory();
 
-    rkmethod.RKProcess(out, euler);
+    rkmethod.RKProcessII(out, euler);
 }
 
