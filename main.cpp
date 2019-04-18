@@ -84,12 +84,12 @@ int main(int argc, char *argv[]) {
 
 // Runge Kutta approximation
     {
-        int np = 5000;
+        int np = 100;
         ofstream rkfile("ep_rkdata.txt");
         bool euler = true;
         RKApproximation(wellbore_material, np, rkfile, euler);
     }
-    return 0;
+
 // Defines the analysis
     int n_threads = 0;
     TPZAnalysis *analysis = Analysis(cmesh,n_threads);

@@ -254,7 +254,7 @@ void TRKSolution::RKProcessII(std::ostream &out, bool euler) {
         //k1
         F_II(r[i], u[i], sigma(i,0), du_k1, dsigma_rr_k1, memory, lambda, G);
         
-        if (euler == false) {
+        if (euler == true) {
             REAL du_k2, du_k3, du_k4;
             REAL dsigma_rr_k2, dsigma_rr_k3, dsigma_rr_k4;
             //k2
@@ -271,7 +271,7 @@ void TRKSolution::RKProcessII(std::ostream &out, bool euler) {
             u[i + 1] = u[i] + 1. / 6. * h * (du_k1 + 2. * du_k2 + 2. * du_k3 + du_k4);
             sigma(i+1,0) = sigma(i,0) + 1. / 6. * h * (dsigma_rr_k1 + 2. * dsigma_rr_k2 + 2. * dsigma_rr_k3 + dsigma_rr_k4);
 
-        } else if (euler == true) {
+        } else if (euler == false) {
         
             //u_ip1, sigma_ip1
             r[i + 1] = r[i] + h;
@@ -280,17 +280,18 @@ void TRKSolution::RKProcessII(std::ostream &out, bool euler) {
         }
         
         /// update elastoplastic state
+        REAL sigma_r, sigma_t, sigma_z;
         {
             REAL r_pone = r[i + 1];
             REAL ur_pone = u[i + 1];
         
-            REAL sigma_r = sigma(i,0) + h * dsigma_rr_k1;
-            REAL sigma_t = (lambda*r_pone*sigma_r + 4*G*(G + lambda)*ur_pone)/((2*G + lambda)*r_pone);
+            sigma_r = sigma(i,0) + h * dsigma_rr_k1;
+            sigma_t = (lambda*r_pone*sigma_r + 4*G*(G + lambda)*ur_pone)/((2*G + lambda)*r_pone);
             REAL nu = lambda / (2.0*(lambda+G));
             REAL Ey = G * (3.0*lambda+2.0*G) / (lambda+G);
             REAL eps_r = (1+nu)*((1-nu)*sigma_r - nu*sigma_t) / Ey;
             REAL eps_t = (1+nu)*((1-nu)*sigma_t - nu*sigma_r) / Ey;
-            REAL sigma_z = lambda*(eps_r + ur_pone/r_pone);
+            sigma_z = lambda*(eps_r + ur_pone/r_pone);
             
             TPZTensor<REAL> eps_total,sigma;
             eps_total.Zero();
@@ -302,32 +303,35 @@ void TRKSolution::RKProcessII(std::ostream &out, bool euler) {
             sigma.YY() = sigma_t;
             sigma.ZZ() = sigma_z;
             
-
-            
-            TPZFMatrix<REAL> Dep(6,6,0.0);
-            TPZPlasticState<REAL> ep_state = m_memory_vector[i+1].m_elastoplastic_state;
-//            ep_state.m_eps_t = eps_total;
-//            m_elastoplastic_model.SetState(ep_state);
-//            m_elastoplastic_model.ApplyLoad(sigma, eps_total);
-            ER.SetEngineeringData(Ey,nu);
-            ER.ComputeStrain(sigma, eps_total);
-            m_elastoplastic_model.SetState(m_memory_vector[i+1].m_elastoplastic_state);
-            m_elastoplastic_model.ApplyStrainComputeSigma(eps_total, sigma, &Dep);
-            m_memory_vector[i+1].m_elastoplastic_state = m_elastoplastic_model.GetState();
-            
-            m_memory_vector[i+1].m_sigma = sigma;
-            lambda = Dep(0,3);
-            G = Dep(4,4)/2.0;
-            std::cout << "lambda = " << lambda << std::endl;
-            std::cout << "G = " << G << std::endl;
+            TPZPlasticState<REAL> state;
+            for (int k = 0; k < 1 ; k++) {
+                state = m_memory_vector[i+1].m_elastoplastic_state;
+                TPZFMatrix<REAL> Dep(6,6,0.0);
+                ER.SetEngineeringData(Ey,nu);
+                ER.ComputeStrain(sigma, eps_total);
+                m_elastoplastic_model.SetState(state);
+                m_elastoplastic_model.ApplyStrainComputeSigma(eps_total, sigma, &Dep);
+                m_memory_vector[i+1].m_elastoplastic_state = m_elastoplastic_model.GetState();
+                
+                m_memory_vector[i+1].m_sigma = sigma;
+                lambda = Dep(0,5);
+                G = Dep(4,4)/2.0;
+                std::cout << "lambda = " << lambda << std::endl;
+                std::cout << "G = " << G << std::endl;
+            }
+            m_memory_vector[i+1].m_elastoplastic_state = state;
             
         }
+        
+        sigma(i+1,0) = sigma_r;
+        sigma(i+1,1) = m_memory_vector[i+1].m_sigma.YY();
+        sigma(i+1,2) = m_memory_vector[i+1].m_sigma.ZZ();
         
         // XX stands for radial direction
         // YY stands for azimuthal direction
 //        sigma(i+1,0) = m_memory_vector[i+1].m_sigma.XX();
-        sigma(i+1,1) = m_memory_vector[i+1].m_sigma.YY();
-        sigma(i+1,2) = m_memory_vector[i+1].m_sigma.ZZ();
+//        sigma(i+1,1) = m_memory_vector[i+1].m_sigma.YY();
+//        sigma(i+1,2) = m_memory_vector[i+1].m_sigma.ZZ();
         
     }
     
