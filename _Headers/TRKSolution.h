@@ -35,7 +35,7 @@ protected:
 
     int m_n_points = 0;
     
-    TPZVec<TPZElastoPlasticMem> m_memory_vector;
+    TPZManVector<TPZElastoPlasticMem,10> m_memory_vector;
 
 public:
     

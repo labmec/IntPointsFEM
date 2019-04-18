@@ -15,7 +15,7 @@ fr = 4.0;
 
 nt = 16;
 nr = 16;
-radial_progression = 1.25;
+radial_progression = 1.3;
 
 // center point
 pc = newp; Point(pc) = {0,0,0};

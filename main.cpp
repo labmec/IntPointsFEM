@@ -84,20 +84,20 @@ int main(int argc, char *argv[]) {
 
 // Runge Kutta approximation
     {
-        int np = 100;
-        ofstream rkfile("rkdata.txt");
+        int np = 5000;
+        ofstream rkfile("ep_rkdata.txt");
         bool euler = true;
         RKApproximation(wellbore_material, np, rkfile, euler);
     }
-
+    return 0;
 // Defines the analysis
     int n_threads = 0;
     TPZAnalysis *analysis = Analysis(cmesh,n_threads);
     TPZAnalysis *analysis_npts = Analysis(cmesh_npts,n_threads);
-
+    
 //Calculates the solution using Newton method
     int n_iterations = 30;
-    REAL tolerance = 1.e-3; /// NVB this tolerance is more apropriated for nonlinear problems
+    REAL tolerance = 1.e-4; /// NVB this tolerance is more apropriated for nonlinear problems
     Solution(analysis, n_iterations, tolerance);
 
 //Post process
@@ -214,10 +214,10 @@ TElastoPlasticData WellboreConfig(){
 
     LER.SetEngineeringData(Ey, nu);
 
-    REAL mc_cohesion    = 10000000000.0;
-    REAL mc_phi         = (20*M_PI/180);
-//    REAL mc_cohesion    = 5.0;
+//    REAL mc_cohesion    = 10000000000.0;
 //    REAL mc_phi         = (20*M_PI/180);
+    REAL mc_cohesion    = 5.0;
+    REAL mc_phi         = (20*M_PI/180);
 
     /// NVB it is important to check the correct sign for ef in TPZMatElastoPlastic and TPZMatElastoPlastic2D materials. It is better to avoid problems with tensile state of stress.
 
@@ -456,7 +456,7 @@ void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
 
 void RKApproximation (TElastoPlasticData wellbore_material, int npoints, std::ostream &out, bool euler) {
     REAL rw = 0.1;
-    REAL re = 4.;
+    REAL re = 4.0;
     REAL theta = 0.;
 
     //Initial stress and wellbore pressure
@@ -505,7 +505,6 @@ void RKApproximation (TElastoPlasticData wellbore_material, int npoints, std::os
     rkmethod.SetInitialStress(sigma0);
     rkmethod.SetWellborePressure(pw);
     rkmethod.FillPointsMemory();
-
     rkmethod.RKProcessII(out, euler);
 }
 
