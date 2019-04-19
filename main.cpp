@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
     
 // Calculates the solution using Newton method
     int n_iterations = 50;
-    REAL tolerance = 1.e-5; /// NVB this tolerance is more apropriated for nonlinear problems
+    REAL tolerance = 1.e-5;
    Solution(analysis, n_iterations, tolerance);
 
 // Post process
