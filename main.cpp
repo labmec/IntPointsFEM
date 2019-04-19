@@ -84,9 +84,9 @@ int main(int argc, char *argv[]) {
 
 // Runge Kutta approximation
     {
-        int np = 500;
+        int np = 200;
         ofstream rkfile("ep_rkdata.txt");
-        bool euler = false;
+        bool euler = true;
         RKApproximation(wellbore_material, np, rkfile, euler);
     }
     return 0;

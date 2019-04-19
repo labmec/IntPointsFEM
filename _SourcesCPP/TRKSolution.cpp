@@ -294,39 +294,49 @@ void TRKSolution::RKProcessII(std::ostream &out, bool euler) {
             REAL eps_t = (1+nu)*((1-nu)*sigma_t - nu*sigma_r) / Ey;
             sigma_z = lambda*(eps_r + ur_pone/r_pone);
             
-            TPZTensor<REAL> eps_total,sigma;
+            TPZTensor<REAL> eps_total, eps_e, eps_p ,sigma;
             eps_total.Zero();
             eps_total.XX() = eps_r;
             eps_total.YY() = eps_t;
         
-//            sigma.XX() = sigma_r;
-//            sigma.YY() = sigma_t;
-//            sigma.ZZ() = sigma_z;
+            sigma.Zero();
+            sigma.XX() = sigma_r;
+            sigma.YY() = sigma_t;
+            sigma.ZZ() = sigma_z;
+            
+            ER.SetLameData(lambda, G);
+            ER.ComputeStrain(sigma, eps_e);
+            eps_e.YZ() = 0.0;
+            eps_e.YZ() = 0.0;
             
             TPZPlasticState<REAL> state = m_memory_vector[i+1].m_elastoplastic_state;
-            m_elastoplastic_model.SetState(state);
-            REAL s = 0.1;
+            
             int k;
-            for (k = 1; k <= 10; k++) {
-                TPZTensor<REAL> e_t = eps_total;
-                e_t *= s*k;
-//                e_t.XX() = eps_r;
+            TPZTensor<REAL> e_t = eps_total;
+            for (k = 1; k <= 1; k++) {
+                
                 TPZFMatrix<REAL> Dep(6,6,0.0);
+                m_elastoplastic_model.SetState(state);
                 m_elastoplastic_model.ApplyStrainComputeSigma(e_t, sigma, &Dep);
+                eps_p = m_elastoplastic_model.GetState().m_eps_p;
+                e_t = eps_e + eps_p;
+                
 //                lambda = Dep(0,5);
 //                G = Dep(4,4)/2.0;
-                
-//                sigma.XX() = sigma_r;
-//                sigma.YY() = sigma_t;
-//                sigma.ZZ() = sigma_z;
-                
             }
+            
+//            TPZFMatrix<REAL> Dep(6,6,0.0);
+//            m_elastoplastic_model.SetState(state);
+//            m_elastoplastic_model.ApplyStrainComputeSigma(e_t, sigma, &Dep);
+//            u[i + 1] = u[i] + h * e_t.XX();
  
             state = m_elastoplastic_model.GetState();
             m_memory_vector[i+1].m_elastoplastic_state = state;
             m_memory_vector[i+1].m_sigma = sigma;
             std::cout << "lambda = " << lambda << std::endl;
             std::cout << "G = " << G << std::endl;
+            
+            
         }
         
         // XX stands for radial direction
