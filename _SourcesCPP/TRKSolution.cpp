@@ -232,10 +232,11 @@ void TRKSolution::RKProcessII(std::ostream &out, bool euler) {
 //    sigma(0,1) = 0.037938099;
 //    sigma(0,2) = 0.00779745;
 
-    u[0] = 0.000340788;
-    sigma(0,0) = 0.00496844;
-    sigma(0,1) = 0.179665;
-    sigma(0,2) = 0.036926702;
+    REAL s = 1.0;
+    u[0] = 0.000340843;
+    sigma(0,0) = s*0.00496844;
+    sigma(0,1) = s*0.179665;
+    sigma(0,2) = s*0.036926702;
     
     m_memory_vector[0].m_sigma.XX() = sigma_re(0,0);
     m_memory_vector[0].m_sigma.YY() = sigma_re(0,1);
@@ -254,7 +255,7 @@ void TRKSolution::RKProcessII(std::ostream &out, bool euler) {
         //k1
         F_II(r[i], u[i], sigma(i,0), du_k1, dsigma_rr_k1, memory, lambda, G);
         
-        if (euler == true) {
+        if (euler == false) {
             REAL du_k2, du_k3, du_k4;
             REAL dsigma_rr_k2, dsigma_rr_k3, dsigma_rr_k4;
             //k2
@@ -271,7 +272,7 @@ void TRKSolution::RKProcessII(std::ostream &out, bool euler) {
             u[i + 1] = u[i] + 1. / 6. * h * (du_k1 + 2. * du_k2 + 2. * du_k3 + du_k4);
             sigma(i+1,0) = sigma(i,0) + 1. / 6. * h * (dsigma_rr_k1 + 2. * dsigma_rr_k2 + 2. * dsigma_rr_k3 + dsigma_rr_k4);
 
-        } else if (euler == false) {
+        } else if (euler == true) {
         
             //u_ip1, sigma_ip1
             r[i + 1] = r[i] + h;
@@ -284,8 +285,8 @@ void TRKSolution::RKProcessII(std::ostream &out, bool euler) {
         {
             REAL r_pone = r[i + 1];
             REAL ur_pone = u[i + 1];
-        
-            sigma_r = sigma(i,0) + h * dsigma_rr_k1;
+            REAL last_sigma_r = sigma(i,0);
+            sigma_r = last_sigma_r + h * dsigma_rr_k1;
             sigma_t = (lambda*r_pone*sigma_r + 4*G*(G + lambda)*ur_pone)/((2*G + lambda)*r_pone);
             REAL nu = lambda / (2.0*(lambda+G));
             REAL Ey = G * (3.0*lambda+2.0*G) / (lambda+G);
@@ -297,47 +298,56 @@ void TRKSolution::RKProcessII(std::ostream &out, bool euler) {
             eps_total.Zero();
             eps_total.XX() = eps_r;
             eps_total.YY() = eps_t;
-            
-            sigma.Zero();
-            sigma.XX() = sigma_r;
-            sigma.YY() = sigma_t;
-            sigma.ZZ() = sigma_z;
-            
-            TPZPlasticState<REAL> state;
-            for (int k = 0; k < 1 ; k++) {
-                state = m_memory_vector[i+1].m_elastoplastic_state;
-                TPZFMatrix<REAL> Dep(6,6,0.0);
-                ER.SetEngineeringData(Ey,nu);
-                ER.ComputeStrain(sigma, eps_total);
-                m_elastoplastic_model.SetState(state);
-                m_elastoplastic_model.ApplyStrainComputeSigma(eps_total, sigma, &Dep);
-                m_memory_vector[i+1].m_elastoplastic_state = m_elastoplastic_model.GetState();
-                
-                m_memory_vector[i+1].m_sigma = sigma;
-                lambda = Dep(0,5);
-                G = Dep(4,4)/2.0;
-                std::cout << "lambda = " << lambda << std::endl;
-                std::cout << "G = " << G << std::endl;
-            }
-            m_memory_vector[i+1].m_elastoplastic_state = state;
-            
-        }
         
-        sigma(i+1,0) = sigma_r;
-        sigma(i+1,1) = m_memory_vector[i+1].m_sigma.YY();
-        sigma(i+1,2) = m_memory_vector[i+1].m_sigma.ZZ();
+//            sigma.XX() = sigma_r;
+//            sigma.YY() = sigma_t;
+//            sigma.ZZ() = sigma_z;
+            
+            TPZPlasticState<REAL> state = m_memory_vector[i+1].m_elastoplastic_state;
+            m_elastoplastic_model.SetState(state);
+            REAL s = 0.1;
+            int k;
+            for (k = 1; k <= 10; k++) {
+                TPZTensor<REAL> e_t = eps_total;
+                e_t *= s*k;
+//                e_t.XX() = eps_r;
+                TPZFMatrix<REAL> Dep(6,6,0.0);
+                m_elastoplastic_model.ApplyStrainComputeSigma(e_t, sigma, &Dep);
+//                lambda = Dep(0,5);
+//                G = Dep(4,4)/2.0;
+                
+//                sigma.XX() = sigma_r;
+//                sigma.YY() = sigma_t;
+//                sigma.ZZ() = sigma_z;
+                
+            }
+ 
+            state = m_elastoplastic_model.GetState();
+            m_memory_vector[i+1].m_elastoplastic_state = state;
+            m_memory_vector[i+1].m_sigma = sigma;
+            std::cout << "lambda = " << lambda << std::endl;
+            std::cout << "G = " << G << std::endl;
+        }
         
         // XX stands for radial direction
         // YY stands for azimuthal direction
-//        sigma(i+1,0) = m_memory_vector[i+1].m_sigma.XX();
-//        sigma(i+1,1) = m_memory_vector[i+1].m_sigma.YY();
-//        sigma(i+1,2) = m_memory_vector[i+1].m_sigma.ZZ();
+        sigma(i+1,0) = m_memory_vector[i+1].m_sigma.XX();
+        sigma(i+1,1) = m_memory_vector[i+1].m_sigma.YY();
+        sigma(i+1,2) = m_memory_vector[i+1].m_sigma.ZZ();
+        
+        sigma(i+1,0) = sigma_r;
+        sigma(i+1,1) = sigma_t;
+        sigma(i+1,2) = sigma_z;
         
     }
     
-    out << "radius" << "  " << "u" << "   " << "sigma_rr" << "   " << "sigma_tt" << "   " << "sigma_zz" << std::endl;
+    out << "radius" << "  " << "u" << "   " << "sigma_rr" << "   " << "sigma_tt" << "   " << "sigma_zz" << "  " << "eps_rr" << "   " << "eps_tt" << "   " << "eps_zz" << "  " << "eps_p_rr" << "   " << "eps_p_tt" << "   " << "eps_p_zz" << std::endl;
     for (int i = 0; i < m_n_points; i++) {
-        out << r[i] << "  " << u[i] << "   " << sigma(i,0) << "   " << sigma(i,1) << "   " << sigma(i,2) << std::endl;
+        TPZTensor<REAL> eps_t = m_memory_vector[i].m_elastoplastic_state.m_eps_t;
+        TPZTensor<REAL> eps_p = m_memory_vector[i].m_elastoplastic_state.m_eps_p;
+        TPZTensor<REAL> sigma = m_memory_vector[i].m_sigma;
+        
+        out << r[i] << "  " << u[i] << "   " << sigma.XX() << "   " << sigma.YY() << "   " << sigma.ZZ() << "   " << eps_t.XX() << "   " << eps_t.YY() << "   " << eps_t.ZZ() << "   " << eps_p.XX() << "   " << eps_p.YY() << "   " << eps_p.ZZ() << std::endl;
     }
 }
 

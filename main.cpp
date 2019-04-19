@@ -84,12 +84,12 @@ int main(int argc, char *argv[]) {
 
 // Runge Kutta approximation
     {
-        int np = 100;
+        int np = 500;
         ofstream rkfile("ep_rkdata.txt");
-        bool euler = true;
+        bool euler = false;
         RKApproximation(wellbore_material, np, rkfile, euler);
     }
-
+    return 0;
 // Defines the analysis
     int n_threads = 0;
     TPZAnalysis *analysis = Analysis(cmesh,n_threads);
@@ -182,7 +182,7 @@ void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData wellbore_material, int n
     scalnames.push_back("FailureType");
     vecnames.push_back("Displacement");
     tensnames.push_back("Stress");
-    tensnames.push_back("StrainElastic");
+    tensnames.push_back("Strain");
     tensnames.push_back("StrainPlastic");
     
 
