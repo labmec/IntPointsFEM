@@ -68,7 +68,7 @@ void PrintMemory(TPZCompMesh * cmesh);
 void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData material, int n_threads, std::string vtk_file);
 
 ///RK Approximation
-void RKApproximation (TElastoPlasticData wellbore_material, int npoints, std::ostream &outbool, bool euler = false);
+void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_material, int npoints, std::ostream &out, bool euler = false);
 
 int main(int argc, char *argv[]) {
     
@@ -92,7 +92,7 @@ int main(int argc, char *argv[]) {
     TPZAnalysis *analysis = Analysis(cmesh,n_threads);
     
 // Calculates the solution using Newton method
-    int n_iterations = 50; 
+    int n_iterations = 50;
     REAL tolerance = 1.e-5; /// NVB this tolerance is more apropriated for nonlinear problems
 //    Solution(analysis, n_iterations, tolerance);
 //
@@ -308,11 +308,18 @@ TElastoPlasticData WellboreConfigRK(){
     bool euler = false;
     
     if(is_elastic_Q){
+
+        REAL u_re, simga_re;
+        u_re = 0.0000254403;
+        simga_re = 0.00124267;
         std::ofstream rkfile("ElasticRKdata.txt");
-        RKApproximation(rock, np, rkfile, euler);
+        RKApproximation(u_re, simga_re, rock, np, rkfile, euler);
     }else{
+        REAL u_re, simga_re;
+        u_re = 0.0000318827;
+        simga_re = 0.00130781;
         std::ofstream rkfile("ElastoPlasticRKdata.txt");
-        RKApproximation(rock, np, rkfile, euler);
+        RKApproximation(u_re, simga_re, rock, np, rkfile, euler);
     }
     return rock;
 }
@@ -518,7 +525,7 @@ void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
     }
 }
 
-void RKApproximation (TElastoPlasticData wellbore_material, int npoints, std::ostream &out, bool euler) {
+void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_material, int npoints, std::ostream &out, bool euler) {
     REAL rw = 0.1;
     REAL re = 4.0;
     REAL theta = 0.;
@@ -563,12 +570,11 @@ void RKApproximation (TElastoPlasticData wellbore_material, int npoints, std::os
     rkmethod.SetWellboreRadius(rw);
     rkmethod.SetExternalRadius(re);
     rkmethod.SetNumberOfPoints(npoints);
-    rkmethod.SetMaterial(material);
+    rkmethod.SetInitialStateMemory(default_memory);
     rkmethod.SetElastoPlasticModel(LEMC);
-    rkmethod.SetStressXYZ(sigmaXYZ,theta);
-    rkmethod.SetInitialStress(sigma0);
-    rkmethod.SetWellborePressure(pw);
+    rkmethod.SetRadialDisplacement(u_re);
+    rkmethod.SetRadialStress(sigma_re);
     rkmethod.FillPointsMemory();
-    rkmethod.RKProcessII(out, euler);
+    rkmethod.RKProcess(out, euler);
 }
 

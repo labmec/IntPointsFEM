@@ -15,9 +15,8 @@
 
 class TRKSolution {
     
+    // @TODO:: NVB for your kind understanding please document this class.
 protected:
-    
-    TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem > *m_material;
     
     TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse> m_elastoplastic_model;
 
@@ -25,17 +24,15 @@ protected:
 
     REAL m_rw = -1;
 
-    TPZTensor<REAL> m_sigma;
-
-    REAL m_pw = -1;
-
-    REAL m_sigma0 = -1;
-
-    REAL m_theta = -1;
+    REAL m_ure = -1;
+    
+    REAL m_sigma_re = -1.0;
 
     int m_n_points = 0;
     
     TPZManVector<TPZElastoPlasticMem,10> m_memory_vector;
+    
+    TPZElastoPlasticMem m_initial_state_memory;
 
 public:
     
@@ -50,10 +47,6 @@ public:
 
     /// Default destructor
     ~TRKSolution();
-
-    void SetMaterial(TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem > *material);
-
-    TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem > * Material();
     
    void SetElastoPlasticModel(TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse> & model);
 
@@ -65,19 +58,15 @@ public:
 
     REAL WellboreRadius();
 
-    void SetStressXYZ(TPZTensor<REAL> &sigma, REAL m_theta);
+    void SetRadialDisplacement(REAL m_sigma);
+    
+    REAL RadialRadialDisplacement();
+    
+    void SetRadialStress(REAL m_sigma);
 
-    TPZTensor<REAL> StressXYZ();
-
-    REAL Theta();
-
-    void SetWellborePressure(REAL pw);
-
-    REAL WellborePressure();
-
-    void SetInitialStress(REAL sigma0);
-
-    REAL InitialStress();
+    REAL RadialStress();
+    
+    void SetInitialStateMemory(TPZElastoPlasticMem memory);
     
     void SetNumberOfPoints(int n_points);
     
@@ -86,18 +75,10 @@ public:
     void CreateMaterial();
     
     void FillPointsMemory();
-
-    void F (REAL r, REAL ur, REAL sigma_r, REAL &d_ur, REAL &d_sigmar, REAL & lambda, REAL & G);
     
-    void F_II (REAL r, REAL ur, REAL sigma_r, REAL &d_ur, REAL &d_sigmar, REAL & lambda, REAL & G);
-
-    void ParametersAtRe (TPZFNMatrix<3,REAL> &sigma, REAL &u_re);
-
+    void F(REAL r, REAL ur, REAL sigma_r, REAL &d_ur, REAL &d_sigmar, REAL & lambda, REAL & G);
+    
     void RKProcess(std::ostream &out, bool euler);
-    
-    void RKProcessII(std::ostream &out, bool euler);
-    
-    void ReconstructEpsilon(TPZTensor<REAL> & sigma, TPZTensor<REAL> & eps_t, REAL & lambda, REAL & G);
 
 };
 
