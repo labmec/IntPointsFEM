@@ -156,6 +156,11 @@ else()
     file(GLOB main *.cpp)
 endif(USING_CUDA)
 
+
+# Configure the path.h.in file.
+# This file can only use the @VARIABLE@ syntax in the file
+configure_file(path.h.in ${PROJECT_SOURCE_DIR}/path.h @ONLY)
+
 set(main_SRCS ${main} ${sources} ${headers})
 
 add_executable(IntegrationPointExperiments ${main_SRCS})
@@ -164,6 +169,5 @@ if(USING_CUDA)
     target_link_libraries(IntegrationPointExperiments pz ${PTHREAD_LIB} ${CUDA_cublas_LIBRARY} ${CUDA_cusparse_LIBRARY} ${CUDA_cudadevrt_LIBRARY})
 else()
     target_link_libraries(IntegrationPointExperiments pz ${PTHREAD_LIB})
-    configure_file(gmsh/wellbore.msh wellbore.msh COPYONLY)
 endif(USING_CUDA)
 
