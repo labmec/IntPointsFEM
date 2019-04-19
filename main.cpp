@@ -110,7 +110,7 @@ int main(int argc, char *argv[]) {
     SolutionAllPoints(analysis_npts, n_iterations, tolerance, wellbore_material);
     if (render_vtk_Q) { //Post process
         std::string vtk_file = "Approximation_IntPointFEM.vtk";
-        PostProcess(cmesh, wellbore_material, n_threads, vtk_file);
+        PostProcess(cmesh_npts, wellbore_material, n_threads, vtk_file);
     }
     return 0;
 }
@@ -254,7 +254,7 @@ TElastoPlasticData WellboreConfigRK(){
     
     /// Elastic verification -> true
     /// ElastoPlastic verification -> false
-    bool is_elastic_Q = false;
+    bool is_elastic_Q = true;
     
     TPZElasticResponse LER;
     REAL Ey = 2000.0;
