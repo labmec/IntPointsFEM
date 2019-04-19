@@ -233,10 +233,10 @@ void TRKSolution::RKProcessII(std::ostream &out, bool euler) {
 //    sigma(0,2) = 0.00779745;
 
     REAL s = 1.0;
-    u[0] = 0.000340843;
-    sigma(0,0) = s*0.00496844;
-    sigma(0,1) = s*0.179665;
-    sigma(0,2) = s*0.036926702;
+    u[0] = 0.000123075;
+    sigma(0,0) = s*0.00104914;
+    sigma(0,1) = s*0.037938099;
+    sigma(0,2) = s*0.00779745;
     
     m_memory_vector[0].m_sigma.XX() = sigma_re(0,0);
     m_memory_vector[0].m_sigma.YY() = sigma_re(0,1);

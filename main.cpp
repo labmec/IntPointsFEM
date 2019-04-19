@@ -68,7 +68,7 @@ void RKApproximation (TElastoPlasticData wellbore_material, int npoints, std::os
 
 int main(int argc, char *argv[]) {
     
-    int pOrder = 2; // Computational mesh order
+    int pOrder = 3; // Computational mesh order
     bool render_vtk_Q = true;
     
 // Generates the geometry
@@ -84,9 +84,9 @@ int main(int argc, char *argv[]) {
 
 // Runge Kutta approximation
     {
-        int np = 200;
+        int np = 100;
         ofstream rkfile("ep_rkdata.txt");
-        bool euler = true;
+        bool euler = false;
         RKApproximation(wellbore_material, np, rkfile, euler);
     }
     return 0;
@@ -96,7 +96,7 @@ int main(int argc, char *argv[]) {
     TPZAnalysis *analysis_npts = Analysis(cmesh_npts,n_threads);
     
 //Calculates the solution using Newton method
-    int n_iterations = 30;
+    int n_iterations = 50;
     REAL tolerance = 1.e-4; /// NVB this tolerance is more apropriated for nonlinear problems
     Solution(analysis, n_iterations, tolerance);
 
@@ -170,7 +170,7 @@ TPZAnalysis *Analysis(TPZCompMesh *cmesh, int n_threads) {
 }
 
 void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData wellbore_material, int n_threads, std::string vtk_file) {
-    int div = 0;
+    int div = 1;
     TPZPostProcAnalysis * post_processor = new TPZPostProcAnalysis;
     post_processor->SetCompMesh(cmesh, true);
 
@@ -226,12 +226,12 @@ TElastoPlasticData WellboreConfig(){
     bc_inner.SetId(2);
     bc_inner.SetType(6);
     bc_inner.SetInitialValue(-50.);
-    bc_inner.SetValue({-1.0*(-20.-bc_inner.InitialValue())}); /// tr(sigma)/3
+    bc_inner.SetValue({-1.0*(-30.-bc_inner.InitialValue())}); /// tr(sigma)/3
 
     bc_outer.SetId(3);
     bc_outer.SetType(6);
     bc_outer.SetInitialValue(-50.0); /// tr(sigma)/3
-    bc_outer.SetValue({-1.0*(-50.-bc_outer.InitialValue())}); /// tr(sigma)/3
+    bc_outer.SetValue({-1.0*(-50.-bc_outer.InitialValue())+0.00104914}); /// tr(sigma)/3
 
     bc_ux_fixed.SetId(4);
     bc_ux_fixed.SetType(3);
