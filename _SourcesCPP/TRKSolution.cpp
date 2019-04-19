@@ -227,45 +227,44 @@ void TRKSolution::RKProcessII(std::ostream &out, bool euler) {
     
     r[0] = m_re;
     u[0] = u_re;
-//    u[0] = 7.1961e-5;
-//    sigma(0,0) = 0.00104914;
-//    sigma(0,1) = 0.037938099;
-//    sigma(0,2) = 0.00779745;
+    u[0] = 0.0000254403;
+    sigma(0,0) = 0.00124267;
+    sigma(0,1) = 0.00124267;
+    sigma(0,2) = 0.00124267;
 
-    REAL s = 1.0;
-    u[0] = 0.000123075;
-    sigma(0,0) = s*0.00104914;
-    sigma(0,1) = s*0.037938099;
-    sigma(0,2) = s*0.00779745;
+    u[0] = 0.0000318827;
+    sigma(0,0) = 0.00130781;
+    sigma(0,1) = 0.00130781;
+    sigma(0,2) = 0.00130781;
     
     m_memory_vector[0].m_sigma.XX() = sigma_re(0,0);
     m_memory_vector[0].m_sigma.YY() = sigma_re(0,1);
     m_memory_vector[0].m_sigma.ZZ() = sigma_re(0,2);
+    
     REAL lambda = m_memory_vector[0].m_ER.Lambda();
     REAL G = m_memory_vector[0].m_ER.G();
-    TPZElasticResponse ER;
+
     for (int i = 0; i < m_n_points; i++) {
         REAL du_k1;
         REAL dsigma_rr_k1;
         
         /// Assuming that Lamé parameters suffer small change between two RK points
         /// http://www.ecs.umass.edu/~arwade/courses/str-mech/polar.pdf
-        TPZElastoPlasticMem & memory = m_memory_vector[i];
         
         //k1
-        F_II(r[i], u[i], sigma(i,0), du_k1, dsigma_rr_k1, memory, lambda, G);
+        F_II(r[i], u[i], sigma(i,0), du_k1, dsigma_rr_k1, lambda, G);
         
         if (euler == false) {
             REAL du_k2, du_k3, du_k4;
             REAL dsigma_rr_k2, dsigma_rr_k3, dsigma_rr_k4;
             //k2
-            F_II(r[i] + h / 2., u[i] + h * du_k1 / 2., sigma(i, 0) + h * dsigma_rr_k1 / 2., du_k2, dsigma_rr_k2, memory, lambda, G);
+            F_II(r[i] + h / 2., u[i] + h * du_k1 / 2., sigma(i, 0) + h * dsigma_rr_k1 / 2., du_k2, dsigma_rr_k2, lambda, G);
 
             //k3
-            F_II(r[i] + h / 2., u[i] + h * du_k2 / 2., sigma(i, 0) + h * dsigma_rr_k2 / 2., du_k3, dsigma_rr_k3, memory, lambda, G);
+            F_II(r[i] + h / 2., u[i] + h * du_k2 / 2., sigma(i, 0) + h * dsigma_rr_k2 / 2., du_k3, dsigma_rr_k3, lambda, G);
 
             //k4
-            F_II(r[i] + h, u[i] + h * du_k3, sigma(i, 0) + h * dsigma_rr_k3, du_k4, dsigma_rr_k4, memory, lambda, G);
+            F_II(r[i] + h, u[i] + h * du_k3, sigma(i, 0) + h * dsigma_rr_k3, du_k4, dsigma_rr_k4, lambda, G);
 
             //u_ip1, sigma_ip1
             r[i + 1] = r[i] + h;
@@ -304,46 +303,22 @@ void TRKSolution::RKProcessII(std::ostream &out, bool euler) {
             sigma.YY() = sigma_t;
             sigma.ZZ() = sigma_z;
             
-            ER.SetLameData(lambda, G);
-            ER.ComputeStrain(sigma, eps_e);
-            eps_e.YZ() = 0.0;
-            eps_e.YZ() = 0.0;
-            
             TPZPlasticState<REAL> state = m_memory_vector[i+1].m_elastoplastic_state;
+            TPZFMatrix<REAL> Dep(6,6,0.0);
+            m_elastoplastic_model.SetState(state);
+            m_elastoplastic_model.ApplyStrainComputeSigma(eps_total, sigma, &Dep);
+            lambda = Dep(0,5);
+            G = Dep(4,4)/2.0;
             
-            int k;
-            TPZTensor<REAL> e_t = eps_total;
-            for (k = 1; k <= 1; k++) {
-                
-                TPZFMatrix<REAL> Dep(6,6,0.0);
-                m_elastoplastic_model.SetState(state);
-                m_elastoplastic_model.ApplyStrainComputeSigma(e_t, sigma, &Dep);
-                eps_p = m_elastoplastic_model.GetState().m_eps_p;
-                e_t = eps_e + eps_p;
-                
-//                lambda = Dep(0,5);
-//                G = Dep(4,4)/2.0;
-            }
-            
-//            TPZFMatrix<REAL> Dep(6,6,0.0);
-//            m_elastoplastic_model.SetState(state);
-//            m_elastoplastic_model.ApplyStrainComputeSigma(e_t, sigma, &Dep);
-//            u[i + 1] = u[i] + h * e_t.XX();
- 
             state = m_elastoplastic_model.GetState();
             m_memory_vector[i+1].m_elastoplastic_state = state;
             m_memory_vector[i+1].m_sigma = sigma;
+
             std::cout << "lambda = " << lambda << std::endl;
             std::cout << "G = " << G << std::endl;
             
             
         }
-        
-        // XX stands for radial direction
-        // YY stands for azimuthal direction
-        sigma(i+1,0) = m_memory_vector[i+1].m_sigma.XX();
-        sigma(i+1,1) = m_memory_vector[i+1].m_sigma.YY();
-        sigma(i+1,2) = m_memory_vector[i+1].m_sigma.ZZ();
         
         sigma(i+1,0) = sigma_r;
         sigma(i+1,1) = sigma_t;
@@ -361,16 +336,11 @@ void TRKSolution::RKProcessII(std::ostream &out, bool euler) {
     }
 }
 
-void TRKSolution::F_II (REAL r, REAL ur, REAL sigma_r, REAL &d_ur, REAL &d_sigmar, TPZElastoPlasticMem memory, REAL & lambda, REAL & G){
+void TRKSolution::F_II (REAL r, REAL ur, REAL sigma_r, REAL &d_ur, REAL &d_sigmar, REAL & lambda, REAL & G){
     
-//    REAL eps_t = ur/r;
     REAL sigma_t = (lambda*r*sigma_r + 4*G*(G + lambda)*ur)/((2*G + lambda)*r);
-//    REAL sigma_t = (4*eps_t*G*(G + lambda) + lambda*sigma_r)/(2*G + lambda);
     d_ur = (r*sigma_r-lambda*ur)/(r*lambda+2*G*r);
     d_sigmar = (-sigma_r + sigma_t)/r;
-    
-//    d_ur = (r*sigma_r-lambda*ur)/(r*lambda+2*G*r);
-//    d_sigmar = (-sigma_r + (2*G*ur/r + lambda*(ur/r + (r*sigma_r-lambda*ur)/(r*(lambda + 2*G)))))/r;
     
 }
 

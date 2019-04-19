@@ -89,7 +89,7 @@ public:
 
     void F (REAL r, REAL ur, REAL sigma_r, REAL &d_ur, REAL &d_sigmar, REAL & lambda, REAL & G);
     
-    void F_II (REAL r, REAL ur, REAL sigma_r, REAL &d_ur, REAL &d_sigmar, TPZElastoPlasticMem memory, REAL & lambda, REAL & G);
+    void F_II (REAL r, REAL ur, REAL sigma_r, REAL &d_ur, REAL &d_sigmar, REAL & lambda, REAL & G);
 
     void ParametersAtRe (TPZFNMatrix<3,REAL> &sigma, REAL &u_re);
 
