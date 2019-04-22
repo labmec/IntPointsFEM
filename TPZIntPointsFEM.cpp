@@ -705,6 +705,7 @@ void TPZIntPointsFEM::AssembleResidual() {
 
 void TPZIntPointsFEM::SetDataStructure(){
     int dim_mesh = (fCmesh->Reference())->Dimension(); // Mesh dimension
+    this->SetMeshDimension(dim_mesh);
     int64_t nelem_c = fCmesh->NElements(); // Number of computational elements
     std::vector<int64_t> cel_indexes;
 
@@ -826,6 +827,10 @@ void TPZIntPointsFEM::SetDataStructure(){
     this->SetIndexes(indexes);
     this->SetWeightVector(weight);
     this->ColoringElements();
+    this->AssembleRhsBoundary();
+
+    fPlasticStrain.Resize(fDim * fNpts, 1);
+    fPlasticStrain.Zero();
 }
 
 void TPZIntPointsFEM::AssembleRhsBoundary() {

@@ -33,23 +33,6 @@ public:
     TPZIntPointsFEM(TPZCompMesh *cmesh, int materialid) {
         SetCompMesh(cmesh);
         SetMaterialId(materialid);
-        SetDataStructure();
-        std::cout << "oioioi" << std::endl;
-        AssembleRhsBoundary();
-
-
-
-        fDim = fCmesh->Dimension();
-#ifdef __CUDACC__
-        cuSparseHandle();
-        cuBlasHandle();
-
-		cudaMalloc(&fPlasticStrain, fDim * fNpts * sizeof(REAL));
-		cudaMemset(fPlasticStrain, 0, fDim * fNpts * sizeof(REAL));
-#else
-        fPlasticStrain.Resize(fDim * fNpts, 1);
-        fPlasticStrain.Zero();
-#endif
     }
 
     ~TPZIntPointsFEM() {
@@ -77,6 +60,24 @@ public:
         fIndexesColor = copy.fIndexesColor;
         fWeight = copy.fWeight;
         fMaterial = copy.fMaterial;
+
+#ifdef __CUDACC__
+        handle_cusparse = copy.handle_cusparse;
+        handle_cublas = copy.handle_cublas;
+
+        dRhs = copy.dRhs;
+        dSolution = copy.dSolution;
+        dPlasticStrain = copy.dPlasticStrain;
+        dStorage = copy.dStorage;
+        dRowSizes = copy.dRowSizes;
+        dColSizes = copy.dColSizes;
+        dMatrixPosition = copy.dMatrixPosition;
+        dRowFirstIndex = copy.dRowFirstIndex;
+        dColFirstIndex = copy.dColFirstIndex;
+        dIndexes = copy.dIndexes;
+        dIndexesColor = copy.dIndexesColor;
+        dWeight = copy.dWeight;
+#endif
     }
 
     TPZIntPointsFEM &operator=(const TPZIntPointsFEM &copy) {
@@ -98,26 +99,35 @@ public:
         fIndexesColor = copy.fIndexesColor;
         fWeight = copy.fWeight;
         fMaterial = copy.fMaterial;
+
+#ifdef __CUDACC__
+        handle_cusparse = copy.handle_cusparse;
+        handle_cublas = copy.handle_cublas;
+
+        dRhs = copy.dRhs;
+        dSolution = copy.dSolution;
+        dPlasticStrain = copy.dPlasticStrain;
+        dStorage = copy.dStorage;
+        dRowSizes = copy.dRowSizes;
+        dColSizes = copy.dColSizes;
+        dMatrixPosition = copy.dMatrixPosition;
+        dRowFirstIndex = copy.dRowFirstIndex;
+        dColFirstIndex = copy.dColFirstIndex;
+        dIndexes = copy.dIndexes;
+        dIndexesColor = copy.dIndexesColor;
+        dWeight = copy.dWeight;
+#endif
         return *this;
     }
 
     void SetRowandColSizes(TPZVec<int> rowsize, TPZVec<int> colsize) {
         int64_t nelem = rowsize.size();
 
-#ifdef __CUDACC__
-        cudaMallocManaged(&fRowSizes, nelem*sizeof(int));
-        cudaMallocManaged(&fColSizes, nelem*sizeof(int));
-        cudaMallocManaged(&fMatrixPosition, (nelem + 1)*sizeof(int));
-        cudaMallocManaged(&fRowFirstIndex, (nelem + 1)*sizeof(int));
-        cudaMallocManaged(&fColFirstIndex, (nelem + 1)*sizeof(int));
- #else
         fRowSizes.resize(nelem);
         fColSizes.resize(nelem);
         fMatrixPosition.resize(nelem + 1);
         fRowFirstIndex.resize(nelem + 1);
         fColFirstIndex.resize(nelem + 1);
-#endif
-
         fMatrixPosition[0] = 0;
         fRowFirstIndex[0] = 0;
         fColFirstIndex[0] = 0;
@@ -129,11 +139,7 @@ public:
             fRowFirstIndex[iel + 1] = fRowFirstIndex[iel] + fRowSizes[iel];
             fColFirstIndex[iel + 1] = fColFirstIndex[iel] + fColSizes[iel];
         }
-#ifdef __CUDACC__
-        cudaMallocManaged(&fStorage, fMatrixPosition[nelem]*sizeof(REAL));
- #else
         fStorage.resize(fMatrixPosition[nelem]);
-#endif
         fElemColor.resize(nelem);
         fElemColor.Fill(-1);
     }
@@ -149,18 +155,9 @@ public:
 
     void SetIndexes(TPZVec<MKL_INT> indexes) {
         int64_t indsize = indexes.size();
-
-#ifdef __CUDACC__
-    	cudaMalloc(&fIndexes, indsize*sizeof(int));
-    	cudaMemcpyAsync	(fIndexes, &indexes[0], indsize*sizeof(int),cudaMemcpyHostToDevice,0);
-    	cudaMalloc(&fIndexesColor, indsize*sizeof(int));
- #else
         fIndexes.resize(indsize);
         fIndexes = indexes;
         fIndexesColor.resize(indsize);
-#endif
-
-
     }
 
     void SetNumberofIntPoints(int64_t npts) {
@@ -194,7 +191,10 @@ public:
 
      TPZFMatrix<REAL> & Rhs() {
         return fRhs;
+    }
 
+    void SetMeshDimension(int dim) {
+        fDim = dim;
     }
 
     void SetDataStructure();
@@ -261,23 +261,6 @@ protected:
     TPZFMatrix<REAL> fRhs;
     TPZFMatrix<REAL> fRhsBoundary;
 	TPZFMatrix<REAL> fSolution;
-//	TPZFMatrix<REAL> fPlasticStrain;
-
-#ifdef __CUDACC__
-    REAL *fPlasticStrain;
-    REAL *fStorage;
-    int *fColSizes;
-    int *fRowSizes;
-    int *fMatrixPosition;
-    int *fColFirstIndex;
-    int *fRowFirstIndex;
-    int *fIndexes;
-    int *fIndexesColor;
-    REAL *fWeight;
-
-    cusparseHandle_t handle_cusparse;
-    cublasHandle_t handle_cublas;
-#else
     TPZFMatrix<REAL> fPlasticStrain;
 	TPZVec<REAL> fStorage;
 	TPZVec<int> fRowSizes;
@@ -288,6 +271,23 @@ protected:
 	TPZVec<MKL_INT> fIndexes;
 	TPZVec<MKL_INT> fIndexesColor;
 	TPZStack<REAL> fWeight;
+
+#ifdef __CUDACC__
+    cusparseHandle_t handle_cusparse;
+    cublasHandle_t handle_cublas;
+
+    REAL *dRhs;
+    REAL *dSolution;
+    REAL *dPlasticStrain;
+    REAL *dStorage;
+    int *dRowSizes;
+    int *dColSizes;
+    int *dMatrixPosition;
+    int *dRowFirstIndex;
+    int *dColFirstIndex;
+    int *dIndexes;
+    int *dIndexesColor;
+    REAL *dWeight;
 #endif
 
 };
