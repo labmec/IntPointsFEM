@@ -164,8 +164,6 @@ endif(USING_CUDA)
 # This file can only use the @VARIABLE@ syntax in the file
 configure_file(path.h.in ${PROJECT_SOURCE_DIR}/path.h @ONLY)
 
-set(main_SRCS ${main} ${sources} ${headers})
-
 add_executable(IntPointsFEM ${main_SRCS})
 
 if(USING_CUDA)
