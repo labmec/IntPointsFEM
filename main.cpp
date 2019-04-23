@@ -496,33 +496,33 @@ void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
 
     analysis->Solution().Zero();
     analysis->Assemble();
-//    for (int i = 0; i < n_iterations; i++) {
+    for (int i = 0; i < n_iterations; i++) {
         analysis->Solve();
         delta_du = analysis->Solution();
         du += delta_du;
         solveintpoints.LoadSolution(du);
         solveintpoints.AssembleResidual();
-//        norm_delta_du = Norm(delta_du);
-//        norm_res = Norm(solveintpoints.Rhs());
-//        stop_criterion_Q = norm_res < tolerance;
-//        std::cout << "Nonlinear process :: delta_du norm = " << norm_delta_du << std::endl;
-//        std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
-////        PrintMemory(analysis->Mesh());
-//        if (stop_criterion_Q) {
-//            AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
-////            PrintMemory(analysis->Mesh());
-//            std::cout << "Nonlinear process converged with residue norm = " << norm_res << std::endl;
-//            std::cout << "Number of iterations = " << i + 1 << std::endl;
-//            break;
-//        }
-////        analysis->Assemble();
-//        analysis->Rhs() = solveintpoints.Rhs();
-//
-//    }
-//
-//    if (stop_criterion_Q == false) {
-//        std::cout << "Nonlinear process not converged with residue norm = " << norm_res << std::endl;
-//    }
+        norm_delta_du = Norm(delta_du);
+        norm_res = Norm(solveintpoints.Rhs());
+        stop_criterion_Q = norm_res < tolerance;
+        std::cout << "Nonlinear process :: delta_du norm = " << norm_delta_du << std::endl;
+        std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
+//        PrintMemory(analysis->Mesh());
+        if (stop_criterion_Q) {
+            AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
+//            PrintMemory(analysis->Mesh());
+            std::cout << "Nonlinear process converged with residue norm = " << norm_res << std::endl;
+            std::cout << "Number of iterations = " << i + 1 << std::endl;
+            break;
+        }
+//        analysis->Assemble();
+        analysis->Rhs() = solveintpoints.Rhs();
+
+    }
+
+    if (stop_criterion_Q == false) {
+        std::cout << "Nonlinear process not converged with residue norm = " << norm_res << std::endl;
+    }
 }
 
 void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_material, int npoints, std::ostream &out, bool euler) {

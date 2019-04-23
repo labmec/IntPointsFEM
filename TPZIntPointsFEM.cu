@@ -20,22 +20,95 @@
 
 #define NT 128
 
-__global__ void DeltaStrainGPUKernel(int64_t nelem, REAL *storage, int *rowsizes, int *colsizes, int *matrixpos, int *rowfirstindex, int* colfirstindex, int npts, int nphis, REAL *gather_solution, REAL *delta_strain) {
-    int iel = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if(iel < nelem) {
-        for (int i = 0; i < rowsizes[iel]; i++) {
-            for (int k = 0; k < colsizes[iel]; k++) {
-                delta_strain[i + rowfirstindex[iel]] += storage[k * rowsizes[iel] + i + matrixpos[iel]] * gather_solution[k + colfirstindex[iel]];
-                delta_strain[i + rowfirstindex[iel] + npts] += storage[k * rowsizes[iel] + i + matrixpos[iel]] * gather_solution[k + colfirstindex[iel] + nphis];
-            }
+
+__device__ void Normalize(REAL *sigma, REAL &maxel) {
+    maxel = sigma[0];
+    for (int i = 1; i < 4; i++) {
+        if (fabs(sigma[i]) > fabs(maxel)) {
+            maxel = sigma[i];
+        }
+    }
+    for (int i = 0; i < 4; i++) {
+        sigma[i] /= maxel;
+    }
+}
+
+__device__ void Interval(REAL *sigma, REAL *interval) {
+	__shared__ REAL lower_vec[3];
+	__shared__ REAL upper_vec[3];
+
+    //row 1 |sigma_xx sigma_xy 0|
+    lower_vec[0] = sigma[0] - fabs(sigma[3]);
+    upper_vec[0] = sigma[0] + fabs(sigma[3]);
+
+    //row 2 |sigma_xy sigma_yy 0|
+    lower_vec[1] = sigma[1] - fabs(sigma[3]);
+    upper_vec[1] = sigma[1] + fabs(sigma[3]);
+
+    //row 3 |0 0 sigma_zz|
+    lower_vec[2] = sigma[2];
+    upper_vec[2] = sigma[2];
+
+    interval[0] = upper_vec[0];
+    interval[1] = lower_vec[0];
+
+    for (int i = 1; i < 3; i++) {
+        if (upper_vec[i] > interval[0]) { //upper interval
+            interval[0] = upper_vec[i];
+        }
+
+        if (lower_vec[i] < interval[1]) { //lower interval
+            interval[1] = lower_vec[i];
         }
     }
 }
 
-//Spectral decomposition
-void TPZIntPointsFEM::Multiplicity1(double *sigma, double eigenvalue, double *eigenvector) {
-    TPZVec<REAL> det(3);
+__device__ void NewtonIterations(REAL *interval, REAL *sigma, REAL *eigenvalues, REAL &maxel) {
+    int numiterations = 20;
+    REAL tol = 10e-12;
+
+    REAL res, f, df, x;
+    int it;
+
+    for (int i = 0; i < 2; i++) {
+        x = interval[i];
+        it = 0;
+
+        f = sigma[0] * sigma[1] - x * (sigma[0] + sigma[1]) + x * x - sigma[3] * sigma[3];
+        res = abs(f);
+
+        while (it < numiterations && res > tol) {
+            df = -sigma[0] - sigma[1] + 2 * x;
+
+            x -= f / df;
+            f = sigma[0] * sigma[1] - x * (sigma[0] + sigma[1]) + x * x - sigma[3] * sigma[3];
+            res = abs(f);
+            it++;
+        }
+        eigenvalues[i] = x;
+
+    }
+    eigenvalues[2] = sigma[0] + sigma[1] + sigma[2] - eigenvalues[0] - eigenvalues[1];
+
+    eigenvalues[0] *= maxel;
+    eigenvalues[1] *= maxel;
+    eigenvalues[2] *= maxel;
+
+    //sorting in descending order
+    for (int i = 0; i < 3; ++i) {
+		for (int j = i + 1; j < 3; ++j) {
+			if (eigenvalues[i] < eigenvalues[j]) {
+				REAL a = eigenvalues[i];
+				eigenvalues[i] = eigenvalues[j];
+				eigenvalues[j] = a;
+			}
+		}
+	}
+}
+
+__device__ void Multiplicity1(REAL *sigma, REAL eigenvalue, REAL *eigenvector) {
+    __shared__ REAL det[3];
     det[0] = (sigma[0] - eigenvalue)*(sigma[1] - eigenvalue) - sigma[3]*sigma[3];
     det[1] = (sigma[0] - eigenvalue)*(sigma[2] - eigenvalue);
     det[2] = (sigma[1] - eigenvalue)*(sigma[2] - eigenvalue);
@@ -46,7 +119,7 @@ void TPZIntPointsFEM::Multiplicity1(double *sigma, double eigenvalue, double *ei
             maxdet = fabs(det[i]);
         }
     }
-    TPZVec<REAL> v(3);
+    __shared__ REAL v[3];
     if (maxdet == fabs(det[0])) {
         v[0] = 0;
         v[1] = 0;
@@ -70,8 +143,8 @@ void TPZIntPointsFEM::Multiplicity1(double *sigma, double eigenvalue, double *ei
     eigenvector[2] = v[2]/norm;
 }
 
-void TPZIntPointsFEM::Multiplicity2(double *sigma, double eigenvalue, double *eigenvector1, double *eigenvector2) {
-    TPZVec<REAL> x(3);
+__device__ void Multiplicity2(REAL *sigma, REAL eigenvalue, REAL *eigenvector1, REAL *eigenvector2) {
+    __shared__ REAL x[3];
     x[0] = sigma[0] - eigenvalue;
     x[1] = sigma[1] - eigenvalue;
     x[2] = sigma[2] - eigenvalue;
@@ -83,8 +156,8 @@ void TPZIntPointsFEM::Multiplicity2(double *sigma, double eigenvalue, double *ei
         }
     }
 
-    TPZVec<REAL> v1(3);
-    TPZVec<REAL> v2(3);
+    __shared__ REAL v1[3];
+    __shared__ REAL v2[3];
 
     if (maxx == fabs(x[0])) {
         v1[0] = -sigma[3]/x[0];
@@ -128,7 +201,7 @@ void TPZIntPointsFEM::Multiplicity2(double *sigma, double eigenvalue, double *ei
     eigenvector2[2] = v2[2]/norm2;
 }
 
-void TPZIntPointsFEM::Eigenvectors(double *sigma, double *eigenvalues, double *eigenvectors, double &maxel) {
+__device__ void Eigenvectors(REAL *sigma, REAL *eigenvalues, REAL *eigenvectors, REAL &maxel) {
     sigma[0]*=maxel;
     sigma[1]*=maxel;
     sigma[2]*=maxel;
@@ -166,89 +239,68 @@ void TPZIntPointsFEM::Eigenvectors(double *sigma, double *eigenvalues, double *e
     }
 }
 
-void TPZIntPointsFEM::Normalize(double *sigma, double &maxel) {
-    maxel = sigma[0];
-    for (int i = 1; i < 4; i++) {
-        if (fabs(sigma[i]) > fabs(maxel)) {
-            maxel = sigma[i];
-        }
-    }
-    for (int i = 0; i < 4; i++) {
-        sigma[i] /= maxel;
-    }
-}
+__global__ void DeltaStrainKernel(int64_t nelem, REAL *storage, int *rowsizes, int *colsizes, int *matrixpos, int *rowfirstindex, int* colfirstindex, int npts, int nphis, REAL *gather_solution, REAL *delta_strain) {
+    int iel = blockIdx.x * blockDim.x + threadIdx.x;
 
-void TPZIntPointsFEM::Interval(double *sigma, double *interval) {
-    TPZVec<REAL> lower_vec(3);
-    TPZVec<REAL> upper_vec(3);
-
-    //row 1 |sigma_xx sigma_xy 0|
-    lower_vec[0] = sigma[0] - fabs(sigma[3]);
-    upper_vec[0] = sigma[0] + fabs(sigma[3]);
-
-    //row 2 |sigma_xy sigma_yy 0|
-    lower_vec[1] = sigma[1] - fabs(sigma[3]);
-    upper_vec[1] = sigma[1] + fabs(sigma[3]);
-
-    //row 3 |0 0 sigma_zz|
-    lower_vec[2] = sigma[2];
-    upper_vec[2] = sigma[2];
-
-    interval[0] = upper_vec[0];
-    interval[1] = lower_vec[0];
-
-    for (int i = 1; i < 3; i++) {
-        if (upper_vec[i] > interval[0]) { //upper interval
-            interval[0] = upper_vec[i];
-        }
-
-        if (lower_vec[i] < interval[1]) { //lower interval
-            interval[1] = lower_vec[i];
+    if(iel < nelem) {
+        for (int i = 0; i < rowsizes[iel]; i++) {
+            for (int k = 0; k < colsizes[iel]; k++) {
+                delta_strain[i + rowfirstindex[iel]] += storage[k * rowsizes[iel] + i + matrixpos[iel]] * gather_solution[k + colfirstindex[iel]];
+                delta_strain[i + rowfirstindex[iel] + npts] += storage[k * rowsizes[iel] + i + matrixpos[iel]] * gather_solution[k + colfirstindex[iel] + nphis];
+            }
         }
     }
 }
 
-void TPZIntPointsFEM::NewtonIterations(double *interval, double *sigma, double *eigenvalues, double &maxel) {
-    int numiterations = 20;
-    REAL tol = 10e-12;
+__global__ void NodalForcesKernel(int64_t nelem, REAL *storage, int *rowsizes, int *colsizes, int *matrixpos, int *rowfirstindex, int* colfirstindex, int npts, int nphis, REAL *sigma, REAL *nodal_forces) {
+    int iel = blockIdx.x * blockDim.x + threadIdx.x;
 
-    REAL res, f, df, x;
-    int it;
-
-    for (int i = 0; i < 2; i++) {
-        x = interval[i];
-        it = 0;
-
-        f = sigma[0] * sigma[1] - x * (sigma[0] + sigma[1]) + x * x - sigma[3] * sigma[3];
-        res = abs(f);
-
-        while (it < numiterations && res > tol) {
-            df = -sigma[0] - sigma[1] + 2 * x;
-
-            x -= f / df;
-            f = sigma[0] * sigma[1] - x * (sigma[0] + sigma[1]) + x * x - sigma[3] * sigma[3];
-            res = abs(f);
-            it++;
+    if(iel < nelem) {
+        for (int i = 0; i < colsizes[iel]; i++) {
+            for (int k = 0; k < rowsizes[iel]; k++) {
+                nodal_forces[i + colfirstindex[iel]] -= storage[k + i * rowsizes[iel] + matrixpos[iel]] * sigma[k + rowfirstindex[iel]];
+                nodal_forces[i + colfirstindex[iel] + nphis] -=  storage[k + i * rowsizes[iel] + matrixpos[iel]] * sigma[k + rowfirstindex[iel] + npts];
+            }
         }
-        eigenvalues[i] = x;
-
     }
-    eigenvalues[2] = sigma[0] + sigma[1] + sigma[2] - eigenvalues[0] - eigenvalues[1];
-
-    eigenvalues[0] *= maxel;
-    eigenvalues[1] *= maxel;
-    eigenvalues[2] *= maxel;
-
-//    std::sort(eigenvalues, eigenvalues+3, [](int i, int j) { return i > j; }); //store eigenvalues in descending order (absolute value)
-    std::sort(eigenvalues, eigenvalues+3, greater<REAL>()); //store eigenvalues in descending order (absolute value)
-
 }
 
-//Project Sigma
-bool TPZIntPointsFEM::PhiPlane(double *eigenvalues, double *sigma_projected) {
-    REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();
-    REAL mc_cohesion = fMaterial->GetPlasticModel().fYC.Cohesion();
+__global__ void ComputeStressKernel(int64_t fNpts, int fDim, REAL *elastic_strain, REAL *sigma, REAL mu, REAL lambda){
+    int ipts = blockIdx.x * blockDim.x + threadIdx.x;
 
+	if (ipts < fNpts/fDim) {
+	    sigma[4 * ipts] = elastic_strain[2 * ipts] * (lambda + 2. * mu) + elastic_strain[2 * ipts + fNpts + 1] * lambda; // Sigma xx
+	    sigma[4 * ipts + 1] = elastic_strain[2 * ipts + fNpts + 1] * (lambda + 2. * mu) + elastic_strain[2 * ipts] * lambda; // Sigma yy
+	    sigma[4 * ipts + 2] = lambda * (elastic_strain[2 * ipts] + elastic_strain[2 * ipts + fNpts + 1]); // Sigma zz
+	    sigma[4 * ipts + 3] = mu * (elastic_strain[2 * ipts + 1] + elastic_strain[2 * ipts + fNpts]); // Sigma xy
+	}
+}
+
+__global__ void ComputeStrainKernel(int64_t fNpts, int fDim, REAL *sigma, REAL *elastic_strain, REAL nu, REAL E, REAL *weight) {
+    int ipts = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (ipts < fNpts/fDim) {
+        elastic_strain[2 * ipts + 0] = 1 / weight[ipts] * (1. / E * (sigma[2 * ipts] * (1. - nu * nu) - sigma[2 * ipts + fNpts + 1] * (nu + nu * nu))); //exx
+        elastic_strain[2 * ipts + 1] = 1 / weight[ipts] * ((1. + nu) / E * sigma[2 * ipts + 1]); //exy
+        elastic_strain[2 * ipts + fNpts + 0] = elastic_strain[2 * ipts + 1]; //exy
+        elastic_strain[2 * ipts + fNpts + 1] = 1 / weight[ipts] * (1. / E * (sigma[2 * ipts + fNpts + 1] * (1. - nu * nu) - sigma[2 * ipts] * (nu + nu * nu))); //eyy
+    }
+}
+
+__global__ void SpectralDecompositionKernel(int64_t fNpts, int fDim, REAL *sigma_trial, REAL *eigenvalues, REAL *eigenvectors) {
+	int ipts = blockIdx.x * blockDim.x + threadIdx.x;
+
+	__shared__ REAL maxel;
+	__shared__ REAL interval[2];
+	if (ipts < fNpts/fDim) {
+		Normalize(&sigma_trial[4 * ipts], maxel);
+		Interval(&sigma_trial[4 * ipts], &interval[0]);
+		NewtonIterations(&interval[0], &sigma_trial[4 * ipts], &eigenvalues[3 * ipts], maxel);
+		Eigenvectors(&sigma_trial[4 * ipts], &eigenvalues[3 * ipts], &eigenvectors[9 * ipts], maxel);
+	}
+}
+
+__device__ bool PhiPlane(REAL *eigenvalues, REAL *sigma_projected, REAL mc_phi, REAL mc_cohesion) {
     const REAL sinphi = sin(mc_phi);
     const REAL cosphi = cos(mc_phi);
 
@@ -262,13 +314,7 @@ bool TPZIntPointsFEM::PhiPlane(double *eigenvalues, double *sigma_projected) {
     return check_validity;
 }
 
-bool TPZIntPointsFEM::ReturnMappingMainPlane(double *eigenvalues, double *sigma_projected, double &m_hardening) {
-    REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();
-    REAL mc_psi = fMaterial->GetPlasticModel().fYC.Psi();
-    REAL mc_cohesion = fMaterial->GetPlasticModel().fYC.Cohesion();
-    REAL K = fMaterial->GetPlasticModel().fER.K();
-    REAL G = fMaterial->GetPlasticModel().fER.G();
-
+__device__ bool ReturnMappingMainPlane(REAL *eigenvalues, REAL *sigma_projected, REAL &m_hardening, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL K, REAL G) {
     const REAL sinphi = sin(mc_phi);
     const REAL sinpsi = sin(mc_psi);
     const REAL cosphi = cos(mc_phi);
@@ -303,24 +349,15 @@ bool TPZIntPointsFEM::ReturnMappingMainPlane(double *eigenvalues, double *sigma_
     return check_validity;
 }
 
-bool TPZIntPointsFEM::ReturnMappingRightEdge(double *eigenvalues, double *sigma_projected, double &m_hardening) {
-    REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();
-    REAL mc_psi = fMaterial->GetPlasticModel().fYC.Psi();
-    REAL mc_cohesion = fMaterial->GetPlasticModel().fYC.Cohesion();
-    REAL K = fMaterial->GetPlasticModel().fER.K();
-    REAL G = fMaterial->GetPlasticModel().fER.G();
-
+__device__ bool ReturnMappingRightEdge(REAL *eigenvalues, REAL *sigma_projected, REAL &m_hardening, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL K, REAL G) {
     const REAL sinphi = sin(mc_phi);
     const REAL sinpsi = sin(mc_psi);
     const REAL cosphi = cos(mc_phi);
 
-    TPZVec<REAL> gamma(2, 0.), phi(2, 0.), sigma_bar(2, 0.), ab(2, 0.);
+    __shared__ REAL gamma[2], phi[2], sigma_bar[2], ab[2];
 
-    TPZVec<TPZVec<REAL>> jac(2), jac_inv(2);
-    for (int i = 0; i < 2; i++) {
-        jac[i].Resize(2, 0.);
-        jac_inv[i].Resize(2, 0.);
-    }
+    __shared__ REAL jac[2][2], jac_inv[2][2];
+
 
     sigma_bar[0] = eigenvalues[0] - eigenvalues[2]+(eigenvalues[0] + eigenvalues[2]) * sinphi;
     sigma_bar[1] = eigenvalues[0] - eigenvalues[1] + (eigenvalues[0] + eigenvalues[1]) * sinphi;
@@ -372,26 +409,16 @@ bool TPZIntPointsFEM::ReturnMappingRightEdge(double *eigenvalues, double *sigma_
     return check_validity;
 }
 
-bool TPZIntPointsFEM::ReturnMappingLeftEdge(double *eigenvalues, double *sigma_projected, double &m_hardening) {
-    REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();
-    REAL mc_psi = fMaterial->GetPlasticModel().fYC.Psi();
-    REAL mc_cohesion = fMaterial->GetPlasticModel().fYC.Cohesion();
-    REAL K = fMaterial->GetPlasticModel().fER.K();
-    REAL G = fMaterial->GetPlasticModel().fER.G();
-
+__device__ bool ReturnMappingLeftEdge(REAL *eigenvalues, REAL *sigma_projected, REAL &m_hardening, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL K, REAL G) {
     const REAL sinphi = sin(mc_phi);
     const REAL sinpsi = sin(mc_psi);
     const REAL cosphi = cos(mc_phi);
     const REAL sinphi2 = sinphi*sinphi;
     const REAL cosphi2 = 1. - sinphi2;
 
-    TPZVec<REAL> gamma(2, 0.), phi(2, 0.), sigma_bar(2, 0.), ab(2, 0.);
+    __shared__ REAL gamma[2], phi[2], sigma_bar[2], ab[2];
 
-    TPZVec<TPZVec<REAL>> jac(2), jac_inv(2);
-    for (int i = 0; i < 2; i++) {
-        jac[i].Resize(2, 0.);
-        jac_inv[i].Resize(2, 0.);
-    }
+    __shared__ REAL jac[2][2], jac_inv[2][2];
 
     sigma_bar[0] = eigenvalues[0] - eigenvalues[2]+(eigenvalues[0] + eigenvalues[2]) * sinphi;
     sigma_bar[1] = eigenvalues[1] - eigenvalues[2]+(eigenvalues[1] + eigenvalues[2]) * sinphi;
@@ -443,12 +470,7 @@ bool TPZIntPointsFEM::ReturnMappingLeftEdge(double *eigenvalues, double *sigma_p
     return check_validity;
 }
 
-void TPZIntPointsFEM::ReturnMappingApex(double *eigenvalues, double *sigma_projected, double &m_hardening) {
-    REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();
-    REAL mc_psi = fMaterial->GetPlasticModel().fYC.Psi();
-    REAL mc_cohesion = fMaterial->GetPlasticModel().fYC.Cohesion();
-    REAL K = fMaterial->GetPlasticModel().fER.K();
-
+__device__ bool ReturnMappingApex(REAL *eigenvalues, REAL *sigma_projected, REAL &m_hardening, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL K) {
     const REAL cotphi = 1. / tan(mc_phi);
 
     REAL ptrnp1 = 0.;
@@ -481,6 +503,42 @@ void TPZIntPointsFEM::ReturnMappingApex(double *eigenvalues, double *sigma_proje
     }
 }
 
+__global__ void ProjectSigmaKernel(int64_t fNpts, int fDim, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL K, REAL G, REAL *eigenvalues, REAL *sigma_projected, REAL *m_type, REAL *alpha) {
+	int ipts = blockIdx.x * blockDim.x + threadIdx.x;
+
+    bool check = false;
+	if (ipts < fNpts/fDim) {
+        m_type[ipts] = 0;
+        check = PhiPlane(&eigenvalues[3*ipts], &sigma_projected[3*ipts], mc_phi, mc_cohesion); //elastic domain
+        if (!check) { //plastic domain
+            m_type[ipts] = 1;
+            check = ReturnMappingMainPlane(&eigenvalues[3*ipts], &sigma_projected[3*ipts], alpha[ipts], mc_phi, mc_psi, mc_cohesion, K, G); //main plane
+            if (!check) { //edges or apex
+                if  (((1 - sin(mc_psi)) * eigenvalues[0 + 3*ipts] - 2. * eigenvalues[1 + 3*ipts] + (1 + sin(mc_psi)) * eigenvalues[2 + 3*ipts]) > 0) { // right edge
+                    check = ReturnMappingRightEdge(&eigenvalues[3*ipts], &sigma_projected[3*ipts], alpha[ipts], mc_phi, mc_psi, mc_cohesion, K, G);
+                } else { //left edge
+                    check = ReturnMappingLeftEdge(&eigenvalues[3*ipts], &sigma_projected[3*ipts], alpha[ipts], mc_phi, mc_psi, mc_cohesion, K, G);
+                }
+                if (!check) { //apex
+                    m_type[ipts] = -1;
+                    ReturnMappingApex(&eigenvalues[3*ipts], &sigma_projected[3*ipts], alpha[ipts], mc_phi, mc_psi, mc_cohesion, K);
+                }
+            }
+        }
+    }
+}
+
+__global__ void StressCompleteTensorKernel(int64_t fNpts, int fDim, REAL *sigma_projected, REAL *eigenvectors, REAL *sigma, REAL *weight) {
+    int ipts = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (ipts < fNpts/fDim) {
+	    sigma[2*ipts + 0] = weight[ipts]*(sigma_projected[3*ipts + 0]*eigenvectors[9*ipts + 0]*eigenvectors[9*ipts + 0] + sigma_projected[3*ipts + 1]*eigenvectors[9*ipts + 3]*eigenvectors[9*ipts + 3] + sigma_projected[3*ipts + 2]*eigenvectors[9*ipts + 6]*eigenvectors[9*ipts + 6]);
+	    sigma[2*ipts + 1] = weight[ipts]*(sigma_projected[3*ipts + 0]*eigenvectors[9*ipts + 0]*eigenvectors[9*ipts + 1] + sigma_projected[3*ipts + 1]*eigenvectors[9*ipts + 3]*eigenvectors[9*ipts + 4] + sigma_projected[3*ipts + 2]*eigenvectors[9*ipts + 6]*eigenvectors[9*ipts + 7]);
+	    sigma[2*ipts + fNpts] = sigma[2*ipts + 1];
+	    sigma[2*ipts + fNpts + 1] = weight[ipts]*(sigma_projected[3*ipts + 0]*eigenvectors[9*ipts + 1]*eigenvectors[9*ipts + 1] + sigma_projected[3*ipts + 1]*eigenvectors[9*ipts + 4]*eigenvectors[9*ipts + 4] + sigma_projected[3*ipts + 2]*eigenvectors[9*ipts + 7]*eigenvectors[9*ipts + 7]);
+	}
+}
+
 //Gather solution
 void TPZIntPointsFEM::GatherSolutionGPU(TPZVecGPU<REAL> &global_solution, TPZVecGPU<REAL> &gather_solution) {
 	gather_solution.Resize(fNpts);
@@ -496,7 +554,7 @@ void TPZIntPointsFEM::DeltaStrainGPU(TPZVecGPU<REAL> &gather_solution, TPZVecGPU
     delta_strain.Zero();
 
     int numBlocks = (nelem + NT - 1)/NT;
-    DeltaStrainGPUKernel <<< numBlocks, NT >>> (nelem, dStorage.GetData(), dRowSizes.GetData(), dColSizes.GetData(), dMatrixPosition.GetData(), dRowFirstIndex.GetData(), dColFirstIndex.GetData(), fNpts, fNphis, gather_solution.GetData(), delta_strain.GetData());
+    DeltaStrainKernel <<< numBlocks, NT >>> (nelem, dStorage.GetData(), dRowSizes.GetData(), dColSizes.GetData(), dMatrixPosition.GetData(), dRowFirstIndex.GetData(), dColFirstIndex.GetData(), fNpts, fNphis, gather_solution.GetData(), delta_strain.GetData());
     cudaDeviceSynchronize();
 }
 
@@ -504,155 +562,112 @@ void TPZIntPointsFEM::ElasticStrainGPU(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<
 	elastic_strain.Resize(fDim*fNpts);
 	elastic_strain.Zero();
 
-    REAL *teste1;
-    REAL *teste2;
-    REAL* teste3;
-    cudaMalloc((void**)&teste1, fDim*fNpts*sizeof(REAL));
-    cudaMalloc((void**)&teste2, fDim*fNpts*sizeof(REAL));
-    cudaMalloc((void**)&teste3, fDim*fNpts*sizeof(REAL));
-
-    TPZFMatrix<REAL> teste11(fDim*fNpts,1,0);
-    TPZFMatrix<REAL> teste22(fDim*fNpts,1,2);
-    TPZFMatrix<REAL> teste33(fDim*fNpts,1,3);
-
-    cudaMemcpy(teste1, &teste11(0,0), fDim*fNpts * sizeof(REAL), cudaMemcpyHostToDevice);
-    cudaMemcpy(teste2, &teste22(0,0), fDim*fNpts * sizeof(REAL), cudaMemcpyHostToDevice);
-    cudaMemcpy(teste3, &teste33(0,0), fDim*fNpts * sizeof(REAL), cudaMemcpyHostToDevice);
-
-
-    thrust::device_ptr<REAL> thrust_delta_strain(teste2);
-    thrust::device_ptr<REAL> thrust_elastic_strain(teste1);
-    thrust::device_ptr<REAL> thrust_plastic_strain(teste3);
-
-    std::cout << "sim" << std::endl;
-	thrust::transform(thrust_delta_strain, thrust_delta_strain + fDim*fNpts, thrust_plastic_strain, thrust_elastic_strain, thrust::minus<REAL>());
-	std::cout << "nao" << std::endl;
+	REAL a = -1.;
+	cublasDaxpy(handle_cublas,fDim*fNpts,&a, &plastic_strain.GetData()[0],1,&delta_strain.GetData()[0],1);
+	elastic_strain = delta_strain; //because the op is y = ax + y in which y = delta_strain
 }
 
-void TPZIntPointsFEM::PlasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &plastic_strain) {
-    plastic_strain = delta_strain - elastic_strain;
+void TPZIntPointsFEM::PlasticStrainGPU(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &elastic_strain, TPZVecGPU<REAL> &plastic_strain) {
+	REAL a = -1.;
+	cublasDaxpy(handle_cublas,fDim*fNpts,&a, &elastic_strain.GetData()[0],1,&delta_strain.GetData()[0],1);
+	plastic_strain = delta_strain; //because the op is y = ax + y in which y = delta_strain
 }
 
 //Compute stress
-void TPZIntPointsFEM::ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &sigma) {
+void TPZIntPointsFEM::ComputeStressGPU(TPZVecGPU<REAL> &elastic_strain, TPZVecGPU<REAL> &sigma) {
     REAL lambda = fMaterial->GetPlasticModel().fER.Lambda();
     REAL mu = fMaterial->GetPlasticModel().fER.Mu();
-    sigma.Resize(fDim*fNpts,1);
+    sigma.Resize(fDim*fNpts);
 
-    for (int64_t ipts=0; ipts < fNpts/fDim; ipts++) {
-        //plane strain
-        sigma(4 * ipts, 0) = elastic_strain(2 * ipts, 0) * (lambda + 2. * mu) + elastic_strain(2 * ipts + fNpts + 1, 0) * lambda; // Sigma xx
-        sigma(4 * ipts + 1, 0) = elastic_strain(2 * ipts + fNpts + 1, 0) * (lambda + 2. * mu) + elastic_strain(2 * ipts, 0) * lambda; // Sigma yy
-        sigma(4 * ipts + 2, 0) = lambda * (elastic_strain(2 * ipts, 0) + elastic_strain(2 * ipts + fNpts + 1, 0)); // Sigma zz
-        sigma(4 * ipts + 3, 0) = mu * (elastic_strain(2 * ipts + 1, 0) + elastic_strain(2 * ipts + fNpts, 0)); // Sigma xy
-    }
+    int numBlocks = (fNpts/fDim + NT - 1)/NT;
+    ComputeStressKernel <<< numBlocks, NT >>> (fNpts, fDim, elastic_strain.GetData(), sigma.GetData(), mu, lambda);
+    cudaDeviceSynchronize();
 }
 
 //Compute strain
-void TPZIntPointsFEM::ComputeStrain(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &elastic_strain) {
+void TPZIntPointsFEM::ComputeStrainGPU(TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL> &elastic_strain) {
     REAL E = fMaterial->GetPlasticModel().fER.E();
     REAL nu = fMaterial->GetPlasticModel().fER.Poisson();
 
-    for (int ipts = 0; ipts < fNpts / fDim; ipts++) {
-        elastic_strain(2 * ipts + 0, 0) = 1 / fWeight[ipts] * (1. / E * (sigma(2 * ipts, 0) * (1. - nu * nu) - sigma(2 * ipts + fNpts + 1, 0) * (nu + nu * nu))); //exx
-        elastic_strain(2 * ipts + 1, 0) = 1 / fWeight[ipts] * ((1. + nu) / E * sigma(2 * ipts + 1, 0)); //exy
-        elastic_strain(2 * ipts + fNpts + 0, 0) = elastic_strain(2 * ipts + 1, 0); //exy
-        elastic_strain(2 * ipts + fNpts + 1, 0) = 1 / fWeight[ipts] * (1. / E * (sigma(2 * ipts + fNpts + 1, 0) * (1. - nu * nu) - sigma(2 * ipts, 0) * (nu + nu * nu))); //eyy
-    }
+    int numBlocks = (fNpts/fDim + NT - 1)/NT;
+    ComputeStrainKernel <<< numBlocks, NT >>> (fNpts, fDim, sigma.GetData(), elastic_strain.GetData(), nu, E, dWeight.GetData());
+    cudaDeviceSynchronize();
 }
 
-void TPZIntPointsFEM::SpectralDecomposition(TPZFMatrix<REAL> &sigma_trial, TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &eigenvectors) {
-    REAL maxel;
-    TPZVec<REAL> interval(2);
-    eigenvalues.Resize(3*fNpts/fDim,1);
-    eigenvectors.Resize(9*fNpts/fDim,1);
+void TPZIntPointsFEM::SpectralDecompositionGPU(TPZVecGPU<REAL> &sigma_trial, TPZVecGPU<REAL> &eigenvalues, TPZVecGPU<REAL> &eigenvectors) {
 
-    for (int64_t ipts = 0; ipts < fNpts/fDim; ipts++) {
-        Normalize(&sigma_trial(4*ipts, 0), maxel);
-        Interval(&sigma_trial(4*ipts, 0), &interval[0]);
-        NewtonIterations(&interval[0], &sigma_trial(4*ipts, 0), &eigenvalues(3*ipts, 0), maxel);
-        Eigenvectors(&sigma_trial(4*ipts, 0), &eigenvalues(3*ipts, 0), &eigenvectors(9*ipts,0),maxel);
-    }
+    eigenvalues.Resize(3*fNpts/fDim);
+    eigenvectors.Resize(9*fNpts/fDim);
+
+    int numBlocks = (fNpts/fDim + NT - 1)/NT;
+    SpectralDecompositionKernel <<< numBlocks, NT >>> (fNpts, fDim, sigma_trial.GetData(), eigenvalues.GetData(), eigenvectors.GetData());
+    cudaDeviceSynchronize();
 }
 
-void TPZIntPointsFEM::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &sigma_projected) {
-    REAL mc_psi = fMaterial->GetPlasticModel().fYC.Psi();
+void TPZIntPointsFEM::ProjectSigmaGPU(TPZVecGPU<REAL> &eigenvalues, TPZVecGPU<REAL> &sigma_projected) {
 
-    sigma_projected.Resize(3*fNpts/fDim,1);
+	REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();
+	REAL mc_psi = fMaterial->GetPlasticModel().fYC.Psi();
+	REAL mc_cohesion = fMaterial->GetPlasticModel().fYC.Cohesion();
+	REAL K = fMaterial->GetPlasticModel().fER.K();
+	REAL G = fMaterial->GetPlasticModel().fER.G();
+
+    sigma_projected.Resize(3*fNpts/fDim);
     sigma_projected.Zero();
-    TPZFMatrix<REAL> elastic_strain_np1(fDim*fNpts);
 
-    TPZFMatrix<REAL> m_type(fNpts/fDim, 1, 0.);
-    TPZFMatrix<REAL> alpha(fNpts/fDim, 1, 0.);
-    bool check = false;
+    TPZVecGPU<REAL> m_type(fNpts/fDim);
+    m_type.Zero();
 
-    for (int ipts = 0; ipts < fNpts/fDim; ipts++) {
-        m_type(ipts,0) = 0;
-        check = PhiPlane(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0)); //elastic domain
-        if (!check) { //plastic domain
-            m_type(ipts,0) = 1;
-            check = ReturnMappingMainPlane(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), alpha(ipts,0)); //main plane
-            if (!check) { //edges or apex
-                if  (((1 - sin(mc_psi)) * eigenvalues(0 + 3*ipts, 0) - 2. * eigenvalues(1 + 3*ipts, 0) + (1 + sin(mc_psi)) * eigenvalues(2 + 3*ipts, 0)) > 0) { // right edge
-                    check = ReturnMappingRightEdge(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), alpha(ipts,0));
-                } else { //left edge
-                    check = ReturnMappingLeftEdge(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), alpha(ipts,0));
-                }
-                if (!check) { //apex
-                    m_type(ipts,0) = -1;
-                    ReturnMappingApex(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), alpha(ipts,0));
-                }
-            }
-        }
-    }
+    TPZVecGPU<REAL> alpha(fNpts/fDim);
+    alpha.Zero();
+
+    int numBlocks = (fNpts/fDim + NT - 1)/NT;
+    ProjectSigmaKernel <<< numBlocks, NT >>> (fNpts, fDim, mc_phi, mc_psi, mc_cohesion, K, G, eigenvalues.GetData(), sigma_projected.GetData(), m_type.GetData(), alpha.GetData());
+    cudaDeviceSynchronize();
+
+
 }
 
-void TPZIntPointsFEM::StressCompleteTensor(TPZFMatrix<REAL> &sigma_projected, TPZFMatrix<REAL> &eigenvectors, TPZFMatrix<REAL> &sigma){
-    sigma.Resize(fDim*fNpts,1);
+void TPZIntPointsFEM::StressCompleteTensorGPU(TPZVecGPU<REAL> &sigma_projected, TPZVecGPU<REAL> &eigenvectors, TPZVecGPU<REAL> &sigma){
+    sigma.Resize(fDim*fNpts);
 
-    for (int ipts = 0; ipts < fNpts/fDim; ipts++) {
-        sigma(2*ipts + 0,0) = fWeight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 0,0)*eigenvectors(9*ipts + 0,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 3,0)*eigenvectors(9*ipts + 3,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 6,0)*eigenvectors(9*ipts + 6,0));
-        sigma(2*ipts + 1,0) = fWeight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 0,0)*eigenvectors(9*ipts + 1,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 3,0)*eigenvectors(9*ipts + 4,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 6,0)*eigenvectors(9*ipts + 7,0));
-        sigma(2*ipts + fNpts,0) = sigma(2*ipts + 1,0);
-        sigma(2*ipts + fNpts + 1,0) = fWeight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 1,0)*eigenvectors(9*ipts + 1,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 4,0)*eigenvectors(9*ipts + 4,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 7,0)*eigenvectors(9*ipts + 7,0));
-    }
+    int numBlocks = (fNpts/fDim + NT - 1)/NT;
+    StressCompleteTensorKernel <<< numBlocks, NT >>> (fNpts, fDim, sigma_projected.GetData(), eigenvectors.GetData(), sigma.GetData(), dWeight.GetData());
+    cudaDeviceSynchronize();
 }
 
-void TPZIntPointsFEM::NodalForces(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &nodal_forces) {
+void TPZIntPointsFEM::NodalForcesGPU(TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL> &nodal_forces) {
     int64_t nelem = fRowSizes.size();
-    nodal_forces.Resize(fDim*fNphis,1);
+
+    nodal_forces.Resize(fDim*fNphis);
     nodal_forces.Zero();
 
-    for (int iel = 0; iel < nelem; iel++) {
-        for (int i = 0; i < fColSizes[iel]; i++) {
-            for (int k = 0; k < fRowSizes[iel]; k++) {
-                nodal_forces(i + fColFirstIndex[iel], 0) -= fStorage[k + i * fRowSizes[iel] + fMatrixPosition[iel]] * sigma(k + fRowFirstIndex[iel], 0);
-                nodal_forces(i + fColFirstIndex[iel] + fNphis, 0) -=  fStorage[k + i * fRowSizes[iel] + fMatrixPosition[iel]] * sigma(k + fRowFirstIndex[iel] + fNpts, 0);
-            }
-        }
-    }
+    int numBlocks = (nelem + NT - 1)/NT;
+    DeltaStrainKernel <<< numBlocks, NT >>> (nelem, dStorage.GetData(), dRowSizes.GetData(), dColSizes.GetData(), dMatrixPosition.GetData(), dRowFirstIndex.GetData(), dColFirstIndex.GetData(), fNpts, fNphis, sigma.GetData(), nodal_forces.GetData());
+    cudaDeviceSynchronize();
 }
 
-void TPZIntPointsFEM::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) {
+void TPZIntPointsFEM::ColoredAssembleGPU(TPZVecGPU<STATE>  &nodal_forces, TPZVecGPU<STATE> &residual) {
     int64_t ncolor = *std::max_element(fElemColor.begin(), fElemColor.end())+1;
     int64_t sz = fIndexes.size();
     int64_t neq = fCmesh->NEquations();
-    nodal_forces_global.Resize(neq*ncolor,1);
-    nodal_forces_global.Zero();
+    residual.Resize(neq*ncolor);
+    residual.Zero();
 
-
-    cblas_dsctr(sz, nodal_forces_vec, &fIndexesColor[0], &nodal_forces_global(0,0));
+    cusparseDsctr(handle_cusparse, sz, nodal_forces.GetData(), &dIndexesColor.GetData()[0], &residual.GetData()[0], CUSPARSE_INDEX_BASE_ZERO);
 
     int64_t colorassemb = ncolor / 2.;
+    REAL alpha = 1.;
     while (colorassemb > 0) {
 
         int64_t firsteq = (ncolor - colorassemb) * neq;
-        cblas_daxpy(firsteq, 1., &nodal_forces_global(firsteq, 0), 1., &nodal_forces_global(0, 0), 1.);
+        cublasDaxpy(handle_cublas, firsteq, &alpha, &residual.GetData()[firsteq], 1., &residual.GetData()[0], 1.);
+
 
         ncolor -= colorassemb;
         colorassemb = ncolor/2;
     }
-    nodal_forces_global.Resize(neq, 1);
+    residual.Resize(neq);
 }
 
 void TPZIntPointsFEM::ColoringElements() const {
@@ -732,26 +747,23 @@ void TPZIntPointsFEM::AssembleResidual() {
 	GatherSolutionGPU(dSolution, gather_solution);
 	DeltaStrainGPU(gather_solution, delta_strain);
 	ElasticStrainGPU(delta_strain, dPlasticStrain, elastic_strain);
+	ComputeStressGPU(elastic_strain, sigma_trial);
+	SpectralDecompositionGPU(sigma_trial, eigenvalues, eigenvectors);
+	ProjectSigmaGPU(eigenvalues, sigma_projected);
+	StressCompleteTensorGPU(sigma_projected, eigenvectors, sigma);
+	NodalForcesGPU(sigma, nodal_forces);
+	ColoredAssembleGPU(nodal_forces, residual);
 
-//    TPZFMatrix<REAL> teste(fDim*fNpts, 1);
-//    elastic_strain.Get(&teste(0,0),fDim*fNpts);
-//    ofstream testef("teste.txt");
-//    teste.Print(testef);
+	//update strain
+	ComputeStrainGPU(sigma, elastic_strain);
+	PlasticStrainGPU(delta_strain, elastic_strain, dPlasticStrain);
 
+	REAL a = 1.;
+	cublasDaxpy(handle_cublas,neq,&a, &dRhsBoundary.GetData()[0],1,&residual.GetData()[0],1);
+	dRhs = residual;
 
-//    ElasticStrain(delta_strain, fPlasticStrain, elastic_strain);
-//    ComputeStress(elastic_strain, sigma_trial);
-//    SpectralDecomposition(sigma_trial, eigenvalues, eigenvectors);
-//    ProjectSigma(eigenvalues, sigma_projected);
-//    StressCompleteTensor(sigma_projected, eigenvectors, sigma);
-//    NodalForces(sigma, nodal_forces);
-//    ColoredAssemble(nodal_forces,residual);
-//
-//    //update strain
-//    ComputeStrain(sigma, elastic_strain);
-//    PlasticStrain(delta_strain, elastic_strain, fPlasticStrain);
-//
-//    fRhs = residual + fRhsBoundary;
+    fRhs.Resize(neq,1);
+    dRhs.Get(&fRhs(0,0),neq);
 }
 
 void TPZIntPointsFEM::SetDataStructure(){
@@ -909,6 +921,9 @@ void TPZIntPointsFEM::TransferDataStructure() {
 
     dRhs.Resize(neq);
     dRhs.Zero();
+
+    dRhsBoundary.Resize(neq);
+    dRhsBoundary.Set(&fRhsBoundary(0,0), neq);
 
 	dSolution.Resize(neq);
 	dSolution.Zero();

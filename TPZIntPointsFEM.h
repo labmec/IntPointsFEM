@@ -69,6 +69,7 @@ public:
         handle_cublas = copy.handle_cublas;
 
         dRhs = copy.dRhs;
+        dRhsBoundary = copy.dRhsBoundary;
         dSolution = copy.dSolution;
         dPlasticStrain = copy.dPlasticStrain;
         dStorage = copy.dStorage;
@@ -108,6 +109,7 @@ public:
         handle_cublas = copy.handle_cublas;
 
         dRhs = copy.dRhs;
+        dRhsBoundary = copy.dRhsBoundary;
         dSolution = copy.dSolution;
         dPlasticStrain = copy.dPlasticStrain;
         dStorage = copy.dStorage;
@@ -231,7 +233,7 @@ public:
 
     void NodalForces(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &nodal_forces);
 
-    void ColoredAssemble(TPZFMatrix<REAL> &nodal_forces_vec, TPZFMatrix<REAL> &nodal_forces_global);
+    void ColoredAssemble(TPZFMatrix<REAL> &nodal_forces, TPZFMatrix<REAL> &residual);
 
     void AssembleResidual();
 
@@ -245,21 +247,23 @@ public:
     void GatherSolutionGPU(TPZVecGPU<REAL> &global_solution, TPZVecGPU<REAL> &gather_solution);
     void DeltaStrainGPU(TPZVecGPU<REAL> &gather_solution, TPZVecGPU<REAL> &delta_strain);
     void ElasticStrainGPU(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &plastic_strain, TPZVecGPU<REAL> &elastic_strain);
-#endif
-
+    void ComputeStressGPU(TPZVecGPU<REAL> &elastic_strain, TPZVecGPU<REAL> &sigma);
+    void SpectralDecompositionGPU(TPZVecGPU<REAL> &sigma_trial, TPZVecGPU<REAL> &eigenvalues, TPZVecGPU<REAL> &eigenvectors);
+    void ProjectSigmaGPU(TPZVecGPU<REAL> &eigenvalues, TPZVecGPU<REAL> &sigma_projected);
+    void StressCompleteTensorGPU(TPZVecGPU<REAL> &sigma_projected, TPZVecGPU<REAL> &eigenvectors, TPZVecGPU<REAL> &sigma);
+    void NodalForcesGPU(TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL> &nodal_forces);
+    void ColoredAssembleGPU(TPZVecGPU<REAL> &nodal_forces, TPZVecGPU<REAL> &residual);
+    void ComputeStrainGPU(TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL> &elastic_strain);
+    void PlasticStrainGPU(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &elastic_strain, TPZVecGPU<REAL> &plastic_strain);
 
     void cuSparseHandle() {
-#ifdef __CUDACC__
         cusparseCreate (&handle_cusparse);
-#endif
     }
 
     void cuBlasHandle() {
-#ifdef __CUDACC__
         cublasCreate (&handle_cublas);
-#endif
     }
-
+#endif
 
 protected:
     int fDim;
@@ -269,6 +273,7 @@ protected:
     int64_t fNphis;
     TPZVec<int64_t> fElemColor;
     TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse>, TPZElastoPlasticMem> *fMaterial;
+
     TPZFMatrix<REAL> fRhs;
     TPZFMatrix<REAL> fRhsBoundary;
 	TPZFMatrix<REAL> fSolution;
@@ -288,6 +293,7 @@ protected:
     cublasHandle_t handle_cublas;
 
     TPZVecGPU<REAL> dRhs;
+    TPZVecGPU<REAL> dRhsBoundary;
     TPZVecGPU<REAL> dSolution;
     TPZVecGPU<REAL> dPlasticStrain;
     TPZVecGPU<REAL> dStorage;
@@ -299,7 +305,6 @@ protected:
     TPZVecGPU<int> dIndexes;
     TPZVecGPU<int> dIndexesColor;
     TPZVecGPU<REAL> dWeight;
-
 #endif
 
 };
