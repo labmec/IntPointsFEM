@@ -241,8 +241,6 @@ public:
 
     void AssembleRhsBoundary();
 
-    void TransferDataStructure();
-
 #ifdef __CUDACC__
     void GatherSolutionGPU(TPZVecGPU<REAL> &global_solution, TPZVecGPU<REAL> &gather_solution);
     void DeltaStrainGPU(TPZVecGPU<REAL> &gather_solution, TPZVecGPU<REAL> &delta_strain);
@@ -255,6 +253,8 @@ public:
     void ColoredAssembleGPU(TPZVecGPU<REAL> &nodal_forces, TPZVecGPU<REAL> &residual);
     void ComputeStrainGPU(TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL> &elastic_strain);
     void PlasticStrainGPU(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &elastic_strain, TPZVecGPU<REAL> &plastic_strain);
+
+    void TransferDataStructure();
 
     void cuSparseHandle() {
         cusparseCreate (&handle_cusparse);

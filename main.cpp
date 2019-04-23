@@ -492,7 +492,6 @@ void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
 
     TPZIntPointsFEM solveintpoints(analysis->Mesh(), wellbore_material.Id());
     solveintpoints.SetDataStructure();
-    solveintpoints.TransferDataStructure();
 
     analysis->Solution().Zero();
     analysis->Assemble();
