@@ -14,13 +14,16 @@
 #include "TPZElastoPlasticMem.h"
 #include "TPZMatElastoPlastic2D.h"
 
+
 #ifdef USING_MKL
 #include "mkl.h"
 #endif
 
 #ifdef __CUDACC__
+#include "TPZVecGPU.h"
 #include <cublas_v2.h>
 #include <cusparse.h>
+#include <cuda.h>
 #endif
 
 class TPZIntPointsFEM {
@@ -153,7 +156,7 @@ public:
         elmatloc = elmat;
     }
 
-    void SetIndexes(TPZVec<MKL_INT> indexes) {
+    void SetIndexes(TPZVec<int> indexes) {
         int64_t indsize = indexes.size();
         fIndexes.resize(indsize);
         fIndexes = indexes;
@@ -200,8 +203,7 @@ public:
     void SetDataStructure();
 
     void GatherSolution(TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &gather_solution);
-
-    void DeltaStrain(TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &deltastrain);
+    void DeltaStrain(TPZFMatrix<REAL> &gather_solution, TPZFMatrix<REAL> &delta_strain);
 
     void ElasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &elastic_strain);
     void PlasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &plastic_strain);
@@ -237,6 +239,15 @@ public:
 
     void AssembleRhsBoundary();
 
+    void TransferDataStructure();
+
+#ifdef __CUDACC__
+    void GatherSolutionGPU(TPZVecGPU<REAL> &global_solution, TPZVecGPU<REAL> &gather_solution);
+    void DeltaStrainGPU(TPZVecGPU<REAL> &gather_solution, TPZVecGPU<REAL> &delta_strain);
+    void ElasticStrainGPU(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &plastic_strain, TPZVecGPU<REAL> &elastic_strain);
+#endif
+
+
     void cuSparseHandle() {
 #ifdef __CUDACC__
         cusparseCreate (&handle_cusparse);
@@ -268,7 +279,7 @@ protected:
 	TPZVec<int> fMatrixPosition;
 	TPZVec<int> fRowFirstIndex;
 	TPZVec<int> fColFirstIndex;
-	TPZVec<MKL_INT> fIndexes;
+	TPZVec<int> fIndexes;
 	TPZVec<MKL_INT> fIndexesColor;
 	TPZStack<REAL> fWeight;
 
@@ -276,18 +287,19 @@ protected:
     cusparseHandle_t handle_cusparse;
     cublasHandle_t handle_cublas;
 
-    REAL *dRhs;
-    REAL *dSolution;
-    REAL *dPlasticStrain;
-    REAL *dStorage;
-    int *dRowSizes;
-    int *dColSizes;
-    int *dMatrixPosition;
-    int *dRowFirstIndex;
-    int *dColFirstIndex;
-    int *dIndexes;
-    int *dIndexesColor;
-    REAL *dWeight;
+    TPZVecGPU<REAL> dRhs;
+    TPZVecGPU<REAL> dSolution;
+    TPZVecGPU<REAL> dPlasticStrain;
+    TPZVecGPU<REAL> dStorage;
+    TPZVecGPU<int> dRowSizes;
+    TPZVecGPU<int> dColSizes;
+    TPZVecGPU<int> dMatrixPosition;
+    TPZVecGPU<int> dRowFirstIndex;
+    TPZVecGPU<int> dColFirstIndex;
+    TPZVecGPU<int> dIndexes;
+    TPZVecGPU<int> dIndexesColor;
+    TPZVecGPU<REAL> dWeight;
+
 #endif
 
 };

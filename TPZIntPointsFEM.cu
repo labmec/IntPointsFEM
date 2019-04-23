@@ -6,11 +6,32 @@
 #include "TPZVTKGeoMesh.h"
 #include "pzintel.h"
 #include "pzskylstrmatrix.h"
+#include "TPZVecGPU.h"
+
+#include <thrust/device_vector.h>
+#include <thrust/functional.h>
+#include <thrust/transform.h>
+
 
 #ifdef USING_MKL
 #include <mkl.h>
 #include <algorithm>
 #endif
+
+#define NT 128
+
+__global__ void DeltaStrainGPUKernel(int64_t nelem, REAL *storage, int *rowsizes, int *colsizes, int *matrixpos, int *rowfirstindex, int* colfirstindex, int npts, int nphis, REAL *gather_solution, REAL *delta_strain) {
+    int iel = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(iel < nelem) {
+        for (int i = 0; i < rowsizes[iel]; i++) {
+            for (int k = 0; k < colsizes[iel]; k++) {
+                delta_strain[i + rowfirstindex[iel]] += storage[k * rowsizes[iel] + i + matrixpos[iel]] * gather_solution[k + colfirstindex[iel]];
+                delta_strain[i + rowfirstindex[iel] + npts] += storage[k * rowsizes[iel] + i + matrixpos[iel]] * gather_solution[k + colfirstindex[iel] + nphis];
+            }
+        }
+    }
+}
 
 //Spectral decomposition
 void TPZIntPointsFEM::Multiplicity1(double *sigma, double eigenvalue, double *eigenvector) {
@@ -461,32 +482,51 @@ void TPZIntPointsFEM::ReturnMappingApex(double *eigenvalues, double *sigma_proje
 }
 
 //Gather solution
-void TPZIntPointsFEM::GatherSolution(TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &gather_solution) {
-    gather_solution.Resize(fNpts,1);
-    gather_solution.Zero();
-
-    cblas_dgthr(fDim*fNphis, global_solution, &gather_solution(0,0), &fIndexes[0]);
+void TPZIntPointsFEM::GatherSolutionGPU(TPZVecGPU<REAL> &global_solution, TPZVecGPU<REAL> &gather_solution) {
+	gather_solution.Resize(fNpts);
+	gather_solution.Zero();
+    cusparseDgthr(handle_cusparse, fDim*fNphis, global_solution.GetData(), &gather_solution.GetData()[0], &dIndexes.GetData()[0], CUSPARSE_INDEX_BASE_ZERO);
 }
 
 //Strain
-void TPZIntPointsFEM::DeltaStrain(TPZFMatrix<REAL> &expandsolution, TPZFMatrix<REAL> &delta_strain) {
+void TPZIntPointsFEM::DeltaStrainGPU(TPZVecGPU<REAL> &gather_solution, TPZVecGPU<REAL> &delta_strain) {
     int64_t nelem = fRowSizes.size();
 
-    delta_strain.Resize(fDim*fNpts,1);
+    delta_strain.Resize(fDim*fNpts);
     delta_strain.Zero();
 
-    for (int64_t iel = 0; iel < nelem; iel++) {
-        for (int i = 0; i < fRowSizes[iel]; i++) {
-            for (int k = 0; k < fColSizes[iel]; k++) {
-                delta_strain(i + fRowFirstIndex[iel], 0) += fStorage[k * fRowSizes[iel] + i + fMatrixPosition[iel]] * expandsolution(k + fColFirstIndex[iel], 0);
-                delta_strain(i + fRowFirstIndex[iel] + fNpts, 0) += fStorage[k * fRowSizes[iel] + i + fMatrixPosition[iel]] * expandsolution(k + fColFirstIndex[iel] + fNphis, 0);
-            }
-        }
-    }
+    int numBlocks = (nelem + NT - 1)/NT;
+    DeltaStrainGPUKernel <<< numBlocks, NT >>> (nelem, dStorage.GetData(), dRowSizes.GetData(), dColSizes.GetData(), dMatrixPosition.GetData(), dRowFirstIndex.GetData(), dColFirstIndex.GetData(), fNpts, fNphis, gather_solution.GetData(), delta_strain.GetData());
+    cudaDeviceSynchronize();
 }
 
-void TPZIntPointsFEM::ElasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &elastic_strain) {
-    elastic_strain = delta_strain - plastic_strain;
+void TPZIntPointsFEM::ElasticStrainGPU(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &plastic_strain, TPZVecGPU<REAL> &elastic_strain) {
+	elastic_strain.Resize(fDim*fNpts);
+	elastic_strain.Zero();
+
+    REAL *teste1;
+    REAL *teste2;
+    REAL* teste3;
+    cudaMalloc((void**)&teste1, fDim*fNpts*sizeof(REAL));
+    cudaMalloc((void**)&teste2, fDim*fNpts*sizeof(REAL));
+    cudaMalloc((void**)&teste3, fDim*fNpts*sizeof(REAL));
+
+    TPZFMatrix<REAL> teste11(fDim*fNpts,1,0);
+    TPZFMatrix<REAL> teste22(fDim*fNpts,1,2);
+    TPZFMatrix<REAL> teste33(fDim*fNpts,1,3);
+
+    cudaMemcpy(teste1, &teste11(0,0), fDim*fNpts * sizeof(REAL), cudaMemcpyHostToDevice);
+    cudaMemcpy(teste2, &teste22(0,0), fDim*fNpts * sizeof(REAL), cudaMemcpyHostToDevice);
+    cudaMemcpy(teste3, &teste33(0,0), fDim*fNpts * sizeof(REAL), cudaMemcpyHostToDevice);
+
+
+    thrust::device_ptr<REAL> thrust_delta_strain(teste2);
+    thrust::device_ptr<REAL> thrust_elastic_strain(teste1);
+    thrust::device_ptr<REAL> thrust_plastic_strain(teste3);
+
+    std::cout << "sim" << std::endl;
+	thrust::transform(thrust_delta_strain, thrust_delta_strain + fDim*fNpts, thrust_plastic_strain, thrust_elastic_strain, thrust::minus<REAL>());
+	std::cout << "nao" << std::endl;
 }
 
 void TPZIntPointsFEM::PlasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &plastic_strain) {
@@ -674,33 +714,44 @@ void TPZIntPointsFEM::ColoringElements() const {
 }
 
 void TPZIntPointsFEM::AssembleResidual() {
-    TPZFMatrix<REAL> gather_solution;
-    TPZFMatrix<REAL> delta_strain;
-    TPZFMatrix<REAL> elastic_strain;
-    TPZFMatrix<REAL> sigma_trial;
-    TPZFMatrix<REAL> eigenvalues;
-    TPZFMatrix<REAL> eigenvectors;
-    TPZFMatrix<REAL> sigma_projected;
-    TPZFMatrix<REAL> sigma;
-    TPZFMatrix<REAL> nodal_forces;
-    TPZFMatrix<REAL> residual;
+	TPZVecGPU<REAL> gather_solution;
+	TPZVecGPU<REAL> delta_strain;
+	TPZVecGPU<REAL> elastic_strain;
+	TPZVecGPU<REAL> sigma_trial;
+	TPZVecGPU<REAL> eigenvalues;
+	TPZVecGPU<REAL> eigenvectors;
+	TPZVecGPU<REAL> sigma_projected;
+	TPZVecGPU<REAL> sigma;
+	TPZVecGPU<REAL> nodal_forces;
+	TPZVecGPU<REAL> residual;
 
-    //residual assemble
-    GatherSolution(fSolution, gather_solution);
-    DeltaStrain(gather_solution, delta_strain);
-    ElasticStrain(delta_strain, fPlasticStrain, elastic_strain);
-    ComputeStress(elastic_strain, sigma_trial);
-    SpectralDecomposition(sigma_trial, eigenvalues, eigenvectors);
-    ProjectSigma(eigenvalues, sigma_projected);
-    StressCompleteTensor(sigma_projected, eigenvectors, sigma);
-    NodalForces(sigma, nodal_forces);
-    ColoredAssemble(nodal_forces,residual);
+	//residual assemble
+	int64_t neq = fCmesh->NEquations();
 
-    //update strain
-    ComputeStrain(sigma, elastic_strain);
-    PlasticStrain(delta_strain, elastic_strain, fPlasticStrain);
+	dSolution.Set(&fSolution(0, 0), neq);
+	GatherSolutionGPU(dSolution, gather_solution);
+	DeltaStrainGPU(gather_solution, delta_strain);
+	ElasticStrainGPU(delta_strain, dPlasticStrain, elastic_strain);
 
-    fRhs = residual + fRhsBoundary;
+//    TPZFMatrix<REAL> teste(fDim*fNpts, 1);
+//    elastic_strain.Get(&teste(0,0),fDim*fNpts);
+//    ofstream testef("teste.txt");
+//    teste.Print(testef);
+
+
+//    ElasticStrain(delta_strain, fPlasticStrain, elastic_strain);
+//    ComputeStress(elastic_strain, sigma_trial);
+//    SpectralDecomposition(sigma_trial, eigenvalues, eigenvectors);
+//    ProjectSigma(eigenvalues, sigma_projected);
+//    StressCompleteTensor(sigma_projected, eigenvectors, sigma);
+//    NodalForces(sigma, nodal_forces);
+//    ColoredAssemble(nodal_forces,residual);
+//
+//    //update strain
+//    ComputeStrain(sigma, elastic_strain);
+//    PlasticStrain(delta_strain, elastic_strain, fPlasticStrain);
+//
+//    fRhs = residual + fRhsBoundary;
 }
 
 void TPZIntPointsFEM::SetDataStructure(){
@@ -725,8 +776,8 @@ void TPZIntPointsFEM::SetDataStructure(){
 
 // RowSizes and ColSizes vectors
     int64_t nelem = cel_indexes.size();
-    TPZVec<MKL_INT> rowsizes(nelem);
-    TPZVec<MKL_INT> colsizes(nelem);
+    TPZVec<int> rowsizes(nelem);
+    TPZVec<int> colsizes(nelem);
 
     int64_t npts_tot = 0;
     int64_t nf_tot = 0;
@@ -759,7 +810,7 @@ void TPZIntPointsFEM::SetDataStructure(){
 // Dphi matrix, weight and indexes vectors
     TPZFMatrix<REAL> elmatrix;
     TPZStack<REAL> weight;
-    TPZManVector<MKL_INT> indexes(dim_mesh * nf_tot);
+    TPZManVector<int> indexes(dim_mesh * nf_tot);
 
     int64_t cont1 = 0;
     int64_t cont2 = 0;
@@ -846,4 +897,49 @@ void TPZIntPointsFEM::AssembleRhsBoundary() {
         ef.ComputeDestinationIndices();
         fRhsBoundary.AddFel(ef.fMat, ef.fSourceIndex, ef.fDestinationIndex);
     }
+}
+
+void TPZIntPointsFEM::TransferDataStructure() {
+    cuSparseHandle();
+    cuBlasHandle();
+
+    int64_t neq = fCmesh->NEquations();
+    int64_t nelem = fColSizes.size();
+    int64_t ncolor = *std::max_element(fElemColor.begin(), fElemColor.end())+1;
+
+    dRhs.Resize(neq);
+    dRhs.Zero();
+
+	dSolution.Resize(neq);
+	dSolution.Zero();
+
+	dPlasticStrain.Resize(fDim * fNpts);
+	dPlasticStrain.Zero();
+
+	dStorage.Resize(fStorage.size());
+	dStorage.Set(&fStorage[0], fStorage.size());
+
+	dRowSizes.Resize(nelem);
+    dRowSizes.Set(&fRowSizes[0], nelem);
+
+    dColSizes.Resize(nelem);
+	dColSizes.Set(&fColSizes[0], nelem);
+
+	dMatrixPosition.Resize(nelem);
+	dMatrixPosition.Set(&fMatrixPosition[0], nelem);
+
+	dRowFirstIndex.Resize(nelem);
+	dRowFirstIndex.Set(&fRowFirstIndex[0], nelem);
+
+	dColFirstIndex.Resize(nelem);
+	dColFirstIndex.Set(&fColFirstIndex[0], nelem);
+
+	dIndexes.Resize(fIndexes.size());
+	dIndexes.Set(&fIndexes[0], fIndexes.size());
+
+	dIndexesColor.Resize(fIndexesColor.size());
+	dIndexesColor.Set(&fIndexesColor[0], fIndexesColor.size());
+
+	dWeight.Resize(fWeight.size());
+	dWeight.Set(&fWeight[0], fWeight.size());
 }
