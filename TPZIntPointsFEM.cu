@@ -895,7 +895,7 @@ void TPZIntPointsFEM::SetDataStructure(){
     fPlasticStrain.Resize(fDim * fNpts, 1);
     fPlasticStrain.Zero();
 
-    TransferDataStructure();S
+    TransferDataStructure();
 }
 
 void TPZIntPointsFEM::AssembleRhsBoundary() {

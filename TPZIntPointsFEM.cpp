@@ -687,6 +687,7 @@ void TPZIntPointsFEM::AssembleResidual() {
 
     //residual assemble
     GatherSolution(fSolution, gather_solution);
+    fSolution.Print(std::cout);
     DeltaStrain(gather_solution, delta_strain);
     ElasticStrain(delta_strain, fPlasticStrain, elastic_strain);
     ComputeStress(elastic_strain, sigma_trial);
