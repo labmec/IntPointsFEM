@@ -643,7 +643,7 @@ void TPZIntPointsFEM::NodalForcesGPU(TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL> &no
     nodal_forces.Zero();
 
     int numBlocks = (nelem + NT - 1)/NT;
-    DeltaStrainKernel <<< numBlocks, NT >>> (nelem, dStorage.GetData(), dRowSizes.GetData(), dColSizes.GetData(), dMatrixPosition.GetData(), dRowFirstIndex.GetData(), dColFirstIndex.GetData(), fNpts, fNphis, sigma.GetData(), nodal_forces.GetData());
+    NodalForcesKernel <<< numBlocks, NT >>> (nelem, dStorage.GetData(), dRowSizes.GetData(), dColSizes.GetData(), dMatrixPosition.GetData(), dRowFirstIndex.GetData(), dColFirstIndex.GetData(), fNpts, fNphis, sigma.GetData(), nodal_forces.GetData());
     cudaDeviceSynchronize();
 }
 
@@ -663,11 +663,9 @@ void TPZIntPointsFEM::ColoredAssembleGPU(TPZVecGPU<STATE>  &nodal_forces, TPZVec
         int64_t firsteq = (ncolor - colorassemb) * neq;
         cublasDaxpy(handle_cublas, firsteq, &alpha, &residual.GetData()[firsteq], 1., &residual.GetData()[0], 1.);
 
-
         ncolor -= colorassemb;
         colorassemb = ncolor/2;
     }
-    residual.Resize(neq);
 }
 
 void TPZIntPointsFEM::ColoringElements() const {
@@ -744,6 +742,7 @@ void TPZIntPointsFEM::AssembleResidual() {
 	int64_t neq = fCmesh->NEquations();
 
 	dSolution.Set(&fSolution(0, 0), neq);
+
 	GatherSolutionGPU(dSolution, gather_solution);
 	DeltaStrainGPU(gather_solution, delta_strain);
 	ElasticStrainGPU(delta_strain, dPlasticStrain, elastic_strain);

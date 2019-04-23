@@ -602,6 +602,8 @@ void TPZIntPointsFEM::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZF
 
 
     cblas_dsctr(sz, nodal_forces_vec, &fIndexesColor[0], &nodal_forces_global(0,0));
+	ofstream file("residual2.txt");
+    nodal_forces_global.Print(file);
 
     int64_t colorassemb = ncolor / 2.;
     while (colorassemb > 0) {
@@ -613,6 +615,7 @@ void TPZIntPointsFEM::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZF
         colorassemb = ncolor/2;
     }
     nodal_forces_global.Resize(neq, 1);
+
 }
 
 void TPZIntPointsFEM::ColoringElements() const {
@@ -687,7 +690,6 @@ void TPZIntPointsFEM::AssembleResidual() {
 
     //residual assemble
     GatherSolution(fSolution, gather_solution);
-    fSolution.Print(std::cout);
     DeltaStrain(gather_solution, delta_strain);
     ElasticStrain(delta_strain, fPlasticStrain, elastic_strain);
     ComputeStress(elastic_strain, sigma_trial);
