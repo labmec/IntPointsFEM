@@ -39,6 +39,9 @@ public:
     }
 
     ~TPZIntPointsFEM() {
+#ifdef __CUDACC__
+    	DestroyHandles();
+#endif
 
     }
 
@@ -241,6 +244,8 @@ public:
 
     void AssembleRhsBoundary();
 
+    void DestroyHandles();
+
 #ifdef __CUDACC__
     void GatherSolutionGPU(TPZVecGPU<REAL> &global_solution, TPZVecGPU<REAL> &gather_solution);
     void DeltaStrainGPU(TPZVecGPU<REAL> &gather_solution, TPZVecGPU<REAL> &delta_strain);
@@ -256,13 +261,14 @@ public:
 
     void TransferDataStructure();
 
-    void cuSparseHandle() {
+    void cuSparseHandleCreate() {
         cusparseCreate (&handle_cusparse);
     }
 
-    void cuBlasHandle() {
+    void cuBlasHandleCreate() {
         cublasCreate (&handle_cublas);
     }
+
 #endif
 
 protected:
