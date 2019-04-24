@@ -1,3 +1,5 @@
+//adapted from https://www.quantstart.com/articles/dev_array_A_Useful_Array_Class_for_CUDA
+
 #ifndef _TPZVECGPU_H_
 #define _TPZVECGPU_H_
 
@@ -16,6 +18,7 @@ public:
         : start_(0),
           end_(0)
     {}
+
 
     // constructor
 	TPZVecGPU(size_t size)

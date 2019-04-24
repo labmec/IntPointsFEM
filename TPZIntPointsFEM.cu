@@ -562,15 +562,17 @@ void TPZIntPointsFEM::ElasticStrainGPU(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<
 	elastic_strain.Resize(fDim*fNpts);
 	elastic_strain.Zero();
 
+	cudaMemcpy(elastic_strain.GetData(),&delta_strain.GetData()[0], fDim*fNpts*sizeof(REAL), cudaMemcpyDeviceToDevice);
+
 	REAL a = -1.;
-	cublasDaxpy(handle_cublas,fDim*fNpts,&a, &plastic_strain.GetData()[0],1,&delta_strain.GetData()[0],1);
-	elastic_strain = delta_strain; //because the op is y = ax + y in which y = delta_strain
+	cublasDaxpy(handle_cublas,fDim*fNpts,&a, &plastic_strain.GetData()[0],1,&elastic_strain.GetData()[0],1);
 }
 
 void TPZIntPointsFEM::PlasticStrainGPU(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &elastic_strain, TPZVecGPU<REAL> &plastic_strain) {
+	cudaMemcpy(plastic_strain.GetData(),&delta_strain.GetData()[0], fDim*fNpts*sizeof(REAL), cudaMemcpyDeviceToDevice);
+
 	REAL a = -1.;
-	cublasDaxpy(handle_cublas,fDim*fNpts,&a, &elastic_strain.GetData()[0],1,&delta_strain.GetData()[0],1);
-	plastic_strain = delta_strain; //because the op is y = ax + y in which y = delta_strain
+	cublasDaxpy(handle_cublas,fDim*fNpts,&a, &elastic_strain.GetData()[0],1,&plastic_strain.GetData()[0],1);
 }
 
 //Compute stress
@@ -737,12 +739,12 @@ void TPZIntPointsFEM::AssembleResidual() {
 	TPZVecGPU<REAL> sigma;
 	TPZVecGPU<REAL> nodal_forces;
 	TPZVecGPU<REAL> residual;
+	TPZVecGPU<REAL> elastic_np1;
 
 	//residual assemble
 	int64_t neq = fCmesh->NEquations();
 
 	dSolution.Set(&fSolution(0, 0), neq);
-
 	GatherSolutionGPU(dSolution, gather_solution);
 	DeltaStrainGPU(gather_solution, delta_strain);
 	ElasticStrainGPU(delta_strain, dPlasticStrain, elastic_strain);

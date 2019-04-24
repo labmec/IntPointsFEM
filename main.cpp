@@ -254,7 +254,7 @@ TElastoPlasticData WellboreConfigRK(){
     
     /// Elastic verification -> true
     /// ElastoPlastic verification -> false
-    bool is_elastic_Q = true;
+    bool is_elastic_Q = false;
     
     TPZElasticResponse LER;
     REAL Ey = 2000.0;
