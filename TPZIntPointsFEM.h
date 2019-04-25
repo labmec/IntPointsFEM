@@ -33,17 +33,9 @@ public:
     TPZIntPointsFEM() {
     }
 
-    TPZIntPointsFEM(TPZCompMesh *cmesh, int materialid) {
-        SetCompMesh(cmesh);
-        SetMaterialId(materialid);
-    }
+    TPZIntPointsFEM(TPZCompMesh *cmesh, int materialid);
 
-    ~TPZIntPointsFEM() {
-#ifdef __CUDACC__
-    	DestroyHandles();
-#endif
-
-    }
+    ~TPZIntPointsFEM();
 
     TPZIntPointsFEM(const TPZIntPointsFEM &copy) {
         fDim = copy.fDim;
@@ -261,13 +253,7 @@ public:
 
     void TransferDataStructure();
 
-    void cuSparseHandleCreate() {
-        cusparseCreate (&handle_cusparse);
-    }
 
-    void cuBlasHandleCreate() {
-        cublasCreate (&handle_cublas);
-    }
 
 #endif
 
@@ -295,22 +281,22 @@ protected:
 	TPZStack<REAL> fWeight;
 
 #ifdef __CUDACC__
-    cusparseHandle_t handle_cusparse;
-    cublasHandle_t handle_cublas;
+    cusparseHandle_t * handle_cusparse;
+    cublasHandle_t * handle_cublas;
 
-    TPZVecGPU<REAL> dRhs;
-    TPZVecGPU<REAL> dRhsBoundary;
-    TPZVecGPU<REAL> dSolution;
-    TPZVecGPU<REAL> dPlasticStrain;
-    TPZVecGPU<REAL> dStorage;
-    TPZVecGPU<int> dRowSizes;
-    TPZVecGPU<int> dColSizes;
-    TPZVecGPU<int> dMatrixPosition;
-    TPZVecGPU<int> dRowFirstIndex;
-    TPZVecGPU<int> dColFirstIndex;
-    TPZVecGPU<int> dIndexes;
-    TPZVecGPU<int> dIndexesColor;
-    TPZVecGPU<REAL> dWeight;
+    TPZVecGPU<REAL> *dRhs;
+    TPZVecGPU<REAL> *dRhsBoundary;
+    TPZVecGPU<REAL> *dSolution;
+    TPZVecGPU<REAL> *dPlasticStrain;
+    TPZVecGPU<REAL> *dStorage;
+    TPZVecGPU<int> *dRowSizes;
+    TPZVecGPU<int> *dColSizes;
+    TPZVecGPU<int> *dMatrixPosition;
+    TPZVecGPU<int> *dRowFirstIndex;
+    TPZVecGPU<int> *dColFirstIndex;
+    TPZVecGPU<int> *dIndexes;
+    TPZVecGPU<int> *dIndexesColor;
+    TPZVecGPU<REAL> *dWeight;
 #endif
 
 };

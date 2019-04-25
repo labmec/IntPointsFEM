@@ -73,7 +73,7 @@ void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_mate
 int main(int argc, char *argv[]) {
     
     int pOrder = 2; // Computational mesh order
-    bool render_vtk_Q = true;
+    bool render_vtk_Q = false;
     
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
@@ -85,21 +85,21 @@ int main(int argc, char *argv[]) {
 // Creates the computational mesh
 //    TElastoPlasticData wellbore_material = WellboreConfig(); /// NVB this one is for recurrent usage
     TElastoPlasticData wellbore_material = WellboreConfigRK(); /// NVB this one is just for verification purposes
-    TPZCompMesh *cmesh = CmeshElastoplasticity(gmesh, pOrder, wellbore_material);
+//    TPZCompMesh *cmesh = CmeshElastoplasticity(gmesh, pOrder, wellbore_material);
 
 // Defines the analysis
     int n_threads = 0;
-    TPZAnalysis *analysis = Analysis(cmesh,n_threads);
+//    TPZAnalysis *analysis = Analysis(cmesh,n_threads);
     
 // Calculates the solution using Newton method
     int n_iterations = 50;
     REAL tolerance = 1.e-5;
-   Solution(analysis, n_iterations, tolerance);
+//   Solution(analysis, n_iterations, tolerance);
 
 // Post process
    if (render_vtk_Q) {
        std::string vtk_file = "Approximation.vtk";
-       PostProcess(cmesh, wellbore_material, n_threads, vtk_file);
+//       PostProcess(cmesh, wellbore_material, n_threads, vtk_file);
    }
 
 // Creates the computational mesh
@@ -112,6 +112,8 @@ int main(int argc, char *argv[]) {
         std::string vtk_file = "Approximation_IntPointFEM.vtk";
         PostProcess(cmesh_npts, wellbore_material, n_threads, vtk_file);
     }
+
+    std::cout << "Final ..." <<std::endl;
     return 0;
 }
 
@@ -254,7 +256,7 @@ TElastoPlasticData WellboreConfigRK(){
     
     /// Elastic verification -> true
     /// ElastoPlastic verification -> false
-    bool is_elastic_Q = false;
+    bool is_elastic_Q = true;
     
     TPZElasticResponse LER;
     REAL Ey = 2000.0;
@@ -501,6 +503,7 @@ void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
         du += delta_du;
         solveintpoints.LoadSolution(du);
         solveintpoints.AssembleResidual();
+        std::cout << "TPZIntPointsFEM::AssembleResidual Sai do Block 4" << std::endl;
         norm_delta_du = Norm(delta_du);
         norm_res = Norm(solveintpoints.Rhs());
         stop_criterion_Q = norm_res < tolerance;

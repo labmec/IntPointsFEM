@@ -15,9 +15,11 @@ class TPZVecGPU
 // public functions
 public:
 	TPZVecGPU()
-        : start_(0),
-          end_(0)
-    {}
+    {
+		start_ = new T(0);
+		end_ = new T(0);
+
+    }
 
 
     // constructor
@@ -28,6 +30,7 @@ public:
     // destructor
     ~TPZVecGPU()
     {
+    	std::cout << "TPZVecGPU::Destruindo cualquer." << std::endl;
         free();
     }
 
@@ -101,6 +104,7 @@ private:
         end_ = start_ + size;
     }
 
+public:
     // free memory on the device
     void free()
     {
