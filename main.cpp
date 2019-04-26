@@ -31,8 +31,8 @@
 #include "TPZPlasticStepPV.h"
 #include "TPZYCMohrCoulombPV.h"
 #include "TPZBndCondWithMem.h"
-
 #include "TPZIntPointsFEM.h"
+
 #include "TElastoPlasticData.h"
 #include "TRKSolution.h"
 
@@ -78,28 +78,27 @@ int main(int argc, char *argv[]) {
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
     std::string msh_file = source_dir + "/gmsh/wellbore.msh";
-//    std::string msh_file = source_dir + "/gmsh/wellbore_quad.msh";
     TPZGeoMesh *gmesh = ReadGeometry(msh_file);
     PrintGeometry(gmesh);
 
 // Creates the computational mesh
 //    TElastoPlasticData wellbore_material = WellboreConfig(); /// NVB this one is for recurrent usage
     TElastoPlasticData wellbore_material = WellboreConfigRK(); /// NVB this one is just for verification purposes
-//    TPZCompMesh *cmesh = CmeshElastoplasticity(gmesh, pOrder, wellbore_material);
+    TPZCompMesh *cmesh = CmeshElastoplasticity(gmesh, pOrder, wellbore_material);
 
 // Defines the analysis
     int n_threads = 0;
-//    TPZAnalysis *analysis = Analysis(cmesh,n_threads);
+    TPZAnalysis *analysis = Analysis(cmesh,n_threads);
     
 // Calculates the solution using Newton method
     int n_iterations = 50;
     REAL tolerance = 1.e-5;
-//   Solution(analysis, n_iterations, tolerance);
+   Solution(analysis, n_iterations, tolerance);
 
 // Post process
    if (render_vtk_Q) {
        std::string vtk_file = "Approximation.vtk";
-//       PostProcess(cmesh, wellbore_material, n_threads, vtk_file);
+       PostProcess(cmesh, wellbore_material, n_threads, vtk_file);
    }
 
 // Creates the computational mesh
@@ -108,6 +107,7 @@ int main(int argc, char *argv[]) {
     
 // Calculates the solution using all intg points at once
     SolutionAllPoints(analysis_npts, n_iterations, tolerance, wellbore_material);
+    std::cout << "main:: After SolutionAllPoints calling ... " << std::endl;
     if (render_vtk_Q) { //Post process
         std::string vtk_file = "Approximation_IntPointFEM.vtk";
         PostProcess(cmesh_npts, wellbore_material, n_threads, vtk_file);
@@ -126,6 +126,7 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
 
     analysis->Solution().Zero();
     TPZFMatrix<REAL> du(analysis->Solution()), delta_du;
+    analysis->Assemble();
 
     for (int i = 0; i < n_iterations; i++) {
         analysis->Assemble();
@@ -256,7 +257,7 @@ TElastoPlasticData WellboreConfigRK(){
     
     /// Elastic verification -> true
     /// ElastoPlastic verification -> false
-    bool is_elastic_Q = true;
+    bool is_elastic_Q = false;
     
     TPZElasticResponse LER;
     REAL Ey = 2000.0;
@@ -487,14 +488,18 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int p_order, TElastoPlasti
 }
 
 void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance, TElastoPlasticData & wellbore_material){
+	std::cout << "Solving with IntPointsFEM ..." << std::endl;
     bool stop_criterion_Q = false;
     REAL norm_res, norm_delta_du;
     int neq = analysis->Solution().Rows();
     TPZFMatrix<REAL> du(neq, 1, 0.), delta_du;
-
-    TPZIntPointsFEM solveintpoints(analysis->Mesh(), wellbore_material.Id());
-    solveintpoints.SetDataStructure();
-
+//    {
+    	std::cout << "SolutionAllPoints:: Creating IntPointsFEM ..." << std::endl;
+    	TPZIntPointsFEM solveintpoints(analysis->Mesh(), wellbore_material.Id());
+    	solveintpoints.SetDataStructure();
+    	std::cout << "SolutionAllPoints:: Destroying with IntPointsFEM ..." << std::endl;
+//    }
+//
     analysis->Solution().Zero();
     analysis->Assemble();
     for (int i = 0; i < n_iterations; i++) {
@@ -503,7 +508,6 @@ void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
         du += delta_du;
         solveintpoints.LoadSolution(du);
         solveintpoints.AssembleResidual();
-        std::cout << "TPZIntPointsFEM::AssembleResidual Sai do Block 4" << std::endl;
         norm_delta_du = Norm(delta_du);
         norm_res = Norm(solveintpoints.Rhs());
         stop_criterion_Q = norm_res < tolerance;

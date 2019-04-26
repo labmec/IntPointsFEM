@@ -12,6 +12,80 @@
 #include <algorithm>
 #endif
 
+
+TPZIntPointsFEM::TPZIntPointsFEM() : fDim(-1), fBoundaryElements(), fCmesh(0), fNpts(-1), fNphis(-1), fElemColor(0), fMaterial(0), fRhs(0,0), fRhsBoundary(0,0),
+									 fSolution(0,0), fPlasticStrain(0,0), fStorage(0), fRowSizes(0), fColSizes(0), fMatrixPosition(0), fRowFirstIndex(0),
+									 fColFirstIndex(0), fIndexes(0), fIndexesColor(0), fWeight() {
+
+
+}
+
+TPZIntPointsFEM::TPZIntPointsFEM(TPZCompMesh *cmesh, int materialid) : fDim(-1), fBoundaryElements(), fCmesh(0), fNpts(-1), fNphis(-1), fElemColor(0), fMaterial(0), fRhs(0,0), fRhsBoundary(0,0),
+		 fSolution(0,0), fPlasticStrain(0,0), fStorage(0), fRowSizes(0), fColSizes(0), fMatrixPosition(0), fRowFirstIndex(0),
+		 fColFirstIndex(0), fIndexes(0), fIndexesColor(0), fWeight() {
+
+	SetCompMesh(cmesh);
+    SetMaterialId(materialid);
+}
+
+TPZIntPointsFEM::~TPZIntPointsFEM() {
+
+}
+
+TPZIntPointsFEM::TPZIntPointsFEM(const TPZIntPointsFEM &copy) {
+    fDim = copy.fDim;
+    fBoundaryElements = copy.fBoundaryElements;
+    fCmesh = copy.fCmesh;
+    fNpts = copy.fNpts;
+    fNphis = copy.fNphis;
+    fElemColor = copy.fElemColor;
+    fMaterial = copy.fMaterial;
+
+    fRhs = copy.fRhs;
+    fRhsBoundary = copy.fRhsBoundary;
+    fSolution = copy.fSolution;
+    fPlasticStrain = copy.fPlasticStrain;
+    fStorage = copy.fStorage;
+    fColSizes = copy.fColSizes;
+    fRowSizes = copy.fRowSizes;
+    fMatrixPosition = copy.fMatrixPosition;
+    fRowFirstIndex = copy.fRowFirstIndex;
+    fColFirstIndex = copy.fColFirstIndex;
+    fIndexes = copy.fIndexes;
+    fIndexesColor = copy.fIndexesColor;
+    fWeight = copy.fWeight;
+}
+
+TPZIntPointsFEM &TPZIntPointsFEM::operator=(const TPZIntPointsFEM &copy) {
+    if(&copy == this){
+        return *this;
+    }
+
+    fDim = copy.fDim;
+    fBoundaryElements = copy.fBoundaryElements;
+    fCmesh = copy.fCmesh;
+    fNpts = copy.fNpts;
+    fNphis = copy.fNphis;
+    fElemColor = copy.fElemColor;
+    fMaterial = copy.fMaterial;
+
+    fRhs = copy.fRhs;
+    fRhsBoundary = copy.fRhsBoundary;
+    fSolution = copy.fSolution;
+    fPlasticStrain = copy.fPlasticStrain;
+    fStorage = copy.fStorage;
+    fColSizes = copy.fColSizes;
+    fRowSizes = copy.fRowSizes;
+    fMatrixPosition = copy.fMatrixPosition;
+    fRowFirstIndex = copy.fRowFirstIndex;
+    fColFirstIndex = copy.fColFirstIndex;
+    fIndexes = copy.fIndexes;
+    fIndexesColor = copy.fIndexesColor;
+    fWeight = copy.fWeight;
+
+    return *this;
+}
+
 //Spectral decomposition
 void TPZIntPointsFEM::Multiplicity1(double *sigma, double eigenvalue, double *eigenvector) {
     TPZVec<REAL> det(3);

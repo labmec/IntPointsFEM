@@ -14,10 +14,10 @@
 #include "TPZElastoPlasticMem.h"
 #include "TPZMatElastoPlastic2D.h"
 
-
 #ifdef USING_MKL
 #include "mkl.h"
 #endif
+
 
 #ifdef __CUDACC__
 #include "TPZVecGPU.h"
@@ -30,95 +30,15 @@ class TPZIntPointsFEM {
 
 public:
 
-    TPZIntPointsFEM() {
-    }
+    TPZIntPointsFEM();
 
     TPZIntPointsFEM(TPZCompMesh *cmesh, int materialid);
 
     ~TPZIntPointsFEM();
 
-    TPZIntPointsFEM(const TPZIntPointsFEM &copy) {
-        fDim = copy.fDim;
-        fRhs = copy.fRhs;
-        fRhsBoundary = copy.fRhsBoundary;
-        fBoundaryElements = copy.fBoundaryElements;
-        fPlasticStrain = copy.fPlasticStrain;
-        fSolution = copy.fSolution;
-        fCmesh = copy.fCmesh;
-        fNpts = copy.fNpts;
-        fNphis = copy.fNphis;
-        fStorage = copy.fStorage;
-        fColSizes = copy.fColSizes;
-        fRowSizes = copy.fRowSizes;
-        fMatrixPosition = copy.fMatrixPosition;
-        fColFirstIndex = copy.fColFirstIndex;
-        fRowFirstIndex = copy.fRowFirstIndex;
-        fElemColor = copy.fElemColor;
-        fIndexes = copy.fIndexes;
-        fIndexesColor = copy.fIndexesColor;
-        fWeight = copy.fWeight;
-        fMaterial = copy.fMaterial;
+    TPZIntPointsFEM(const TPZIntPointsFEM &copy);
 
-#ifdef __CUDACC__
-        handle_cusparse = copy.handle_cusparse;
-        handle_cublas = copy.handle_cublas;
-
-        dRhs = copy.dRhs;
-        dRhsBoundary = copy.dRhsBoundary;
-        dSolution = copy.dSolution;
-        dPlasticStrain = copy.dPlasticStrain;
-        dStorage = copy.dStorage;
-        dRowSizes = copy.dRowSizes;
-        dColSizes = copy.dColSizes;
-        dMatrixPosition = copy.dMatrixPosition;
-        dRowFirstIndex = copy.dRowFirstIndex;
-        dColFirstIndex = copy.dColFirstIndex;
-        dIndexes = copy.dIndexes;
-        dIndexesColor = copy.dIndexesColor;
-        dWeight = copy.dWeight;
-#endif
-    }
-
-    TPZIntPointsFEM &operator=(const TPZIntPointsFEM &copy) {
-        fDim = copy.fDim;
-        fRhs = copy.fRhs;
-        fRhsBoundary = copy.fRhsBoundary;
-        fBoundaryElements = copy.fBoundaryElements;
-        fPlasticStrain = copy.fPlasticStrain;
-        fSolution = copy.fSolution;
-        fCmesh = copy.fCmesh;
-        fStorage = copy.fStorage;
-        fColSizes = copy.fColSizes;
-        fRowSizes = copy.fRowSizes;
-        fMatrixPosition = copy.fMatrixPosition;
-        fColFirstIndex = copy.fColFirstIndex;
-        fRowFirstIndex = copy.fRowFirstIndex;
-        fElemColor = copy.fElemColor;
-        fIndexes = copy.fIndexes;
-        fIndexesColor = copy.fIndexesColor;
-        fWeight = copy.fWeight;
-        fMaterial = copy.fMaterial;
-
-#ifdef __CUDACC__
-        handle_cusparse = copy.handle_cusparse;
-        handle_cublas = copy.handle_cublas;
-
-        dRhs = copy.dRhs;
-        dRhsBoundary = copy.dRhsBoundary;
-        dSolution = copy.dSolution;
-        dPlasticStrain = copy.dPlasticStrain;
-        dStorage = copy.dStorage;
-        dRowSizes = copy.dRowSizes;
-        dColSizes = copy.dColSizes;
-        dMatrixPosition = copy.dMatrixPosition;
-        dRowFirstIndex = copy.dRowFirstIndex;
-        dColFirstIndex = copy.dColFirstIndex;
-        dIndexes = copy.dIndexes;
-        dIndexesColor = copy.dIndexesColor;
-        dWeight = copy.dWeight;
-#endif
-        return *this;
-    }
+    TPZIntPointsFEM &operator=(const TPZIntPointsFEM &copy);
 
     void SetRowandColSizes(TPZVec<int> rowsize, TPZVec<int> colsize) {
         int64_t nelem = rowsize.size();
@@ -176,7 +96,7 @@ public:
         fCmesh = cmesh;
     }
 
-    void SetWeightVector (TPZStack<REAL> wvec) {
+    void SetWeightVector (TPZVec<REAL> &wvec) {
         fWeight = wvec;
     }
 
@@ -236,24 +156,20 @@ public:
 
     void AssembleRhsBoundary();
 
-    void DestroyHandles();
-
 #ifdef __CUDACC__
-    void GatherSolutionGPU(TPZVecGPU<REAL> &global_solution, TPZVecGPU<REAL> &gather_solution);
-    void DeltaStrainGPU(TPZVecGPU<REAL> &gather_solution, TPZVecGPU<REAL> &delta_strain);
-    void ElasticStrainGPU(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &plastic_strain, TPZVecGPU<REAL> &elastic_strain);
-    void ComputeStressGPU(TPZVecGPU<REAL> &elastic_strain, TPZVecGPU<REAL> &sigma);
-    void SpectralDecompositionGPU(TPZVecGPU<REAL> &sigma_trial, TPZVecGPU<REAL> &eigenvalues, TPZVecGPU<REAL> &eigenvectors);
-    void ProjectSigmaGPU(TPZVecGPU<REAL> &eigenvalues, TPZVecGPU<REAL> &sigma_projected);
-    void StressCompleteTensorGPU(TPZVecGPU<REAL> &sigma_projected, TPZVecGPU<REAL> &eigenvectors, TPZVecGPU<REAL> &sigma);
-    void NodalForcesGPU(TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL> &nodal_forces);
-    void ColoredAssembleGPU(TPZVecGPU<REAL> &nodal_forces, TPZVecGPU<REAL> &residual);
-    void ComputeStrainGPU(TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL> &elastic_strain);
-    void PlasticStrainGPU(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &elastic_strain, TPZVecGPU<REAL> &plastic_strain);
-
     void TransferDataStructure();
 
-
+    void GatherSolutionGPU(REAL *gather_solution);
+    void DeltaStrainGPU(REAL *gather_solution, REAL *delta_strain);
+    void ElasticStrainGPU(REAL *delta_strain, REAL *plastic_strain, REAL *elastic_strain);
+    void ComputeStressGPU(REAL *elastic_strain, REAL *sigma);
+    void SpectralDecompositionGPU(REAL *sigma_trial, REAL *eigenvalues, REAL *eigenvectors);
+    void ProjectSigmaGPU(REAL *eigenvalues, REAL *sigma_projected);
+    void StressCompleteTensorGPU(REAL *sigma_projected, REAL *eigenvectors, REAL *sigma);
+    void NodalForcesGPU(REAL *sigma, REAL *nodal_forces);
+    void ColoredAssembleGPU(REAL *nodal_forces, REAL *residual);
+    void ComputeStrainGPU(REAL *sigma, REAL *elastic_strain);
+    void PlasticStrainGPU(REAL *delta_strain, REAL *elastic_strain, REAL *plastic_strain);
 
 #endif
 
@@ -277,27 +193,31 @@ protected:
 	TPZVec<int> fRowFirstIndex;
 	TPZVec<int> fColFirstIndex;
 	TPZVec<int> fIndexes;
-	TPZVec<MKL_INT> fIndexesColor;
-	TPZStack<REAL> fWeight;
+	TPZVec<int> fIndexesColor;
+	TPZVec<REAL> fWeight;
 
 #ifdef __CUDACC__
-    cusparseHandle_t * handle_cusparse;
-    cublasHandle_t * handle_cublas;
-
-    TPZVecGPU<REAL> *dRhs;
-    TPZVecGPU<REAL> *dRhsBoundary;
-    TPZVecGPU<REAL> *dSolution;
-    TPZVecGPU<REAL> *dPlasticStrain;
-    TPZVecGPU<REAL> *dStorage;
-    TPZVecGPU<int> *dRowSizes;
-    TPZVecGPU<int> *dColSizes;
-    TPZVecGPU<int> *dMatrixPosition;
-    TPZVecGPU<int> *dRowFirstIndex;
-    TPZVecGPU<int> *dColFirstIndex;
-    TPZVecGPU<int> *dIndexes;
-    TPZVecGPU<int> *dIndexesColor;
-    TPZVecGPU<REAL> *dWeight;
+	cusparseHandle_t handle_cusparse;
+	cublasHandle_t handle_cublas;
 #endif
+
+//	 @omar:: Cara Natalia AO DEFINIR dSolution DA ERRADO COMENTA dSolution QUALQUER COISA NO wapp
+
+    REAL *dRhs;
+    REAL *dRhsBoundary;
+    REAL *dSolution;
+    REAL *dPlasticStrain;
+    REAL *dStorage;
+    int *dRowSizes;
+    int *dColSizes;
+    int *dMatrixPosition;
+    int *dRowFirstIndex;
+    int *dColFirstIndex;
+    int *dIndexes;
+    int *dIndexesColor;
+    REAL *dWeight;
+//#endif
+
 
 };
 
