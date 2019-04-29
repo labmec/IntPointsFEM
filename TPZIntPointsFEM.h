@@ -20,7 +20,7 @@
 
 
 #ifdef __CUDACC__
-#include "TPZVecGPU.h"
+//#include "TPZVecGPU.h"
 #include <cublas_v2.h>
 #include <cusparse.h>
 #include <cuda.h>
