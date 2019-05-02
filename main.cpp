@@ -92,7 +92,7 @@ int main(int argc, char *argv[]) {
     TPZAnalysis *analysis = Analysis(cmesh,n_threads);
     
 // Calculates the solution using Newton method
-    int n_iterations = 50;
+    int n_iterations = 2;
     REAL tolerance = 1.e-5;
    Solution(analysis, n_iterations, tolerance);
 
@@ -257,7 +257,7 @@ TElastoPlasticData WellboreConfigRK(){
     
     /// Elastic verification -> true
     /// ElastoPlastic verification -> false
-    bool is_elastic_Q = true;
+    bool is_elastic_Q = false;
     
     TPZElasticResponse LER;
     REAL Ey = 2000.0;
