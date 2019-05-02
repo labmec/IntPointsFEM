@@ -910,6 +910,22 @@ void TPZIntPointsFEM::AssembleRhsBoundary() {
 	}
 }
 
+void TPZIntPointsFEM::CSRInfo() {
+    int64_t nelem = fRowSizes.size();
+    int64_t nnz = fStorage.size();
+    TPZVec<int> fRowPtr(fNpts + 1); //m+1
+    TPZVec<int> fColInd(nnz);
+    for (int iel = 0; iel < nelem; ++iel) {
+        for (int irow = 0; irow < fRowSizes[iel]; ++irow) {
+            fRowPtr[irow + fRowFirstIndex[iel]] = fMatrixPosition[iel] + irow*fColSizes[iel];
+
+            for (int icol = 0; icol < fColSizes[iel]; ++icol) {
+                fColInd[icol + fMatrixPosition[iel] + irow*fColSizes[iel]] = icol + fColFirstIndex[iel];
+            }
+        }
+    }
+}
+
 void TPZIntPointsFEM::TransferDataStructure() {
 
 	cublasCreate(&handle_cublas);
