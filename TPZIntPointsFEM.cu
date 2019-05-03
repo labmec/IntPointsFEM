@@ -1059,6 +1059,7 @@ void TPZIntPointsFEM::DeltaStrainGPU(REAL *gather_solution, REAL *delta_strain) 
 
 void TPZIntPointsFEM::ElasticStrainGPU(REAL *delta_strain, REAL *plastic_strain, REAL *elastic_strain) {
 	cudaMemcpy(elastic_strain, &delta_strain[0], fDim * fNpts * sizeof(REAL), cudaMemcpyDeviceToDevice);
+	cudaMemset(plastic_strain, 0, fDim * fNpts * sizeof(REAL));
 
 	REAL a = -1.;
 	cublasDaxpy(handle_cublas, fDim * fNpts, &a, &plastic_strain[0], 1, &elastic_strain[0], 1);
@@ -1148,7 +1149,7 @@ void TPZIntPointsFEM::ColoredAssembleGPU(REAL *nodal_forces, REAL *residual) {
 	while (colorassemb > 0) {
 
 		int64_t firsteq = (ncolor - colorassemb) * neq;
-		cublasDaxpy(handle_cublas, firsteq, &alpha, &residual[firsteq], 1., &residual[0], 1.);
+		cublasDaxpy(handle_cublas, colorassemb * neq, &alpha, &residual[firsteq], 1., &residual[0], 1.);
 
 		ncolor -= colorassemb;
 		colorassemb = ncolor / 2;
