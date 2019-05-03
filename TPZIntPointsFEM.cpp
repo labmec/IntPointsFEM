@@ -14,17 +14,17 @@
 
 
 TPZIntPointsFEM::TPZIntPointsFEM() : fDim(-1), fBoundaryElements(), fCmesh(0), fNpts(-1), fNphis(-1), fElemColor(0), fMaterial(0), fRhs(0,0), fRhsBoundary(0,0),
-									 fSolution(0,0), fPlasticStrain(0,0), fStorage(0), fRowSizes(0), fColSizes(0), fMatrixPosition(0), fRowFirstIndex(0),
-									 fColFirstIndex(0), fIndexes(0), fIndexesColor(0), fWeight() {
+                                     fSolution(0,0), fPlasticStrain(0,0), fStorage(0), fRowSizes(0), fColSizes(0), fMatrixPosition(0), fRowFirstIndex(0),
+                                     fColFirstIndex(0), fIndexes(0), fIndexesColor(0), fWeight() {
 
 
 }
 
 TPZIntPointsFEM::TPZIntPointsFEM(TPZCompMesh *cmesh, int materialid) : fDim(-1), fBoundaryElements(), fCmesh(0), fNpts(-1), fNphis(-1), fElemColor(0), fMaterial(0), fRhs(0,0), fRhsBoundary(0,0),
-		 fSolution(0,0), fPlasticStrain(0,0), fStorage(0), fRowSizes(0), fColSizes(0), fMatrixPosition(0), fRowFirstIndex(0),
-		 fColFirstIndex(0), fIndexes(0), fIndexesColor(0), fWeight() {
+                                                                       fSolution(0,0), fPlasticStrain(0,0), fStorage(0), fRowSizes(0), fColSizes(0), fMatrixPosition(0), fRowFirstIndex(0),
+                                                                       fColFirstIndex(0), fIndexes(0), fIndexesColor(0), fWeight() {
 
-	SetCompMesh(cmesh);
+    SetCompMesh(cmesh);
     SetMaterialId(materialid);
 }
 
@@ -560,10 +560,17 @@ void TPZIntPointsFEM::DeltaStrain(TPZFMatrix<REAL> &expandsolution, TPZFMatrix<R
 }
 
 void TPZIntPointsFEM::ElasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &elastic_strain) {
+    elastic_strain.Resize(fDim*fNpts,1);
+    elastic_strain.Zero();
+
+    plastic_strain.Zero();
+
     elastic_strain = delta_strain - plastic_strain;
 }
 
 void TPZIntPointsFEM::PlasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &plastic_strain) {
+    plastic_strain.Resize(fDim*fNpts,1);
+
     plastic_strain = delta_strain - elastic_strain;
 }
 
@@ -913,12 +920,12 @@ void TPZIntPointsFEM::AssembleRhsBoundary() {
     fRhsBoundary.Resize(neq, 1);
     fRhsBoundary.Zero();
 
-        for (auto iel : fBoundaryElements) {
-            TPZCompEl *cel = fCmesh->Element(iel);
-            if (!cel) continue;
-            TPZElementMatrix ef(fCmesh, TPZElementMatrix::EF);
-            cel->CalcResidual(ef);
-            ef.ComputeDestinationIndices();
-            fRhsBoundary.AddFel(ef.fMat, ef.fSourceIndex, ef.fDestinationIndex);
-        }
+    for (auto iel : fBoundaryElements) {
+        TPZCompEl *cel = fCmesh->Element(iel);
+        if (!cel) continue;
+        TPZElementMatrix ef(fCmesh, TPZElementMatrix::EF);
+        cel->CalcResidual(ef);
+        ef.ComputeDestinationIndices();
+        fRhsBoundary.AddFel(ef.fMat, ef.fSourceIndex, ef.fDestinationIndex);
+    }
 }
