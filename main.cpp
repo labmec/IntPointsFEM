@@ -73,7 +73,7 @@ void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_mate
 int main(int argc, char *argv[]) {
 
     int pOrder = 2; // Computational mesh order
-    bool render_vtk_Q = false;
+    bool render_vtk_Q = true;
     
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
@@ -108,7 +108,12 @@ int main(int argc, char *argv[]) {
 // Calculates the solution using all intg points at once
     SolutionAllPoints(analysis_npts, n_iterations, tolerance, wellbore_material);
     if (render_vtk_Q) { //Post process
-        std::string vtk_file = "Approximation_IntPointFEM.vtk";
+#ifdef USING_CUDA
+        std::string vtk_file = "Approximation_IntPointFEM-GPU.vtk";
+#else
+        std::string vtk_file = "Approximation_IntPointFEM-CPU.vtk";
+
+#endif
         PostProcess(cmesh_npts, wellbore_material, n_threads, vtk_file);
     }
 
@@ -139,7 +144,6 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
         std::cout << "Nonlinear process :: delta_du norm = " << norm_delta_du << std::endl;
         std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
         if (stop_criterion_Q) {
-        	analysis->Solution().Print(std::cout);
             AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
             std::cout << "Nonlinear process converged with residue norm = " << norm_res << std::endl;
             std::cout << "Number of iterations = " << i + 1 << std::endl;
@@ -512,7 +516,6 @@ void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
         std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
 //        PrintMemory(analysis->Mesh());
         if (stop_criterion_Q) {
-        	analysis->Solution().Print(std::cout);
             AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
 //            PrintMemory(analysis->Mesh());
             std::cout << "Nonlinear process converged with residue norm = " << norm_res << std::endl;
