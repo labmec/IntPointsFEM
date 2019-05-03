@@ -13,6 +13,7 @@
 #include "TPZYCMohrCoulombPV.h"
 #include "TPZElastoPlasticMem.h"
 #include "TPZMatElastoPlastic2D.h"
+#include "pzanalysis.h"
 
 #ifdef USING_MKL
 #include "mkl.h"
@@ -32,7 +33,7 @@ public:
 
     TPZIntPointsFEM();
 
-    TPZIntPointsFEM(TPZCompMesh *cmesh, int materialid);
+    TPZIntPointsFEM(TPZAnalysis *analysis, int materialid);
 
     ~TPZIntPointsFEM();
 
@@ -96,6 +97,10 @@ public:
         fCmesh = cmesh;
     }
 
+    void SetAnalysis(TPZAnalysis *analysis) {
+        fAnalysis = analysis;
+    }
+
     void SetWeightVector (TPZVec<REAL> &wvec) {
         fWeight = wvec;
     }
@@ -106,6 +111,7 @@ public:
     }
 
     void LoadSolution (TPZFMatrix<REAL> & sol) {
+        fAnalysis->LoadSolution(sol);
         fSolution = sol;
     }
 
@@ -177,6 +183,7 @@ protected:
     int fDim;
     TPZStack<int64_t> fBoundaryElements;
     TPZCompMesh *fCmesh;
+    TPZAnalysis *fAnalysis;
     int64_t fNpts;
     int64_t fNphis;
     TPZVec<int64_t> fElemColor;
