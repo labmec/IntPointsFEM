@@ -13,18 +13,18 @@
 #endif
 
 
-TPZIntPointsFEM::TPZIntPointsFEM() : fDim(-1), fBoundaryElements(), fCmesh(), fAnalysis(), fNpts(-1), fNphis(-1), fElemColor(0), fMaterial(0), fRhs(0,0), fRhsBoundary(0,0),
+TPZIntPointsFEM::TPZIntPointsFEM() : fDim(-1), fBoundaryElements(), fCmesh(0), fNpts(-1), fNphis(-1), fElemColor(0), fMaterial(0), fRhs(0,0), fRhsBoundary(0,0),
                                      fSolution(0,0), fPlasticStrain(0,0), fStorage(0), fRowSizes(0), fColSizes(0), fMatrixPosition(0), fRowFirstIndex(0),
                                      fColFirstIndex(0), fIndexes(0), fIndexesColor(0), fWeight() {
 
 
 }
 
-TPZIntPointsFEM::TPZIntPointsFEM(TPZAnalysis *analysis, int materialid) : fDim(-1), fBoundaryElements(), fCmesh(), fAnalysis(), fNpts(-1), fNphis(-1), fElemColor(0), fMaterial(0), fRhs(0,0), fRhsBoundary(0,0),
+TPZIntPointsFEM::TPZIntPointsFEM(TPZCompMesh *cmesh, int materialid) : fDim(-1), fBoundaryElements(), fCmesh(0), fNpts(-1), fNphis(-1), fElemColor(0), fMaterial(0), fRhs(0,0), fRhsBoundary(0,0),
                                                                        fSolution(0,0), fPlasticStrain(0,0), fStorage(0), fRowSizes(0), fColSizes(0), fMatrixPosition(0), fRowFirstIndex(0),
                                                                        fColFirstIndex(0), fIndexes(0), fIndexesColor(0), fWeight() {
-    SetAnalysis(analysis);
-    SetCompMesh(analysis->Mesh());
+
+    SetCompMesh(cmesh);
     SetMaterialId(materialid);
 }
 
@@ -36,7 +36,6 @@ TPZIntPointsFEM::TPZIntPointsFEM(const TPZIntPointsFEM &copy) {
     fDim = copy.fDim;
     fBoundaryElements = copy.fBoundaryElements;
     fCmesh = copy.fCmesh;
-    fAnalysis = copy.fAnalysis;
     fNpts = copy.fNpts;
     fNphis = copy.fNphis;
     fElemColor = copy.fElemColor;
@@ -65,7 +64,6 @@ TPZIntPointsFEM &TPZIntPointsFEM::operator=(const TPZIntPointsFEM &copy) {
     fDim = copy.fDim;
     fBoundaryElements = copy.fBoundaryElements;
     fCmesh = copy.fCmesh;
-    fAnalysis = copy.fAnalysis;
     fNpts = copy.fNpts;
     fNphis = copy.fNphis;
     fElemColor = copy.fElemColor;

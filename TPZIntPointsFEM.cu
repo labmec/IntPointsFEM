@@ -534,9 +534,12 @@ __global__ void StressCompleteTensorKernel(int64_t fNpts, int fDim, REAL *sigma_
 }
 
 
-TPZIntPointsFEM::TPZIntPointsFEM() : fDim(-1), fBoundaryElements(), fCmesh(), fAnalysis(), fNpts(-1), fNphis(-1), fElemColor(0), fMaterial(0), fRhs(0,0), fRhsBoundary(0,0),
-                                     fSolution(0,0), fPlasticStrain(0,0), fStorage(0), fRowSizes(0), fColSizes(0), fMatrixPosition(0), fRowFirstIndex(0),
-                                     fColFirstIndex(0), fIndexes(0), fIndexesColor(0), fWeight(){
+TPZIntPointsFEM::TPZIntPointsFEM() :
+		fDim(-1), fBoundaryElements(), fCmesh(0), fNpts(-1), fNphis(-1), fElemColor(
+				0), fMaterial(0), fRhs(0, 0), fRhsBoundary(0, 0), fSolution(0,
+				0), fPlasticStrain(0, 0), fStorage(0), fRowSizes(0), fColSizes(
+				0), fMatrixPosition(0), fRowFirstIndex(0), fColFirstIndex(0), fIndexes(
+				0), fIndexesColor(0), fWeight() {
 //	handle_cusparse = new cusparseHandle_t;
 //	handle_cublas = new cublasHandle_t;
 
@@ -556,12 +559,14 @@ TPZIntPointsFEM::TPZIntPointsFEM() : fDim(-1), fBoundaryElements(), fCmesh(), fA
 
 }
 
-TPZIntPointsFEM::TPZIntPointsFEM(TPZCompMesh *cmesh, int materialid) : fDim(-1), fBoundaryElements(), fCmesh(), fAnalysis(), fNpts(-1), fNphis(-1), fElemColor(0), fMaterial(0), fRhs(0,0), fRhsBoundary(0,0),
-                                                                       fSolution(0,0), fPlasticStrain(0,0), fStorage(0), fRowSizes(0), fColSizes(0), fMatrixPosition(0), fRowFirstIndex(0),
-                                                                       fColFirstIndex(0), fIndexes(0), fIndexesColor(0), fWeight() {
-    SetAnalysis(analysis);
-    SetCompMesh(analysis->Mesh());
-    SetMaterialId(materialid);
+TPZIntPointsFEM::TPZIntPointsFEM(TPZCompMesh *cmesh, int materialid) :
+		fDim(-1), fBoundaryElements(), fCmesh(0), fNpts(-1), fNphis(-1), fElemColor(
+				0), fMaterial(0), fRhs(0, 0), fRhsBoundary(0, 0), fSolution(0,
+				0), fPlasticStrain(0, 0), fStorage(0), fRowSizes(0), fColSizes(
+				0), fMatrixPosition(0), fRowFirstIndex(0), fColFirstIndex(0), fIndexes(
+				0), fIndexesColor(0), fWeight() {
+	SetCompMesh(cmesh);
+	SetMaterialId(materialid);
 //	handle_cusparse = new cusparseHandle_t;
 //	handle_cublas = new cublasHandle_t;
 	dRhs = new REAL[0];
@@ -602,7 +607,6 @@ TPZIntPointsFEM::TPZIntPointsFEM(const TPZIntPointsFEM &copy) {
 	fDim = copy.fDim;
 	fBoundaryElements = copy.fBoundaryElements;
 	fCmesh = copy.fCmesh;
-    fAnalysis = copy.fAnalysis;
 	fNpts = copy.fNpts;
 	fNphis = copy.fNphis;
 	fElemColor = copy.fElemColor;
@@ -648,7 +652,6 @@ TPZIntPointsFEM &TPZIntPointsFEM::operator=(const TPZIntPointsFEM &copy) {
 	fDim = copy.fDim;
 	fBoundaryElements = copy.fBoundaryElements;
 	fCmesh = copy.fCmesh;
-    fAnalysis = copy.fAnalysis;
 	fNpts = copy.fNpts;
 	fNphis = copy.fNphis;
 	fElemColor = copy.fElemColor;

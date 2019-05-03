@@ -73,7 +73,7 @@ void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_mate
 int main(int argc, char *argv[]) {
 
     int pOrder = 2; // Computational mesh order
-    bool render_vtk_Q = true;
+    bool render_vtk_Q = false;
     
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
@@ -139,8 +139,7 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
         std::cout << "Nonlinear process :: delta_du norm = " << norm_delta_du << std::endl;
         std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
         if (stop_criterion_Q) {
-            analysis->Solution().Print(std::cout);
-
+        	analysis->Solution().Print(std::cout);
             AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
             std::cout << "Nonlinear process converged with residue norm = " << norm_res << std::endl;
             std::cout << "Number of iterations = " << i + 1 << std::endl;
@@ -494,7 +493,7 @@ void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
     int neq = analysis->Solution().Rows();
     TPZFMatrix<REAL> du(neq, 1, 0.), delta_du;
 
-    TPZIntPointsFEM solveintpoints(analysis, wellbore_material.Id());
+    TPZIntPointsFEM solveintpoints(analysis->Mesh(), wellbore_material.Id());
     solveintpoints.SetDataStructure();
 
     analysis->Solution().Zero();
@@ -513,7 +512,7 @@ void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
         std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
 //        PrintMemory(analysis->Mesh());
         if (stop_criterion_Q) {
-            analysis->Solution().Print(std::cout);
+        	analysis->Solution().Print(std::cout);
             AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
 //            PrintMemory(analysis->Mesh());
             std::cout << "Nonlinear process converged with residue norm = " << norm_res << std::endl;
@@ -582,4 +581,3 @@ void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_mate
     rkmethod.FillPointsMemory();
     rkmethod.RKProcess(out, euler);
 }
-
