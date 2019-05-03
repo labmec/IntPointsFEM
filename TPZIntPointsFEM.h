@@ -119,8 +119,6 @@ public:
 
     void SetDataStructure();
 
-    void CSRInfo();
-
     void GatherSolution(TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &gather_solution);
     void DeltaStrain(TPZFMatrix<REAL> &gather_solution, TPZFMatrix<REAL> &delta_strain);
 
@@ -203,8 +201,7 @@ protected:
 	cublasHandle_t handle_cublas;
 #endif
 
-
-
+//	 @omar:: Cara Natalia AO DEFINIR dSolution DA ERRADO COMENTA dSolution QUALQUER COISA NO wapp
 
     REAL *dRhs;
     REAL *dRhsBoundary;

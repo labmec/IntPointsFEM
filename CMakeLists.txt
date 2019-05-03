@@ -171,5 +171,6 @@ if(USING_CUDA)
     configure_file(gmsh/wellbore.msh wellbore.msh COPYONLY)
 else()
     target_link_libraries(IntPointsFEM pz ${PTHREAD_LIB})
+    configure_file(gmsh/wellbore.msh wellbore.msh COPYONLY)
 endif(USING_CUDA)
 

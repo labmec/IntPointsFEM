@@ -14,17 +14,17 @@
 
 
 TPZIntPointsFEM::TPZIntPointsFEM() : fDim(-1), fBoundaryElements(), fCmesh(0), fNpts(-1), fNphis(-1), fElemColor(0), fMaterial(0), fRhs(0,0), fRhsBoundary(0,0),
-									 fSolution(0,0), fPlasticStrain(0,0), fStorage(0), fRowSizes(0), fColSizes(0), fMatrixPosition(0), fRowFirstIndex(0),
-									 fColFirstIndex(0), fIndexes(0), fIndexesColor(0), fWeight() {
+                                     fSolution(0,0), fPlasticStrain(0,0), fStorage(0), fRowSizes(0), fColSizes(0), fMatrixPosition(0), fRowFirstIndex(0),
+                                     fColFirstIndex(0), fIndexes(0), fIndexesColor(0), fWeight() {
 
 
 }
 
 TPZIntPointsFEM::TPZIntPointsFEM(TPZCompMesh *cmesh, int materialid) : fDim(-1), fBoundaryElements(), fCmesh(0), fNpts(-1), fNphis(-1), fElemColor(0), fMaterial(0), fRhs(0,0), fRhsBoundary(0,0),
-		 fSolution(0,0), fPlasticStrain(0,0), fStorage(0), fRowSizes(0), fColSizes(0), fMatrixPosition(0), fRowFirstIndex(0),
-		 fColFirstIndex(0), fIndexes(0), fIndexesColor(0), fWeight() {
+                                                                       fSolution(0,0), fPlasticStrain(0,0), fStorage(0), fRowSizes(0), fColSizes(0), fMatrixPosition(0), fRowFirstIndex(0),
+                                                                       fColFirstIndex(0), fIndexes(0), fIndexesColor(0), fWeight() {
 
-	SetCompMesh(cmesh);
+    SetCompMesh(cmesh);
     SetMaterialId(materialid);
 }
 
@@ -560,10 +560,17 @@ void TPZIntPointsFEM::DeltaStrain(TPZFMatrix<REAL> &expandsolution, TPZFMatrix<R
 }
 
 void TPZIntPointsFEM::ElasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &elastic_strain) {
+    elastic_strain.Resize(fDim*fNpts,1);
+    elastic_strain.Zero();
+
+    plastic_strain.Zero();
+
     elastic_strain = delta_strain - plastic_strain;
 }
 
 void TPZIntPointsFEM::PlasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &plastic_strain) {
+    plastic_strain.Resize(fDim*fNpts,1);
+
     plastic_strain = delta_strain - elastic_strain;
 }
 
@@ -667,26 +674,26 @@ void TPZIntPointsFEM::NodalForces(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &nod
     }
 }
 
-void TPZIntPointsFEM::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces_vec, TPZFMatrix<STATE> &nodal_forces_global) {
+void TPZIntPointsFEM::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces, TPZFMatrix<STATE> &residual) {
     int64_t ncolor = *std::max_element(fElemColor.begin(), fElemColor.end())+1;
     int64_t sz = fIndexes.size();
     int64_t neq = fCmesh->NEquations();
-    nodal_forces_global.Resize(neq*ncolor,1);
-    nodal_forces_global.Zero();
+    residual.Resize(neq*ncolor,1);
+    residual.Zero();
 
 
-    cblas_dsctr(sz, nodal_forces_vec, &fIndexesColor[0], &nodal_forces_global(0,0));
+    cblas_dsctr(sz, nodal_forces, &fIndexesColor[0], &residual(0,0));
 
     int64_t colorassemb = ncolor / 2.;
     while (colorassemb > 0) {
 
         int64_t firsteq = (ncolor - colorassemb) * neq;
-        cblas_daxpy(firsteq, 1., &nodal_forces_global(firsteq, 0), 1., &nodal_forces_global(0, 0), 1.);
+        cblas_daxpy(colorassemb * neq, 1., &residual(firsteq, 0), 1., &residual(0, 0), 1.);
 
         ncolor -= colorassemb;
         colorassemb = ncolor/2;
     }
-    nodal_forces_global.Resize(neq, 1);
+    residual.Resize(neq, 1);
 
 }
 
@@ -913,12 +920,12 @@ void TPZIntPointsFEM::AssembleRhsBoundary() {
     fRhsBoundary.Resize(neq, 1);
     fRhsBoundary.Zero();
 
-        for (auto iel : fBoundaryElements) {
-            TPZCompEl *cel = fCmesh->Element(iel);
-            if (!cel) continue;
-            TPZElementMatrix ef(fCmesh, TPZElementMatrix::EF);
-            cel->CalcResidual(ef);
-            ef.ComputeDestinationIndices();
-            fRhsBoundary.AddFel(ef.fMat, ef.fSourceIndex, ef.fDestinationIndex);
-        }
+    for (auto iel : fBoundaryElements) {
+        TPZCompEl *cel = fCmesh->Element(iel);
+        if (!cel) continue;
+        TPZElementMatrix ef(fCmesh, TPZElementMatrix::EF);
+        cel->CalcResidual(ef);
+        ef.ComputeDestinationIndices();
+        fRhsBoundary.AddFel(ef.fMat, ef.fSourceIndex, ef.fDestinationIndex);
+    }
 }
