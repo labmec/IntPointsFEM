@@ -72,12 +72,17 @@ void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_mate
 
 int main(int argc, char *argv[]) {
 
-    int pOrder = 2; // Computational mesh order
+    int pOrder = 1; // Computational mesh order
     bool render_vtk_Q = true;
     
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
-    std::string msh_file = source_dir + "/gmsh/wellbore.msh";
+    std::string msh_file = source_dir + "/gmsh/wellbore-10.msh";
+//    std::string msh_file = source_dir + "/gmsh/wellbore-20.msh";
+//    std::string msh_file = source_dir + "/gmsh/wellbore-30.msh";
+//    std::string msh_file = source_dir + "/gmsh/wellbore-40.msh";
+//    std::string msh_file = source_dir + "/gmsh/wellbore-50.msh";
+
     TPZGeoMesh *gmesh = ReadGeometry(msh_file);
     PrintGeometry(gmesh);
 

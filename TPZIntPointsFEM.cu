@@ -539,7 +539,7 @@ TPZIntPointsFEM::TPZIntPointsFEM() :
 				0), fMaterial(0), fRhs(0, 0), fRhsBoundary(0, 0), fSolution(0,
 				0), fPlasticStrain(0, 0), fStorage(0), fRowSizes(0), fColSizes(
 				0), fMatrixPosition(0), fRowFirstIndex(0), fColFirstIndex(0), fIndexes(
-				0), fIndexesColor(0), fWeight() {
+				0), fIndexesColor(0), fWeight(), fRowPtr(0), fColInd(0) {
 //	handle_cusparse = new cusparseHandle_t;
 //	handle_cublas = new cublasHandle_t;
 
@@ -557,6 +557,10 @@ TPZIntPointsFEM::TPZIntPointsFEM() :
 	dIndexesColor = new int[0];
 	dWeight = new REAL[0];
 
+	dRowPtr = new int[0];
+	dColInd = new int[0];
+
+
 }
 
 TPZIntPointsFEM::TPZIntPointsFEM(TPZCompMesh *cmesh, int materialid) :
@@ -564,7 +568,7 @@ TPZIntPointsFEM::TPZIntPointsFEM(TPZCompMesh *cmesh, int materialid) :
 				0), fMaterial(0), fRhs(0, 0), fRhsBoundary(0, 0), fSolution(0,
 				0), fPlasticStrain(0, 0), fStorage(0), fRowSizes(0), fColSizes(
 				0), fMatrixPosition(0), fRowFirstIndex(0), fColFirstIndex(0), fIndexes(
-				0), fIndexesColor(0), fWeight() {
+				0), fIndexesColor(0), fWeight(), fRowPtr(0), fColInd(0)  {
 	SetCompMesh(cmesh);
 	SetMaterialId(materialid);
 //	handle_cusparse = new cusparseHandle_t;
@@ -582,6 +586,9 @@ TPZIntPointsFEM::TPZIntPointsFEM(TPZCompMesh *cmesh, int materialid) :
 	dIndexes = new int[0];
 	dIndexesColor = new int[0];
 	dWeight = new REAL[0];
+
+	dRowPtr = new int[0];
+	dColInd = new int[0];
 }
 
 TPZIntPointsFEM::~TPZIntPointsFEM() {
@@ -598,6 +605,9 @@ TPZIntPointsFEM::~TPZIntPointsFEM() {
 	cudaFree(dIndexes);
 	cudaFree(dIndexesColor);
 	cudaFree(dWeight);
+
+	cudaFree(dRowPtr);
+	cudaFree(dColInd);
 
 	cublasDestroy(handle_cublas);
 	cusparseDestroy(handle_cusparse);
@@ -626,6 +636,9 @@ TPZIntPointsFEM::TPZIntPointsFEM(const TPZIntPointsFEM &copy) {
 	fIndexesColor = copy.fIndexesColor;
 	fWeight = copy.fWeight;
 
+	fRowPtr = copy.fRowPtr;
+	fColInd = copy.fColInd;
+
 	handle_cusparse = copy.handle_cusparse;
 	handle_cublas = copy.handle_cublas;
 
@@ -642,6 +655,9 @@ TPZIntPointsFEM::TPZIntPointsFEM(const TPZIntPointsFEM &copy) {
 	dIndexes = copy.dIndexes;
 	dIndexesColor = copy.dIndexesColor;
 	dWeight = copy.dWeight;
+
+	dRowPtr = copy.dRowPtr;
+	dColInd = copy.dColInd;
 }
 
 TPZIntPointsFEM &TPZIntPointsFEM::operator=(const TPZIntPointsFEM &copy) {
@@ -671,6 +687,9 @@ TPZIntPointsFEM &TPZIntPointsFEM::operator=(const TPZIntPointsFEM &copy) {
 	fIndexesColor = copy.fIndexesColor;
 	fWeight = copy.fWeight;
 
+	fRowPtr = copy.fRowPtr;
+	fColInd = copy.fColInd;
+
 	handle_cusparse = copy.handle_cusparse;
 	handle_cublas = copy.handle_cublas;
 
@@ -687,6 +706,9 @@ TPZIntPointsFEM &TPZIntPointsFEM::operator=(const TPZIntPointsFEM &copy) {
 	dIndexes = copy.dIndexes;
 	dIndexesColor = copy.dIndexesColor;
 	dWeight = copy.dWeight;
+
+	dRowPtr = copy.dRowPtr;
+	dColInd = copy.dColInd;
 
 	return *this;
 }
@@ -799,6 +821,7 @@ void TPZIntPointsFEM::SetDataStructure() {
 					elmatrix(inpts * dim + idim, inf) = dphiXY(idim, inf);
 			}
 		}
+		elmatrix.Transpose();
 		this->SetElementMatrix(it, elmatrix);
 		it++;
 
@@ -830,6 +853,7 @@ void TPZIntPointsFEM::SetDataStructure() {
 	this->SetWeightVector(weight);
 	this->ColoringElements();
 	this->AssembleRhsBoundary();
+	this->CSRInfo();
 	this->TransferDataStructure();
 }
 
@@ -917,55 +941,53 @@ void TPZIntPointsFEM::TransferDataStructure() {
 
 	int64_t neq = fCmesh->NEquations();
 	int64_t nelem = fColSizes.size();
+    int64_t nnz = fStorage.size();
 
 	cudaMalloc((void**) &dRhs, neq * sizeof(REAL));
-	cudaMemset(dRhs, 0, neq * sizeof(REAL));
+//	cudaMemset(dRhs, 0, neq * sizeof(REAL));
 
 	cudaMalloc((void**) &dRhsBoundary, neq * sizeof(REAL));
-	cudaMemcpy(dRhsBoundary, &fRhsBoundary(0, 0), neq * sizeof(REAL),
-			cudaMemcpyHostToDevice);
+	cudaMemcpy(dRhsBoundary, &fRhsBoundary(0, 0), neq * sizeof(REAL), cudaMemcpyHostToDevice);
 
 	cudaMalloc((void**) &dSolution, neq * sizeof(REAL));
-	cudaMemset(dSolution, 0, neq * sizeof(REAL));
+//	cudaMemset(dSolution, 0, neq * sizeof(REAL));
 
 	cudaMalloc((void**) &dPlasticStrain, fDim * fNpts * sizeof(REAL));
-	cudaMemset(dPlasticStrain, 0, fDim * fNpts * sizeof(REAL));
+//	cudaMemset(dPlasticStrain, 0, fDim * fNpts * sizeof(REAL));
 
 	cudaMalloc((void**) &dStorage, fStorage.size() * sizeof(REAL));
-	cudaMemcpy(dStorage, &fStorage[0], fStorage.size() * sizeof(REAL),
-			cudaMemcpyHostToDevice);
+	cudaMemcpy(dStorage, &fStorage[0], fStorage.size() * sizeof(REAL), cudaMemcpyHostToDevice);
 
 	cudaMalloc((void**) &dRowSizes, nelem * sizeof(int));
-	cudaMemcpy(dRowSizes, &fRowSizes[0], nelem * sizeof(int),
-			cudaMemcpyHostToDevice);
+	cudaMemcpy(dRowSizes, &fRowSizes[0], nelem * sizeof(int), cudaMemcpyHostToDevice);
 
 	cudaMalloc((void**) &dColSizes, nelem * sizeof(int));
-	cudaMemcpy(dColSizes, &fColSizes[0], nelem * sizeof(int),
-			cudaMemcpyHostToDevice);
+	cudaMemcpy(dColSizes, &fColSizes[0], nelem * sizeof(int), cudaMemcpyHostToDevice);
 
 	cudaMalloc((void**) &dMatrixPosition, nelem * sizeof(int));
-	cudaMemcpy(dMatrixPosition, &fMatrixPosition[0], nelem * sizeof(int),
-			cudaMemcpyHostToDevice);
+	cudaMemcpy(dMatrixPosition, &fMatrixPosition[0], nelem * sizeof(int), cudaMemcpyHostToDevice);
 
 	cudaMalloc((void**) &dRowFirstIndex, nelem * sizeof(int));
-	cudaMemcpy(dRowFirstIndex, &fRowFirstIndex[0], nelem * sizeof(int),
-			cudaMemcpyHostToDevice);
+	cudaMemcpy(dRowFirstIndex, &fRowFirstIndex[0], nelem * sizeof(int), cudaMemcpyHostToDevice);
 
 	cudaMalloc((void**) &dColFirstIndex, nelem * sizeof(int));
-	cudaMemcpy(dColFirstIndex, &fColFirstIndex[0], nelem * sizeof(int),
-			cudaMemcpyHostToDevice);
+	cudaMemcpy(dColFirstIndex, &fColFirstIndex[0], nelem * sizeof(int), cudaMemcpyHostToDevice);
 
 	cudaMalloc((void**) &dIndexes, fIndexes.size() * sizeof(int));
-	cudaMemcpy(dIndexes, &fIndexes[0], fIndexes.size() * sizeof(int),
-			cudaMemcpyHostToDevice);
+	cudaMemcpy(dIndexes, &fIndexes[0], fIndexes.size() * sizeof(int), cudaMemcpyHostToDevice);
 
 	cudaMalloc((void**) &dIndexesColor, fIndexesColor.size() * sizeof(int));
 	cudaMemcpy(dIndexesColor, &fIndexesColor[0],
 			fIndexesColor.size() * sizeof(int), cudaMemcpyHostToDevice);
 
 	cudaMalloc((void**) &dWeight, fWeight.size() * sizeof(REAL));
-	cudaMemcpy(dWeight, &fWeight[0], fWeight.size() * sizeof(REAL),
-			cudaMemcpyHostToDevice);
+	cudaMemcpy(dWeight, &fWeight[0], fWeight.size() * sizeof(REAL), cudaMemcpyHostToDevice);
+
+	cudaMalloc((void**) &dRowPtr, (fNpts + 1) * sizeof(int));
+	cudaMemcpy(dRowPtr, &fRowPtr[0], (fNpts + 1) * sizeof(int), cudaMemcpyHostToDevice);
+
+	cudaMalloc((void**) &dColInd, nnz * sizeof(int));
+	cudaMemcpy(dColInd, &fColInd[0], nnz * sizeof(int), cudaMemcpyHostToDevice);
 }
 
 void TPZIntPointsFEM::AssembleResidual() {
@@ -982,27 +1004,27 @@ void TPZIntPointsFEM::AssembleResidual() {
 
 	REAL *elastic_strain;
 	cudaMalloc((void**) &elastic_strain, fDim * fNpts * sizeof(REAL));
-	cudaMemset(elastic_strain, 0, fDim * fNpts * sizeof(REAL));
+//	cudaMemset(elastic_strain, 0, fDim * fNpts * sizeof(REAL));
 
 	REAL *sigma_trial;
 	cudaMalloc((void**) &sigma_trial, fDim * fNpts * sizeof(REAL));
-	cudaMemset(sigma_trial, 0, fDim * fNpts * sizeof(REAL));
+//	cudaMemset(sigma_trial, 0, fDim * fNpts * sizeof(REAL));
 
 	REAL *eigenvalues;
 	cudaMalloc((void**) &eigenvalues, 3 * fNpts / fDim * sizeof(REAL));
-	cudaMemset(eigenvalues, 0, 3 * fNpts / fDim * sizeof(REAL));
+//	cudaMemset(eigenvalues, 0, 3 * fNpts / fDim * sizeof(REAL));
 
 	REAL *eigenvectors;
 	cudaMalloc((void**) &eigenvectors, 9 * fNpts / fDim * sizeof(REAL));
-	cudaMemset(eigenvectors, 0, 9 * fNpts / fDim * sizeof(REAL));
+//	cudaMemset(eigenvectors, 0, 9 * fNpts / fDim * sizeof(REAL));
 
 	REAL *sigma_projected;
 	cudaMalloc((void**) &sigma_projected, 3 * fNpts / fDim * sizeof(REAL));
-	cudaMemset(sigma_projected, 0, 3 * fNpts / fDim * sizeof(REAL));
+//	cudaMemset(sigma_projected, 0, 3 * fNpts / fDim * sizeof(REAL));
 
 	REAL *sigma;
 	cudaMalloc((void**) &sigma, fDim * fNpts * sizeof(REAL));
-	cudaMemset(sigma, 0, fDim * fNpts * sizeof(REAL));
+//	cudaMemset(sigma, 0, fDim * fNpts * sizeof(REAL));
 
 	REAL *nodal_forces;
 	cudaMalloc((void**) &nodal_forces, fDim * fNpts * sizeof(REAL));
@@ -1052,9 +1074,21 @@ void TPZIntPointsFEM::GatherSolutionGPU(REAL *gather_solution) {
 void TPZIntPointsFEM::DeltaStrainGPU(REAL *gather_solution, REAL *delta_strain) {
 	int64_t nelem = fRowSizes.size();
 
-	int numBlocks = (nelem + NT - 1) / NT;
-	DeltaStrainKernel<<<numBlocks, NT>>>(nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, gather_solution, delta_strain);
-	cudaDeviceSynchronize();
+//	int numBlocks = (nelem + NT - 1) / NT;
+//	DeltaStrainKernel<<<numBlocks, NT>>>(nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, gather_solution, delta_strain);
+//	cudaDeviceSynchronize();
+
+	int nnz = fStorage.size();
+	REAL alpha = 1.;
+	REAL beta = 0.;
+
+	cusparseMatDescr_t descr;
+	cusparseCreateMatDescr(&descr);
+	cusparseSetMatType(descr, CUSPARSE_MATRIX_TYPE_GENERAL);
+	cusparseSetMatIndexBase(descr, CUSPARSE_INDEX_BASE_ZERO);
+
+	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_NON_TRANSPOSE, fNpts, fNphis, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &gather_solution[0], &beta, &delta_strain[0]);
+	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_NON_TRANSPOSE, fNpts, fNphis, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &gather_solution[fNphis], &beta, &delta_strain[fNpts]);
 }
 
 void TPZIntPointsFEM::ElasticStrainGPU(REAL *delta_strain, REAL *plastic_strain, REAL *elastic_strain) {
@@ -1108,11 +1142,11 @@ void TPZIntPointsFEM::ProjectSigmaGPU(REAL *eigenvalues, REAL *sigma_projected) 
 
 	REAL *m_type;
 	cudaMalloc((void**) &m_type, fNpts / fDim * sizeof(REAL));
-	cudaMemset(m_type, 0, fNpts / fDim * sizeof(REAL));
+//	cudaMemset(m_type, 0, fNpts / fDim * sizeof(REAL));
 
 	REAL *alpha;
 	cudaMalloc((void**) &alpha, fNpts / fDim * sizeof(REAL));
-	cudaMemset(alpha, 0, fNpts / fDim * sizeof(REAL));
+//	cudaMemset(alpha, 0, fNpts / fDim * sizeof(REAL));
 
 	int numBlocks = (fNpts / fDim + NT - 1) / NT;
 	ProjectSigmaKernel<<<numBlocks, NT>>>(fNpts, fDim, mc_phi, mc_psi, mc_cohesion, K, G, eigenvalues, sigma_projected, m_type, alpha);
@@ -1124,16 +1158,26 @@ void TPZIntPointsFEM::StressCompleteTensorGPU(REAL *sigma_projected, REAL *eigen
 	int numBlocks = (fNpts / fDim + NT - 1) / NT;
 	StressCompleteTensorKernel<<<numBlocks, NT>>>(fNpts, fDim, sigma_projected, eigenvectors, sigma, dWeight);
 	cudaDeviceSynchronize();
-
-
 }
 
 void TPZIntPointsFEM::NodalForcesGPU(REAL *sigma, REAL *nodal_forces) {
 	int64_t nelem = fRowSizes.size();
 
-	int numBlocks = (nelem + NT - 1) / NT;
-	NodalForcesKernel<<<numBlocks, NT>>>(nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, sigma, nodal_forces);
-	cudaDeviceSynchronize();
+//	int numBlocks = (nelem + NT - 1) / NT;
+//	NodalForcesKernel<<<numBlocks, NT>>>(nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, sigma, nodal_forces);
+//	cudaDeviceSynchronize();
+
+	int nnz = fStorage.size();
+	REAL alpha = -1.;
+	REAL beta = 0.;
+
+	cusparseMatDescr_t descr;
+	cusparseCreateMatDescr(&descr);
+	cusparseSetMatType(descr, CUSPARSE_MATRIX_TYPE_GENERAL);
+	cusparseSetMatIndexBase(descr, CUSPARSE_INDEX_BASE_ZERO);
+
+	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_TRANSPOSE, fNpts, fNphis, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &sigma[0], &beta, &nodal_forces[0]);
+	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_TRANSPOSE, fNpts, fNphis, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &sigma[fNpts], &beta, &nodal_forces[fNphis]);
 }
 
 void TPZIntPointsFEM::ColoredAssembleGPU(REAL *nodal_forces, REAL *residual) {
