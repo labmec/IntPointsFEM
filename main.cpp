@@ -1,4 +1,5 @@
 
+#include "path.h"
 #include <iostream>
 #include <string.h>
 #include <ctime>
@@ -19,737 +20,567 @@
 #include "tpzintpoints.h"
 #include "TPZMatElasticity2D.h"
 #include "TPZSSpStructMatrix.h"
+#include "TPZGmshReader.h"
+#include "pzpostprocanalysis.h"
+#include "pzfstrmatrix.h"
 
 #include "TPZMatElastoPlastic2D.h"
 #include "TPZMatElastoPlastic.h"
 #include "TPZElastoPlasticMem.h"
 #include "TPZElasticCriterion.h"
 #include "TPZPlasticStepPV.h"
-#include "TPZSandlerExtended.h"
 #include "TPZYCMohrCoulombPV.h"
-#include "pzstepsolver.h"
+#include "TPZBndCondWithMem.h"
+#include "TPZIntPointsFEM.h"
 
-#include "TPZSolveMatrix.h"
-#include "TPZSolveVector.h"
+#include "TElastoPlasticData.h"
+#include "TRKSolution.h"
 
-#ifdef USING_TBB
-#include "tbb/parallel_for_each.h"
-#endif
+/// Gmsh mesh
+TPZGeoMesh * ReadGeometry(std::string geometry_file);
+void PrintGeometry(TPZGeoMesh * geometry);
 
-TPZGeoMesh *Geometry2D(int nelem_x, int nelem_y, REAL len, int ndivide);
+/// CompMesh elastoplasticity
+TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int pOrder, TElastoPlasticData & material_data);
 
-TPZCompMesh *CmeshElasticity(TPZGeoMesh *gmesh, int pOrder);
-TPZCompMesh *CmeshElasticityNoBoundary(TPZGeoMesh *gmesh, int pOrder);
+/// Material configuration
+TElastoPlasticData WellboreConfig();
 
-TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int pOrder);
-TPZCompMesh *CmeshElastoplasticityNoBoundary(TPZGeoMesh *gmesh, int pOrder);
+/// Material configuration for RK verification
+TElastoPlasticData WellboreConfigRK();
 
-void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh);
-void SolVector(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh);
+/// Solve using assemble residual of all intg points at once
+void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance, TElastoPlasticData & wellbore_material);
 
-TPZFMatrix<REAL>  Residual(TPZCompMesh *cmesh, TPZCompMesh *cmesh_noboundary);
+///Set Analysis
+TPZAnalysis * Analysis(TPZCompMesh * cmesh, int n_threads);
+
+///Solve using Newton method
+void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance);
+
+/// Accept solution
+void AcceptPseudoTimeStepSolution(TPZAnalysis * an, TPZCompMesh * cmesh);
+
+/// Print mesh memory data
+void PrintMemory(TPZCompMesh * cmesh);
+
+/// Post process
+void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData material, int n_threads, std::string vtk_file);
+
+///RK Approximation
+void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_material, int npoints, std::ostream &out, bool euler = false);
 
 int main(int argc, char *argv[]) {
-//// ------------------------ DATA INPUT ------------------------------
-    int nelem_x = 1; // Number of elements in x direction
-    int nelem_y = 1; // Number of elements in y direction
-    REAL len = 1; // Domain length
-    int pOrder = 1; // Computational mesh order
-    int ndivide = 0; // Subdivision of elements
 
+    int pOrder = 2; // Computational mesh order
+    bool render_vtk_Q = true;
+    
 // Generates the geometry
-    TPZGeoMesh *gmesh = Geometry2D(nelem_x, nelem_y, len, ndivide);
+    std::string source_dir = SOURCE_DIR;
+    std::string msh_file = source_dir + "/gmsh/wellbore.msh";
+    TPZGeoMesh *gmesh = ReadGeometry(msh_file);
+    PrintGeometry(gmesh);
 
 // Creates the computational mesh
-//    TPZCompMesh *cmesh = CmeshElasticity(gmesh, pOrder);
-    TPZCompMesh *cmesh = CmeshElastoplasticity(gmesh, pOrder);
-//    TPZCompMesh *cmesh_noboundary = CmeshElastoplasticityNoBoundary(gmesh, pOrder);
+//    TElastoPlasticData wellbore_material = WellboreConfig(); /// NVB this one is for recurrent usage
+    TElastoPlasticData wellbore_material = WellboreConfigRK(); /// NVB this one is just for verification purposes
+    TPZCompMesh *cmesh = CmeshElastoplasticity(gmesh, pOrder, wellbore_material);
 
 // Defines the analysis
-    bool optimizeBandwidth = true;
-    int n_threads = 1;
-    TPZAnalysis an(cmesh, optimizeBandwidth);
-    TPZSymetricSpStructMatrix strskyl(cmesh);
-    strskyl.SetNumThreads(n_threads);
-    an.SetStructuralMatrix(strskyl);
-
-// Solve
-    TPZStepSolver<STATE> step;
-    step.SetDirect(ELDLt);
-    an.SetSolver(step);
-    an.Assemble();
-//    an.Solver().Matrix()->Print("K = ", std::cout, EMathematicaInput);
-    an.Solve();
-//    an.Solution().Print("U = ", std::cout, EMathematicaInput);
-
+    int n_threads = 0;
+    TPZAnalysis *analysis = Analysis(cmesh,n_threads);
+    
+// Calculates the solution using Newton method
+    int n_iterations = 80;
+    REAL tolerance = 1.e-3;
+    Solution(analysis, n_iterations, tolerance);
 
 // Post process
-//    TPZManVector<std::string> scalarnames(0), vecnames(1);
-//    scalarnames[0] = "SigmaX";
-//    scalarnames[1] = "SigmaY";
-//    scalarnames[0] = "StressI1";
-//    vecnames[0] = "Displacement";
-//    std::string namefile = "Elasticity_teste";
-//    an.DefineGraphMesh(2, scalarnames, vecnames, namefile + "ElasticitySolutions.vtk");
-//    an.PostProcess(0,2);
+   if (render_vtk_Q) {
+       std::string vtk_file = "Approximation.vtk";
+       PostProcess(cmesh, wellbore_material, n_threads, vtk_file);
+   }
 
-// Calculates residual without boundary conditions
-//    TPZFMatrix<REAL> residual = Residual(cmesh, cmesh_noboundary);
-    TPZFMatrix<REAL> residual(1,1,0.);
+// Creates the computational mesh
+    TPZCompMesh *cmesh_npts = CmeshElastoplasticity(gmesh, pOrder, wellbore_material);
+    TPZAnalysis *analysis_npts = Analysis(cmesh_npts,n_threads);
+    
+// Calculates the solution using all intg points at once
+    SolutionAllPoints(analysis_npts, n_iterations, tolerance, wellbore_material);
+    if (render_vtk_Q) { //Post process
+#ifdef USING_CUDA
+        std::string vtk_file = "Approximation_IntPointFEM-GPU.vtk";
+#else
+        std::string vtk_file = "Approximation_IntPointFEM-CPU.vtk";
 
-// Calculates residual using matrix operations and check if the result is ok
-    SolMatrix(residual, cmesh);
-//    SolVector(residual, cmesh);
+#endif
+        PostProcess(cmesh_npts, wellbore_material, n_threads, vtk_file);
+    }
+
     return 0;
 }
 
-TPZGeoMesh *Geometry2D(int nelem_x, int nelem_y, REAL len, int ndivide) {
-// Creates the geometric mesh
-    TPZGeoMesh *gmesh = new TPZGeoMesh();
-    int dim = 2;
-    gmesh->SetDimension(dim);
+void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
+    std::cout << "\n\nSolving with PZ ...\n" << std::endl;
+    bool stop_criterion_Q = false;
+    REAL norm_res, norm_delta_du;
 
-// Geometry definitions
-    int64_t nnodes_x = nelem_x + 1; //Number of nodes in x direction
-    int64_t nnodes_y = nelem_y + 1; //Number of nodes in x direction
-    int64_t nelem = nelem_x * nelem_y; //Total number of elements
+    int neq = analysis->Solution().Rows();
+    std::cout  << "Solving a NLS with DOF = " << neq << std::endl;
 
-// Nodes initialization
-// Enumeration: vertical order - from the below to the top, and from the left to the right
-    TPZManVector<REAL> coord(3, 0.);
-    int64_t id, index;
-    for (int64_t i = 0; i < nnodes_x; i++) {
-        for (int64_t j = 0; j < nnodes_y; j++) {
-            id = i * nnodes_y + j;
-            coord[0] = (i) * len / (nnodes_x - 1);
-            coord[1] = (j) * len / (nnodes_y - 1);
-            index = gmesh->NodeVec().AllocateNewElement();
-            gmesh->NodeVec()[index] = TPZGeoNode(id, coord, *gmesh);
+    analysis->Solution().Zero();
+    TPZFMatrix<REAL> du(analysis->Solution()), delta_du;
+    analysis->Assemble();
+
+    for (int i = 0; i < n_iterations; i++) {
+        analysis->Solve();
+        delta_du = analysis->Solution();
+        du += delta_du;
+        analysis->LoadSolution(du);
+        analysis->AssembleResidual();
+        norm_delta_du = Norm(delta_du);
+        norm_res = Norm(analysis->Rhs());
+        stop_criterion_Q = norm_res < tolerance;
+        std::cout << "Nonlinear process :: delta_du norm = " << norm_delta_du << std::endl;
+        std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
+        if (stop_criterion_Q) {
+            AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
+            std::cout << "Nonlinear process converged with residue norm = " << norm_res << std::endl;
+            std::cout << "Number of iterations = " << i + 1 << std::endl;
+            break;
+        }
+//        analysis->Assemble();
+    }
+
+    if (stop_criterion_Q == false) {
+        AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
+        std::cout << "Nonlinear process not converged with residue norm = " << norm_res << std::endl;
+    }
+}
+
+TPZAnalysis *Analysis(TPZCompMesh *cmesh, int n_threads) {
+    bool optimizeBandwidth = true;
+    TPZAnalysis *analysis = new TPZAnalysis(cmesh, optimizeBandwidth);
+    TPZSymetricSpStructMatrix strskyl(cmesh);
+    strskyl.SetNumThreads(n_threads);
+    analysis->SetStructuralMatrix(strskyl);
+    TPZStepSolver<STATE> step;
+    step.SetDirect(ELDLt);
+    analysis->SetSolver(step);
+    return analysis;
+}
+
+void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData wellbore_material, int n_threads, std::string vtk_file) {
+    int div = 1;
+    TPZPostProcAnalysis * post_processor = new TPZPostProcAnalysis;
+    post_processor->SetCompMesh(cmesh, true);
+
+    int n_regions = 1;
+    TPZManVector<int,1> post_mat_id(n_regions);
+    post_mat_id[0] = wellbore_material.Id();
+
+    TPZStack<std::string,50> names, scalnames,vecnames,tensnames;
+    scalnames.push_back("FailureType");
+    vecnames.push_back("Displacement");
+    tensnames.push_back("Stress");
+    tensnames.push_back("Strain");
+    tensnames.push_back("StrainPlastic");
+
+
+    for (auto i : scalnames) {
+        names.push_back(i);
+    }
+    for (auto i : vecnames) {
+        names.push_back(i);
+    }
+    for (auto i : tensnames) {
+        names.push_back(i);
+    }
+
+    post_processor->SetPostProcessVariables(post_mat_id, names);
+    TPZFStructMatrix structmatrix(post_processor->Mesh());
+    structmatrix.SetNumThreads(n_threads);
+    post_processor->SetStructuralMatrix(structmatrix);
+
+    post_processor->TransferSolution(); /// Computes the L2 projection.
+    post_processor->DefineGraphMesh(2,scalnames,vecnames,tensnames,vtk_file);
+    post_processor->PostProcess(div,2);
+}
+
+TElastoPlasticData WellboreConfig(){
+    TPZElasticResponse LER;
+
+    REAL Ey = 2000.0;
+    REAL nu = 0.2;
+
+    LER.SetEngineeringData(Ey, nu);
+
+    REAL mc_cohesion    = 10000000000.0;
+//    REAL mc_cohesion    = 5.0;
+    REAL mc_phi         = (20*M_PI/180);
+
+    /// NVB it is important to check the correct sign for ef in TPZMatElastoPlastic and TPZMatElastoPlastic2D materials. It is better to avoid problems with tensile state of stress.
+
+    std::vector<TBCData> bc_data;
+    TBCData bc_inner, bc_outer, bc_ux_fixed, bc_uy_fixed;
+    bc_inner.SetId(2);
+    bc_inner.SetType(6);
+    bc_inner.SetInitialValue(-50.);
+    bc_inner.SetValue({-1.0*(-20.-bc_inner.InitialValue())}); /// tr(sigma)/3
+
+    bc_outer.SetId(3);
+    bc_outer.SetType(6);
+    bc_outer.SetInitialValue(-50.0); /// tr(sigma)/3
+    bc_outer.SetValue({-1.0*(-50.-bc_outer.InitialValue())}); /// tr(sigma)/3
+
+    bc_ux_fixed.SetId(4);
+    bc_ux_fixed.SetType(3);
+    bc_ux_fixed.SetValue({1,0});
+
+    bc_uy_fixed.SetId(5);
+    bc_uy_fixed.SetType(3);
+    bc_uy_fixed.SetValue({0,1});
+
+    bc_data.push_back(bc_inner);
+    bc_data.push_back(bc_outer);
+    bc_data.push_back(bc_ux_fixed);
+    bc_data.push_back(bc_uy_fixed);
+
+    TElastoPlasticData rock;
+    rock.SetMaterialParameters(LER, mc_phi, mc_cohesion);
+    rock.SetId(1);
+
+    rock.SetBoundaryData(bc_data);
+
+    return rock;
+}
+
+/// Material configuration for RK verification
+TElastoPlasticData WellboreConfigRK(){
+
+    /// Elastic verification -> true
+    /// ElastoPlastic verification -> false
+    bool is_elastic_Q = false;
+
+    TPZElasticResponse LER;
+    REAL Ey = 2000.0;
+    REAL nu = 0.2;
+
+    LER.SetEngineeringData(Ey, nu);
+    REAL mc_cohesion, mc_phi;
+    if (is_elastic_Q) {
+        mc_cohesion    = 10000000000.0;
+        mc_phi         = (20*M_PI/180);
+    }else{
+        mc_cohesion    = 5.0;
+        mc_phi         = (20*M_PI/180);
+    }
+
+    std::vector<TBCData> bc_data;
+    TBCData bc_inner, bc_outer, bc_ux_fixed, bc_uy_fixed;
+    bc_inner.SetId(2);
+    bc_inner.SetType(6);
+    bc_inner.SetInitialValue(-50.);
+    bc_inner.SetValue({-1.0*(-40.-bc_inner.InitialValue())}); /// tr(sigma)/3
+
+    bc_outer.SetId(3);
+    bc_outer.SetType(6);
+    bc_outer.SetInitialValue(-50.0); /// tr(sigma)/3
+    bc_outer.SetValue({-1.0*(-50.-bc_outer.InitialValue())+0.001}); /// tr(sigma)/3
+
+    bc_ux_fixed.SetId(4);
+    bc_ux_fixed.SetType(3);
+    bc_ux_fixed.SetValue({1,0});
+
+    bc_uy_fixed.SetId(5);
+    bc_uy_fixed.SetType(3);
+    bc_uy_fixed.SetValue({0,1});
+
+    bc_data.push_back(bc_inner);
+    bc_data.push_back(bc_outer);
+    bc_data.push_back(bc_ux_fixed);
+    bc_data.push_back(bc_uy_fixed);
+
+    TElastoPlasticData rock;
+    rock.SetMaterialParameters(LER, mc_phi, mc_cohesion);
+    rock.SetId(1);
+
+    rock.SetBoundaryData(bc_data);
+
+// Runge Kutta approximation
+    int np = 2000;
+    bool euler = false;
+
+    if(is_elastic_Q){
+
+        REAL u_re, simga_re;
+        u_re = 0.0000254403;
+        simga_re = 0.00124267;
+        std::ofstream rkfile("ElasticRKdata.txt");
+        RKApproximation(u_re, simga_re, rock, np, rkfile, euler);
+    }else{
+        REAL u_re, simga_re;
+        u_re = 0.0000318827;
+        simga_re = 0.00130781;
+        std::ofstream rkfile("ElastoPlasticRKdata.txt");
+        RKApproximation(u_re, simga_re, rock, np, rkfile, euler);
+    }
+    return rock;
+}
+
+TPZGeoMesh * ReadGeometry(std::string geometry_file) {
+    TPZGmshReader Geometry;
+    REAL l = 1.0;
+    Geometry.SetCharacteristiclength(l);
+    Geometry.SetFormatVersion("4.1");
+    TPZGeoMesh * geometry = Geometry.GeometricGmshMesh(geometry_file);
+    Geometry.PrintPartitionSummary(std::cout);
+#ifdef PZDEBUG
+    if (!geometry)
+    {
+        std::cout << "The geometrical mesh was not generated." << std::endl;
+        DebugStop();
+    }
+#endif
+
+    return geometry;
+
+}
+
+void PrintGeometry(TPZGeoMesh * geometry) {
+    std::stringstream text_name;
+    std::stringstream vtk_name;
+    text_name  << "geometry" << ".txt";
+    vtk_name   << "geometry"  << ".vtk";
+    std::ofstream textfile(text_name.str().c_str());
+    geometry->Print(textfile);
+    std::ofstream vtkfile(vtk_name.str().c_str());
+    TPZVTKGeoMesh::PrintGMeshVTK(geometry, vtkfile, true);
+
+#ifdef PZDEBUG
+    TPZCheckGeom checker(geometry);
+    checker.CheckUniqueId();
+    if(checker.PerformCheck())
+    {
+        DebugStop();
+    }
+#endif
+
+}
+
+void AcceptPseudoTimeStepSolution(TPZAnalysis * an, TPZCompMesh * cmesh){
+
+    bool update = true;
+    {
+        std::map<int, TPZMaterial *> & refMatVec = cmesh->MaterialVec();
+        std::map<int, TPZMaterial * >::iterator mit;
+        TPZMatWithMem<TPZElastoPlasticMem> * pMatWithMem;
+        for(mit=refMatVec.begin(); mit!= refMatVec.end(); mit++)
+        {
+            pMatWithMem = dynamic_cast<TPZMatWithMem<TPZElastoPlasticMem> *>( mit->second );
+            if(pMatWithMem != NULL)
+            {
+                pMatWithMem->SetUpdateMem(update);
+            }
+        }
+    }
+    an->AssembleResidual();
+    update = false;
+    {
+        std::map<int, TPZMaterial *> & refMatVec = cmesh->MaterialVec();
+        std::map<int, TPZMaterial * >::iterator mit;
+        TPZMatWithMem<TPZElastoPlasticMem> * pMatWithMem;
+        for(mit=refMatVec.begin(); mit!= refMatVec.end(); mit++)
+        {
+            pMatWithMem = dynamic_cast<TPZMatWithMem<TPZElastoPlasticMem> *>( mit->second );
+            if(pMatWithMem != NULL)
+            {
+                pMatWithMem->SetUpdateMem(update);
+//                for(auto memory: *pMatWithMem->GetMemory()){
+//                    memory.Print();
+//                }
+            }
         }
     }
 
-// Element connectivities
-// Enumeration: vertical order - from the below to the top, and from the left to the right
-    TPZManVector<int64_t> connect(4, 0);
-    for (int64_t i = 0; i < (nnodes_x - 1); i++) {
-        for (int64_t j = 0; j < (nnodes_y - 1); j++) {
-            index = (i) * (nnodes_y - 1) + (j);
-            connect[0] = (i) * nnodes_y + (j);
-            connect[1] = connect[0] + (nnodes_y);
-            connect[2] = connect[1] + 1;
-            connect[3] = connect[0] + 1;
-            gmesh->CreateGeoElement(EQuadrilateral, connect, 1, id); //Allocates and define the geometric element
+}
+
+void PrintMemory(TPZCompMesh * cmesh){
+
+    std::map<int, TPZMaterial *> & refMatVec = cmesh->MaterialVec();
+    std::map<int, TPZMaterial * >::iterator mit;
+    TPZMatWithMem<TPZElastoPlasticMem> * pMatWithMem;
+    for(mit=refMatVec.begin(); mit!= refMatVec.end(); mit++)
+    {
+        pMatWithMem = dynamic_cast<TPZMatWithMem<TPZElastoPlasticMem> *>( mit->second );
+        if(pMatWithMem != NULL)
+        {
+            for(auto memory: *pMatWithMem->GetMemory()){
+                memory.Print();
+            }
         }
     }
 
-// Generates neighborhood information
-    gmesh->BuildConnectivity();
-
-// Creates the boundary conditions
-// Dirichlet
-    for (int64_t i = 0; i < nelem_y; i++) {
-        TPZGeoEl *gelem = gmesh->Element(i);
-        TPZGeoElBC el_boundary(gelem, 7, -1); //Left side of the plane
-    }
-    for (int64_t i = 0; i < nelem_x; i++) {
-        int64_t n = nelem_y * (i + 1) - 1;
-        TPZGeoEl *gelem = gmesh->Element(n);
-        TPZGeoElBC el_boundary(gelem, 6, -2); //Top side of the plane
-    }
-
-// Neumann
-    for (int64_t i = 0; i < nelem_x; i++) {
-        int64_t n = nelem_y * (i + 1) - (nelem_y);
-        TPZGeoEl *gelem = gmesh->Element(n);
-        TPZGeoElBC el_boundary(gelem, 4, -3); //Bottom side of the plane - tension
-    }
-    for (int64_t i = nelem - nelem_y; i < nelem; i++) {
-        TPZGeoEl *gelem = gmesh->Element(i);
-        TPZGeoElBC el_boundary(gelem, 5, -4); //Right side of the plane - tension
-    }
-
-// HP adaptativity
-    if (ndivide != 0) {
-        // Finding the elements which will be subdivided
-        TPZGeoEl *gel; // Defining the element
-        TPZVec<REAL> x(3, 0.); // Defining the coordinate at the end of the node
-        x[0] = 0;
-        x[1] = len;
-        TPZVec<REAL> qsi(3, 0.); // Defining the parametric coordinate
-        int64_t InitialElIndex = 0;
-        int targetDim = 2;
-        gel = gmesh->FindElement(x, qsi, InitialElIndex,
-                                 targetDim); // Finding the element which is related to the coordinate
-        int64_t elid = gel->Index(); // Atention: this procedure catchs the first element which is related to the coordinate
-
-        TPZVec<TPZGeoEl *> subelindex;
-
-        gel = gmesh->Element(elid);
-        gel->Divide(subelindex);
-        for (int i = 0; i < ndivide - 1; i++) {
-            subelindex[3]->Divide(subelindex);
-        }
-
-    }
-    return gmesh;
 }
 
-TPZCompMesh *CmeshElasticity(TPZGeoMesh *gmesh, int pOrder) {
-
-    // Creating the computational mesh
-    TPZCompMesh *cmesh = new TPZCompMesh(gmesh);
-    cmesh->SetDefaultOrder(pOrder);
-
-// Creating elasticity material
-    TPZMatElasticity2D *mat = new TPZMatElasticity2D(1);
-    mat->SetElasticParameters(200000000., 0.3);
-    mat->SetPlaneStrain();
-
-// Setting the boundary conditions
-    TPZMaterial *bcBottom, *bcRight, *bcTop, *bcLeft;
-    TPZFMatrix<REAL> val1(2, 1, 0.);
-    TPZFMatrix<REAL> val2(2, 1, 0.);
-
-    bcLeft = mat->CreateBC(mat, -1, 7, val1, val2); // X displacement = 0
-    bcTop = mat->CreateBC(mat, -2, 8, val1, val2); // Y displacement = 0
-
-    val2(1, 0) = -1000000.;
-    bcBottom = mat->CreateBC(mat, -3, 1, val1, val2); // Tension in y
-
-    val2(0, 0) = 1000000.;
-    val2(1, 0) = 0.0;
-    bcRight = mat->CreateBC(mat, -4, 1, val1, val2); // Tension in x
-
-    cmesh->InsertMaterialObject(mat);
-
-    cmesh->InsertMaterialObject(bcBottom);
-    cmesh->InsertMaterialObject(bcRight);
-    cmesh->InsertMaterialObject(bcTop);
-    cmesh->InsertMaterialObject(bcLeft);
-
-    cmesh->SetAllCreateFunctionsContinuous();
-    cmesh->AutoBuild();
-    cmesh->AdjustBoundaryElements();
-    cmesh->CleanUpUnconnectedNodes();
-
-    return cmesh;
-
-
-//// Creates the computational mesh
-//    TPZCompMesh *cmesh = new TPZCompMesh(gmesh);
-//    cmesh->SetDefaultOrder(pOrder);
-//
-//// Creates elastic material
-//    TPZMatElasticity2D *material = new TPZMatElasticity2D(1);
-//    material->SetElasticParameters(200000., 0.3);
-//    material->SetPlaneStrain();
-//
-//// Set the boundary conditions
-//    TPZMaterial *bcBottom, *bcRight, *bcTop, *bcLeft;
-//    TPZFMatrix<REAL> val1(2, 2), val2(2, 2);
-//
-//    val2(0, 0) = 0;
-//    val2(1, 0) = 0;
-//    bcLeft = material->CreateBC(material, -1, 0, val1, val2); // X displacement = 0
-//
-//    val2(0,0) = 0;
-//    val2(1,0) = 0;
-//    bcTop = material->CreateBC(material, -2, 0, val1, val2); // Y displacement = 0
-//
-//    val2(0, 0) = 0.0;
-//    val2(1, 0) = -1000.;
-//    bcBottom = material->CreateBC(material, -3, 1, val1, val2); // Tension in y
-//
-//    val2(0, 0) = 0.0;
-//    val2(1, 0) = 0.0;
-//    bcRight = material->CreateBC(material, -4, 0, val1, val2); // Tension in x
-//
-//    cmesh->InsertMaterialObject(material);
-//    cmesh->InsertMaterialObject(bcBottom);
-//    cmesh->InsertMaterialObject(bcRight);
-//    cmesh->InsertMaterialObject(bcTop);
-//    cmesh->InsertMaterialObject(bcLeft);
-//
-//    cmesh->SetAllCreateFunctionsContinuous();
-//    cmesh->AutoBuild();
-//    cmesh->AdjustBoundaryElements();
-//    cmesh->CleanUpUnconnectedNodes();
-//
-//    return cmesh;
-}
-
-TPZCompMesh *CmeshElasticityNoBoundary(TPZGeoMesh *gmesh, int pOrder) {
-
-    // Creating the computational mesh
-    TPZCompMesh *cmesh = new TPZCompMesh(gmesh);
-    cmesh->SetDefaultOrder(pOrder);
-
-    // Creating elasticity material
-    TPZMatElasticity2D *mat = new TPZMatElasticity2D(1);
-    mat->SetElasticParameters(200000000., 0.3);
-    mat->SetPlaneStrain();
-    cmesh->InsertMaterialObject(mat);
-
-    cmesh->SetAllCreateFunctionsContinuous();
-    cmesh->AutoBuild();
-    return cmesh;
-
-//    // Creating the computational mesh
-//    TPZCompMesh *cmesh = new TPZCompMesh(gmesh);
-//    cmesh->SetDefaultOrder(pOrder);
-//
-//    // Creating elasticity material
-//    TPZMatElasticity2D *mat = new TPZMatElasticity2D(1);
-//    mat->SetElasticParameters(200000000., 0.3);
-//    cmesh->InsertMaterialObject(mat);
-//
-//    cmesh->SetAllCreateFunctionsContinuous();
-//    cmesh->AutoBuild();
-//    return cmesh;
-}
-
-TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh * gmesh, int p_order) {
+TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int p_order, TElastoPlasticData & wellbore_material) {
 
 // Creates the computational mesh
     TPZCompMesh * cmesh = new TPZCompMesh(gmesh);
     cmesh->SetDefaultOrder(p_order);
+    int dim = gmesh->Dimension();
+    int matid = wellbore_material.Id();
 
-// Mohr Coulomb data
-    REAL mc_cohesion    = 10.0;
-    REAL mc_phi         = (20.0*M_PI/180);
+    // Mohr Coulomb data
+    REAL mc_cohesion    = wellbore_material.Cohesion();
+    REAL mc_phi         = wellbore_material.FrictionAngle();
     REAL mc_psi         = mc_phi;
 
-// ElastoPlastic Material using Mohr Coulomb
-// Elastic predictor
-    TPZElasticResponse ER;
-    REAL G = 400*mc_cohesion;
-    REAL nu = 0.3;
-    REAL E = 2.0*G*(1+nu);
+    // ElastoPlastic Material using Mohr Coulomb
+    // Elastic predictor
+    TPZElasticResponse ER = wellbore_material.ElasticResponse();
 
     TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse> LEMC;
-    ER.SetEngineeringData(E,nu);
     LEMC.SetElasticResponse(ER);
     LEMC.fYC.SetUp(mc_phi, mc_psi, mc_cohesion, ER);
     int PlaneStrain = 1;
-    int matid = 1;
     LEMC.fN.m_eps_t.Zero();
     LEMC.fN.m_eps_p.Zero();
 
-// Creates elastoplatic material
+    TPZElastoPlasticMem default_memory;
+    default_memory.m_ER = ER;
+    default_memory.m_sigma.Zero();
+    default_memory.m_elastoplastic_state = LEMC.fN;
+
+    // Creates elastoplatic material
     TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem > * material = new TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem >(matid,PlaneStrain);
     material->SetPlasticityModel(LEMC);
-
-// Set the boundary conditions
-    TPZMaterial *bcBottom, *bcRight, *bcTop, *bcLeft;
-    TPZFMatrix<REAL> val1(2,2), val2(2,2);
-
-    val2(0,0) = 0;
-    val2(1,0) = 0;
-    bcLeft = material->CreateBC(material, -1, 0, val1, val2);
-
-    val2(0,0) = 0;
-    val2(1,0) = 0;
-    bcTop = material->CreateBC(material, -2, 0, val1, val2);
-
-    val2(0,0) = 0;
-    val2(1,0) = -1000;
-    bcBottom = material->CreateBC(material, -3, 1, val1, val2);
-
-    val2(0,0) = 1000;
-    val2(1,0) = 0;
-    bcRight = material->CreateBC(material, -4, 1, val1, val2);
-
+    material->SetDefaultMem(default_memory);
     cmesh->InsertMaterialObject(material);
-    cmesh->InsertMaterialObject(bcBottom);
-    cmesh->InsertMaterialObject(bcTop);
-    cmesh->InsertMaterialObject(bcLeft);
-    cmesh->InsertMaterialObject(bcRight);
 
+    // Set the boundary conditions
+    TPZFNMatrix<3,REAL> val1(dim,dim), val2(dim,dim);
+    val1.Zero();
+    val2.Zero();
+    int n_bc = wellbore_material.BoundaryData().size();
+    for (int i = 0; i < n_bc; i++) {
+        int bc_id = wellbore_material.BoundaryData()[i].Id();
+        int type = wellbore_material.BoundaryData()[i].Type();
+
+        int n_values = wellbore_material.BoundaryData()[i].Value().size();
+
+        for (int k = 0; k < n_values; k++) {
+            val2(k,0) = wellbore_material.BoundaryData()[i].Value()[k];
+        }
+
+        TPZBndCondWithMem<TPZElastoPlasticMem> * bc = new  TPZBndCondWithMem<TPZElastoPlasticMem>(material, bc_id, type, val1, val2);
+        cmesh->InsertMaterialObject(bc);
+
+    }
+
+    cmesh->SetDimModel(dim);
     cmesh->SetAllCreateFunctionsContinuousWithMem();
+    cmesh->ApproxSpace().CreateWithMemory(true);
     cmesh->AutoBuild();
 
+#ifdef PZDEBUG
+    std::ofstream out("cmesh.txt");
+    cmesh->Print(out);
+#endif
     return cmesh;
 }
 
-TPZCompMesh *CmeshElastoplasticityNoBoundary(TPZGeoMesh * gmesh, int p_order) {
+void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance, TElastoPlasticData & wellbore_material){
+    std::cout << "\n\nSolving with IntPointsFEM ...\n" << std::endl;
+    bool stop_criterion_Q = false;
+    REAL norm_res, norm_delta_du;
+    int neq = analysis->Solution().Rows();
+    TPZFMatrix<REAL> du(neq, 1, 0.), delta_du;
 
-// Creates the computational mesh
-    TPZCompMesh * cmesh = new TPZCompMesh(gmesh);
-    cmesh->SetDefaultOrder(p_order);
+    TPZIntPointsFEM solveintpoints(analysis->Mesh(), wellbore_material.Id());
+    solveintpoints.SetDataStructure();
 
-// Mohr Coulomb data
-    REAL mc_cohesion    = 10.0;
-    REAL mc_phi         = (20.0*M_PI/180);
+    analysis->Solution().Zero();
+    analysis->Assemble();
+    for (int i = 0; i < n_iterations; i++) {
+        analysis->Solve();
+        delta_du = analysis->Solution();
+        du += delta_du;
+        solveintpoints.LoadSolution(du);
+        analysis->LoadSolution(du);
+        solveintpoints.AssembleResidual();
+        norm_delta_du = Norm(delta_du);
+        norm_res = Norm(solveintpoints.Rhs());
+        stop_criterion_Q = norm_res < tolerance;
+        std::cout << "Nonlinear process :: delta_du norm = " << norm_delta_du << std::endl;
+        std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
+//        PrintMemory(analysis->Mesh());
+        if (stop_criterion_Q) {
+            AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
+//            PrintMemory(analysis->Mesh());
+            std::cout << "Nonlinear process converged with residue norm = " << norm_res << std::endl;
+            std::cout << "Number of iterations = " << i + 1 << std::endl;
+            break;
+        }
+//        analysis->Assemble();
+        analysis->Rhs() = solveintpoints.Rhs();
+
+    }
+
+    if (stop_criterion_Q == false) {
+        std::cout << "Nonlinear process not converged with residue norm = " << norm_res << std::endl;
+    }
+}
+
+void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_material, int npoints, std::ostream &out, bool euler) {
+    REAL rw = 0.1;
+    REAL re = 4.0;
+    REAL theta = 0.;
+
+    //Initial stress and wellbore pressure
+    REAL sigma0 = wellbore_material.BoundaryData()[0].InitialValue();
+    REAL pw = wellbore_material.BoundaryData()[0].Value()[0] + sigma0;
+
+    //Outer stress
+    TPZTensor<REAL> sigmaXYZ;
+    REAL sigma = wellbore_material.BoundaryData()[1].Value()[0] + sigma0;
+    sigmaXYZ.Identity();
+    sigmaXYZ.Multiply(sigma,1);
+
+    // Mohr Coulomb data
+    REAL mc_cohesion    = wellbore_material.Cohesion();
+    REAL mc_phi         = wellbore_material.FrictionAngle();
     REAL mc_psi         = mc_phi;
 
-// ElastoPlastic Material using Mohr Coulomb
-// Elastic predictor
-    TPZElasticResponse ER;
-    REAL G = 400*mc_cohesion;
-    REAL nu = 0.3;
-    REAL E = 2.0*G*(1+nu);
+    // ElastoPlastic Material using Mohr Coulomb
+    // Elastic predictor
+    TPZElasticResponse ER = wellbore_material.ElasticResponse();
 
     TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse> LEMC;
-    ER.SetEngineeringData(E,nu);
     LEMC.SetElasticResponse(ER);
     LEMC.fYC.SetUp(mc_phi, mc_psi, mc_cohesion, ER);
     int PlaneStrain = 1;
-    int matid = 1;
+    LEMC.fN.m_eps_t.Zero();
+    LEMC.fN.m_eps_p.Zero();
 
-// Creates elastoplatic material
-    TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem > * material = new TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem >(matid,PlaneStrain);
+    TPZElastoPlasticMem default_memory;
+    default_memory.m_ER = ER;
+    default_memory.m_sigma.Zero();
+    default_memory.m_elastoplastic_state = LEMC.fN;
+
+    // Creates elastoplatic material
+    TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem > * material = new TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem >(wellbore_material.Id(),PlaneStrain);
     material->SetPlasticityModel(LEMC);
+    material->SetDefaultMem(default_memory);
 
-    cmesh->InsertMaterialObject(material);
-    cmesh->SetAllCreateFunctionsContinuousWithMem();
-    cmesh->AutoBuild();
-
-    return cmesh;
-}
-
-void SolVector(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
-
-    int dim_mesh = (cmesh->Reference())->Dimension(); // Mesh dimension
-    int64_t nelem_c = cmesh->NElements(); // Number of computational elements
-    std::vector<int64_t> cel_indexes;
-
-// Number of domain geometric elements
-    for (int64_t i = 0; i < nelem_c; i++) {
-        TPZCompEl *cel = cmesh->Element(i);
-        if (!cel) continue;
-        TPZGeoEl *gel = cmesh->Element(i)->Reference();
-        if (!gel || gel->Dimension() != dim_mesh) continue;
-        cel_indexes.push_back(cel->Index());
-    }
-
-    if (cel_indexes.size() == 0) {
-        DebugStop();
-    }
-
-// RowSizes and ColSizes vectors
-    int64_t nelem = cel_indexes.size();
-    TPZVec<int64_t> rowsizes(nelem);
-    TPZVec<int64_t> colsizes(nelem);
-
-    int64_t npts_tot = 0;
-    int64_t nf_tot = 0;
-
-    for (auto iel : cel_indexes) {
-        //Verification
-        TPZCompEl *cel = cmesh->Element(iel);
-
-        //Integration rule
-        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement * >(cel);
-        if (!cel_inter) DebugStop();
-        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
-
-        int64_t npts = int_rule->NPoints(); // number of integration points of the element
-        int64_t dim = cel_inter->Dimension(); //dimension of the element
-        int64_t nf = cel_inter->NShapeF(); // number of shape functions of the element
-
-        rowsizes[iel] = dim * npts;
-        colsizes[iel] = nf;
-
-        npts_tot += npts;
-        nf_tot += nf;
-    }
-
-    TPZSolveVector *SolVec = new TPZSolveVector(dim_mesh * npts_tot, nf_tot, rowsizes, colsizes);
-
-// Dphi matrix, weight and indexes vectors
-    TPZFMatrix<REAL> elmatrix;
-    TPZVec<REAL> weight(npts_tot);
-    TPZManVector<MKL_INT> indexes(dim_mesh * nf_tot);
-    int cont = 0;
-    for (auto iel : cel_indexes) {
-        int64_t cont1 = 0;
-        int64_t cont2 = 0;
-        //Verification
-        TPZCompEl *cel = cmesh->Element(iel);
-
-        //Integration rule
-        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement * >(cel);
-        if (!cel_inter) DebugStop();
-        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
-
-        int64_t npts = int_rule->NPoints(); // number of integration points of the element
-        int64_t dim = cel_inter->Dimension(); //dimension of the element
-        int64_t nf = cel_inter->NShapeF(); // number of shape functions of the element
-
-        TPZMaterialData data;
-        cel_inter->InitMaterialData(data);
-
-        elmatrix.Resize(dim * npts, nf);
-        for (int64_t inpts = 0; inpts < npts; inpts++) {
-            TPZManVector<REAL> qsi(dim, 1);
-            REAL w;
-            int_rule->Point(inpts, qsi, w);
-            cel_inter->ComputeRequiredData(data, qsi);
-            weight[iel + nelem*inpts] = w * std::abs(data.detjac);
-
-            TPZFMatrix<REAL> &dphix = data.dphix;
-            for (int inf = 0; inf < nf; inf++) {
-                for (int idim = 0; idim < dim; idim++)
-                    elmatrix(inpts * dim + idim, inf) = dphix(idim, inf);
-            }
-        }
-        SolVec->SetElementMatrix(iel, elmatrix);
-
-        int64_t ncon = cel->NConnects();
-        for (int64_t icon = 0; icon < ncon; icon++) {
-            int64_t id = cel->ConnectIndex(icon);
-            TPZConnect &df = cmesh->ConnectVec()[id];
-            int64_t conid = df.SequenceNumber();
-            if (df.NElConnected() == 0 || conid < 0 || cmesh->Block().Size(conid) == 0) continue;
-            else {
-                int64_t pos = cmesh->Block().Position(conid);
-                int64_t nsize = cmesh->Block().Size(conid);
-                for (int64_t isize = 0; isize < nsize; isize++) {
-                    if (isize % 2 == 0) {
-                        indexes[cont1*nelem + cont] = pos + isize;
-                        cont1++;
-                    } else {
-                        indexes[cont2*nelem + nf_tot + cont] = pos + isize;
-                        cont2++;
-                    }
-                }
-            }
-        }
-        cont++;
-    }
-    SolVec->SetIndexes(indexes);
-    SolVec->ColoringElements(cmesh);
-
-    TPZFMatrix<REAL> coef_sol = cmesh->Solution();
-    int neq = cmesh->NEquations();
-
-    TPZFMatrix<REAL> nodal_forces_global1(neq, 1, 0.);
-    TPZFMatrix<REAL> nodal_forces_global2(neq, 1, 0.);
-    TPZFMatrix<REAL> result;
-    TPZFMatrix<REAL> sigma;
-    TPZFMatrix<REAL> nodal_forces_vec;
-
-#ifdef __CUDACC__
-    std::cout << "\n\nSOLVING WITH GPU" << std::endl;
-    SolVec->AllocateMemory(cmesh);
-    SolVec->MultiplyCUDA(coef_sol,result);
-    SolVec->ComputeSigmaCUDA(weight, result, sigma);
-    SolVec->MultiplyTransposeCUDA(sigma,nodal_forces_vec);
-    SolVec->ColoredAssembleCUDA(nodal_forces_vec,nodal_forces_global1);
-    SolVec->FreeMemory();
-
-#endif
-
-    std::cout << "\n\nSOLVING WITH CPU" << std::endl;
-    SolVec->Multiply(coef_sol, result);
-    SolVec->ComputeSigma(weight, result, sigma);
-    SolVec->MultiplyTranspose(sigma,nodal_forces_vec);
-    SolVec->ColoredAssemble(nodal_forces_vec,nodal_forces_global2);
-
-    //Check the result
-    int rescpu = Norm(nodal_forces_global2 - residual);
-    if(rescpu == 0){
-        std::cout << "\nAssemble done in the CPU is ok." << std::endl;
-    } else {
-        std::cout << "\nAssemble done in the CPU is not ok." << std::endl;
-    }
-
-#ifdef __CUDACC__
-    int resgpu = Norm(nodal_forces_global1 - residual);
-    if(resgpu == 0){
-        std::cout << "\nAssemble done in the GPU is ok." << std::endl;
-    } else {
-        std::cout << "\nAssemble done in the GPU is not ok." << std::endl;
-    }
-#endif
-}
-
-void SolMatrix(TPZFMatrix<REAL> residual, TPZCompMesh *cmesh) {
-
-    int dim_mesh = (cmesh->Reference())->Dimension(); // Mesh dimension
-    int64_t nelem_c = cmesh->NElements(); // Number of computational elements
-    std::vector<int64_t> cel_indexes;
-
-// Number of domain geometric elements
-    for (int64_t i = 0; i < nelem_c; i++) {
-        TPZCompEl *cel = cmesh->Element(i);
-        if (!cel) continue;
-        TPZGeoEl *gel = cmesh->Element(i)->Reference();
-        if (!gel || gel->Dimension() != dim_mesh) continue;
-        cel_indexes.push_back(cel->Index());
-    }
-
-    if (cel_indexes.size() == 0) {
-        DebugStop();
-    }
-
-// RowSizes and ColSizes vectors
-    int64_t nelem = cel_indexes.size();
-    TPZVec<MKL_INT> rowsizes(nelem);
-    TPZVec<MKL_INT> colsizes(nelem);
-
-    int64_t npts_tot = 0;
-    int64_t nf_tot = 0;
-
-    for (auto iel : cel_indexes) {
-        //Verification
-        TPZCompEl *cel = cmesh->Element(iel);
-
-        //Integration rule
-        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement * >(cel);
-        if (!cel_inter) DebugStop();
-        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
-
-        int64_t npts = int_rule->NPoints(); // number of integration points of the element
-        int64_t dim = cel_inter->Dimension(); //dimension of the element
-        int64_t nf = cel_inter->NShapeF(); // number of shape functions of the element
-
-        rowsizes[iel] = dim * npts;
-        colsizes[iel] = nf;
-
-        npts_tot += npts;
-        nf_tot += nf;
-    }
-
-    TPZSolveMatrix *SolMat = new TPZSolveMatrix(dim_mesh * npts_tot, nf_tot, rowsizes, colsizes);
-
-// Dphi matrix, weight and indexes vectors
-    TPZFMatrix<REAL> elmatrix;
-    TPZStack<REAL> weight;
-    TPZManVector<MKL_INT> indexes(dim_mesh * nf_tot);
-
-    int64_t cont1 = 0;
-    int64_t cont2 = 0;
-
-    for (auto iel : cel_indexes) {
-        //Verification
-        TPZCompEl *cel = cmesh->Element(iel);
-
-        //Integration rule
-        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement * >(cel);
-        if (!cel_inter) DebugStop();
-        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
-
-        int64_t npts = int_rule->NPoints(); // number of integration points of the element
-        int64_t dim = cel_inter->Dimension(); //dimension of the element
-        int64_t nf = cel_inter->NShapeF(); // number of shape functions of the element
-
-        TPZMaterialData data;
-        cel_inter->InitMaterialData(data);
-
-        elmatrix.Resize(dim * npts, nf);
-        for (int64_t inpts = 0; inpts < npts; inpts++) {
-            TPZManVector<REAL> qsi(dim, 1);
-            REAL w;
-            int_rule->Point(inpts, qsi, w);
-            cel_inter->ComputeRequiredData(data, qsi);
-            weight.Push(w * std::abs(data.detjac)); //weight = w * detjac
-
-            TPZFMatrix<REAL> &dphix = data.dphix;
-            for (int inf = 0; inf < nf; inf++) {
-                for (int idim = 0; idim < dim; idim++)
-                    elmatrix(inpts * dim + idim, inf) = dphix(idim, inf);
-            }
-        }
-        SolMat->SetElementMatrix(iel, elmatrix);
-
-        //Indexes vector
-        int64_t ncon = cel->NConnects();
-        for (int64_t icon = 0; icon < ncon; icon++) {
-            int64_t id = cel->ConnectIndex(icon);
-            TPZConnect &df = cmesh->ConnectVec()[id];
-            int64_t conid = df.SequenceNumber();
-            if (df.NElConnected() == 0 || conid < 0 || cmesh->Block().Size(conid) == 0) continue;
-            else {
-                int64_t pos = cmesh->Block().Position(conid);
-                int64_t nsize = cmesh->Block().Size(conid);
-                for (int64_t isize = 0; isize < nsize; isize++) {
-                    if (isize % 2 == 0) {
-                        indexes[cont1] = pos + isize;
-                        cont1++;
-                    } else {
-                        indexes[cont2 + nf_tot] = pos + isize;
-                        cont2++;
-                    }
-                }
-            }
-        }
-    }
-    SolMat->SetIndexes(indexes);
-    SolMat->ColoringElements(cmesh);
-
-    TPZFMatrix<REAL> solution = cmesh->Solution();
-    int neq = cmesh->NEquations();
-
-    TPZFMatrix<REAL> nodal_forces_global1(neq, 1, 0.);
-    TPZFMatrix<REAL> nodal_forces_global2(neq, 1, 0.);
-    TPZFMatrix<REAL> sigma_trial;
-    TPZFMatrix<REAL> eigenvalues;
-    TPZFMatrix<REAL> nodal_forces_vec;
-    TPZFMatrix<REAL> delta_strain;
-    TPZFMatrix<REAL> total_strain(dim_mesh * dim_mesh * npts_tot, 1, 0.);
-    TPZFMatrix<REAL> plastic_strain(dim_mesh * dim_mesh * npts_tot, 1, 0.);
-    TPZFMatrix<REAL> elastic_strain(dim_mesh * dim_mesh * npts_tot, 1, 0.);
-    TPZFMatrix<REAL> phi;
-    TPZFMatrix<REAL> sigma_projected;
-
-    #ifdef __CUDACC__
-    std::cout << "\n\nSOLVING WITH GPU" << std::endl;
-    SolMat->AllocateMemory(cmesh);
-    SolMat->MultiplyCUDA(coef_sol, result);
-    SolMat->ComputeSigmaCUDA(weight, result, sigma);
-    SolMat->MultiplyTransposeCUDA(sigma, nodal_forces_vec);
-    SolMat->ColoredAssembleCUDA(nodal_forces_vec, nodal_forces_global1);
-    SolMat->FreeMemory();
-    #endif
-
-    std::cout << "\n\nSOLVING WITH CPU" << std::endl;
-
-    SolMat->DeltaStrain(solution, delta_strain);
-    SolMat->ElasticStrain(delta_strain, total_strain, plastic_strain, elastic_strain);
-    SolMat->SigmaTrial(weight, delta_strain, sigma_trial);
-    SolMat->PrincipalStress(sigma_trial, eigenvalues);
-    SolMat->ProjectSigma(total_strain, plastic_strain, eigenvalues, sigma_projected);
-
-//    SolMat->Multiply(coef_sol, result);
-//    SolMat->ComputeSigma(weight, result, sigma);
-//    SolMat->MultiplyTranspose(sigma, nodal_forces_vec);
-//    SolMat->ColoredAssemble(nodal_forces_vec, nodal_forces_global2);
-
-//    //Check the result
-//    int rescpu = Norm(nodal_forces_global2 - residual);
-//    if(rescpu == 0){
-//        std::cout << "\nAssemble done in the CPU is ok." << std::endl;
-//    } else {
-//        std::cout << "\nAssemble done in the CPU is not ok." << std::endl;
-//    }
-
-    #ifdef __CUDACC__
-    int resgpu = Norm(nodal_forces_global1 - residual);
-    if(resgpu == 0){
-        std::cout << "\nAssemble done in the GPU is ok." << std::endl;
-    } else {
-        std::cout << "\nAssemble done in the GPU is not ok." << std::endl;
-    }
-    #endif
-}
-
-TPZFMatrix<REAL> Residual(TPZCompMesh *cmesh, TPZCompMesh *cmesh_noboundary) {
-    bool optimizeBandwidth = true;
-    int n_threads = 16;
-
-    TPZAnalysis an_d(cmesh_noboundary, optimizeBandwidth);
-    TPZSymetricSpStructMatrix strskyl(cmesh_noboundary);
-    strskyl.SetNumThreads(n_threads);
-    an_d.SetStructuralMatrix(strskyl);
-
-    TPZStepSolver<STATE> step;
-    step.SetDirect(ELDLt);
-    an_d.SetSolver(step);
-    an_d.Assemble();
-    an_d.Solve();
-
-    TPZFMatrix<STATE> res;
-    an_d.Solver().Matrix()->Multiply(cmesh->Solution(), res);
-    return res;
+    TRKSolution rkmethod;
+    rkmethod.SetWellboreRadius(rw);
+    rkmethod.SetExternalRadius(re);
+    rkmethod.SetNumberOfPoints(npoints);
+    rkmethod.SetInitialStateMemory(default_memory);
+    rkmethod.SetElastoPlasticModel(LEMC);
+    rkmethod.SetRadialDisplacement(u_re);
+    rkmethod.SetRadialStress(sigma_re);
+    rkmethod.FillPointsMemory();
+    rkmethod.RKProcess(out, euler);
 }
