@@ -77,11 +77,11 @@ int main(int argc, char *argv[]) {
     
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
-    std::string msh_file = source_dir + "/gmsh/wellbore-10.msh";
+//    std::string msh_file = source_dir + "/gmsh/wellbore-10.msh";
 //    std::string msh_file = source_dir + "/gmsh/wellbore-20.msh";
 //    std::string msh_file = source_dir + "/gmsh/wellbore-30.msh";
 //    std::string msh_file = source_dir + "/gmsh/wellbore-40.msh";
-//    std::string msh_file = source_dir + "/gmsh/wellbore-50.msh";
+    std::string msh_file = source_dir + "/gmsh/wellbore-50.msh";
 
     TPZGeoMesh *gmesh = ReadGeometry(msh_file);
     PrintGeometry(gmesh);
