@@ -12,20 +12,28 @@
 #include <algorithm>
 #endif
 
+#include "SpectralDecomp.h"
+#include "SigmaProjection.h"
 
-TPZIntPointsFEM::TPZIntPointsFEM() : fDim(-1), fBoundaryElements(), fCmesh(0), fNpts(-1), fNphis(-1), fElemColor(0), fMaterial(0), fRhs(0,0), fRhsBoundary(0,0),
-                                     fSolution(0,0), fPlasticStrain(0,0), fStorage(0), fRowSizes(0), fColSizes(0), fMatrixPosition(0), fRowFirstIndex(0),
-                                     fColFirstIndex(0), fIndexes(0), fIndexesColor(0), fWeight() {
 
+TPZIntPointsFEM::TPZIntPointsFEM() :
+		fDim(-1), fBoundaryElements(), fCmesh(0), fNpts(-1), fNphis(-1), fElemColor(
+				0), fMaterial(0), fRhs(0, 0), fRhsBoundary(0, 0), fSolution(0,
+				0), fPlasticStrain(0, 0), fStorage(0), fRowSizes(0), fColSizes(
+				0), fMatrixPosition(0), fRowFirstIndex(0), fColFirstIndex(0), fIndexes(
+				0), fIndexesColor(0), fWeight() {
 
 }
 
-TPZIntPointsFEM::TPZIntPointsFEM(TPZCompMesh *cmesh, int materialid) : fDim(-1), fBoundaryElements(), fCmesh(0), fNpts(-1), fNphis(-1), fElemColor(0), fMaterial(0), fRhs(0,0), fRhsBoundary(0,0),
-                                                                       fSolution(0,0), fPlasticStrain(0,0), fStorage(0), fRowSizes(0), fColSizes(0), fMatrixPosition(0), fRowFirstIndex(0),
-                                                                       fColFirstIndex(0), fIndexes(0), fIndexesColor(0), fWeight() {
+TPZIntPointsFEM::TPZIntPointsFEM(TPZCompMesh *cmesh, int materialid) :
+		fDim(-1), fBoundaryElements(), fCmesh(0), fNpts(-1), fNphis(-1), fElemColor(
+				0), fMaterial(0), fRhs(0, 0), fRhsBoundary(0, 0), fSolution(0,
+				0), fPlasticStrain(0, 0), fStorage(0), fRowSizes(0), fColSizes(
+				0), fMatrixPosition(0), fRowFirstIndex(0), fColFirstIndex(0), fIndexes(
+				0), fIndexesColor(0), fWeight() {
 
-    SetCompMesh(cmesh);
-    SetMaterialId(materialid);
+	SetCompMesh(cmesh);
+	SetMaterialId(materialid);
 }
 
 TPZIntPointsFEM::~TPZIntPointsFEM() {
@@ -86,455 +94,6 @@ TPZIntPointsFEM &TPZIntPointsFEM::operator=(const TPZIntPointsFEM &copy) {
     return *this;
 }
 
-//Spectral decomposition
-void TPZIntPointsFEM::Multiplicity1(double *sigma, double eigenvalue, double *eigenvector) {
-    TPZVec<REAL> det(3);
-    det[0] = (sigma[0] - eigenvalue)*(sigma[1] - eigenvalue) - sigma[3]*sigma[3];
-    det[1] = (sigma[0] - eigenvalue)*(sigma[2] - eigenvalue);
-    det[2] = (sigma[1] - eigenvalue)*(sigma[2] - eigenvalue);
-
-    REAL maxdet = fabs(det[0]);
-    for (int i = 1; i < 3; i++) {
-        if (fabs(det[i]) > fabs(maxdet)) {
-            maxdet = fabs(det[i]);
-        }
-    }
-    TPZVec<REAL> v(3);
-    if (maxdet == fabs(det[0])) {
-        v[0] = 0;
-        v[1] = 0;
-        v[2] = 1;
-
-    }
-    else if (maxdet == fabs(det[1])) {
-        v[0] = 1/det[1]*(-(sigma[2] - eigenvalue)*sigma[3]);
-        v[1] = 1;
-        v[2] = 0;
-
-    }
-    else {
-        v[0] = 1;
-        v[1] = 1/det[2]*(-(sigma[2] - eigenvalue)*sigma[3]);
-        v[2] = 0;
-    }
-    REAL norm = sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
-    eigenvector[0] = v[0]/norm;
-    eigenvector[1] = v[1]/norm;
-    eigenvector[2] = v[2]/norm;
-}
-
-void TPZIntPointsFEM::Multiplicity2(double *sigma, double eigenvalue, double *eigenvector1, double *eigenvector2) {
-    TPZVec<REAL> x(3);
-    x[0] = sigma[0] - eigenvalue;
-    x[1] = sigma[1] - eigenvalue;
-    x[2] = sigma[2] - eigenvalue;
-
-    REAL maxx = fabs(x[0]);
-    for (int i = 1; i < 3; i++) {
-        if (fabs(x[i]) > fabs(maxx)) {
-            maxx = fabs(x[i]);
-        }
-    }
-
-    TPZVec<REAL> v1(3);
-    TPZVec<REAL> v2(3);
-
-    if (maxx == fabs(x[0])) {
-        v1[0] = -sigma[3]/x[0];
-        v1[1] = 1;
-        v1[2] = 0;
-
-        v2[0] = 0;
-        v2[1] = 0;
-        v2[2] = 1;
-
-    }
-    else if (maxx == fabs(x[1])) {
-        v1[0] = 1;
-        v1[1] = -sigma[3]/x[1];
-        v1[2] = 0;
-
-        v2[0] = 0;
-        v2[1] = 0;
-        v2[2] = 1;
-
-    }
-    else {
-        v1[0] = 1;
-        v1[1] = 0;
-        v1[2] = 0;
-
-        v2[0] = 0;
-        v2[1] = 1;
-        v2[2] = 0;
-
-    }
-    REAL norm1 = sqrt(v1[0]*v1[0] + v1[1]*v1[1] + v1[2]*v1[2]);
-    REAL norm2 = sqrt(v2[0]*v2[0] + v2[1]*v1[1] + v2[2]*v2[2]);
-
-    eigenvector1[0] = v1[0]/norm1;
-    eigenvector1[1] = v1[1]/norm1;
-    eigenvector1[2] = v1[2]/norm1;
-
-    eigenvector2[0] = v2[0]/norm2;
-    eigenvector2[1] = v2[1]/norm2;
-    eigenvector2[2] = v2[2]/norm2;
-}
-
-void TPZIntPointsFEM::Eigenvectors(double *sigma, double *eigenvalues, double *eigenvectors, double &maxel) {
-    sigma[0]*=maxel;
-    sigma[1]*=maxel;
-    sigma[2]*=maxel;
-    sigma[3]*=maxel;
-
-    if ((eigenvalues[0] == eigenvalues[1]) && (eigenvalues[1] == eigenvalues[2])) {
-        eigenvectors[0] = 1.;
-        eigenvectors[1] = 0.;
-        eigenvectors[2] = 0.;
-
-        eigenvectors[3] = 0.;
-        eigenvectors[4] = 1.;
-        eigenvectors[5] = 0.;
-
-        eigenvectors[6] = 0.;
-        eigenvectors[7] = 0.;
-        eigenvectors[8] = 1.;
-    }
-    else {
-        if (eigenvalues[0] != eigenvalues[1] && eigenvalues[0] != eigenvalues[2]) {
-            Multiplicity1(sigma, eigenvalues[0], &eigenvectors[0]);
-        } else if (eigenvalues[0] == eigenvalues[1]) {
-            Multiplicity2(sigma, eigenvalues[0], &eigenvectors[0], &eigenvectors[3]);
-        } else if (eigenvalues[0] == eigenvalues[2]) {
-            Multiplicity2(sigma, eigenvalues[0], &eigenvectors[0], &eigenvectors[6]);
-        }
-        if (eigenvalues[1] != eigenvalues[0] && eigenvalues[1] != eigenvalues[2]) {
-            Multiplicity1(sigma, eigenvalues[1], &eigenvectors[3]);
-        } else if (eigenvalues[1] == eigenvalues[2]) {
-            Multiplicity2(sigma, eigenvalues[1], &eigenvectors[3], &eigenvectors[6]);
-        }
-        if (eigenvalues[2] != eigenvalues[0] && eigenvalues[2] != eigenvalues[1]) {
-            Multiplicity1(sigma, eigenvalues[2], &eigenvectors[6]);
-        }
-    }
-}
-
-void TPZIntPointsFEM::Normalize(double *sigma, double &maxel) {
-    maxel = sigma[0];
-    for (int i = 1; i < 4; i++) {
-        if (fabs(sigma[i]) > fabs(maxel)) {
-            maxel = sigma[i];
-        }
-    }
-    for (int i = 0; i < 4; i++) {
-        sigma[i] /= maxel;
-    }
-}
-
-void TPZIntPointsFEM::Interval(double *sigma, double *interval) {
-    TPZVec<REAL> lower_vec(3);
-    TPZVec<REAL> upper_vec(3);
-
-    //row 1 |sigma_xx sigma_xy 0|
-    lower_vec[0] = sigma[0] - fabs(sigma[3]);
-    upper_vec[0] = sigma[0] + fabs(sigma[3]);
-
-    //row 2 |sigma_xy sigma_yy 0|
-    lower_vec[1] = sigma[1] - fabs(sigma[3]);
-    upper_vec[1] = sigma[1] + fabs(sigma[3]);
-
-    //row 3 |0 0 sigma_zz|
-    lower_vec[2] = sigma[2];
-    upper_vec[2] = sigma[2];
-
-    interval[0] = upper_vec[0];
-    interval[1] = lower_vec[0];
-
-    for (int i = 1; i < 3; i++) {
-        if (upper_vec[i] > interval[0]) { //upper interval
-            interval[0] = upper_vec[i];
-        }
-
-        if (lower_vec[i] < interval[1]) { //lower interval
-            interval[1] = lower_vec[i];
-        }
-    }
-}
-
-void TPZIntPointsFEM::NewtonIterations(double *interval, double *sigma, double *eigenvalues, double &maxel) {
-    int numiterations = 20;
-    REAL tol = 10e-12;
-
-    REAL res, f, df, x;
-    int it;
-
-    for (int i = 0; i < 2; i++) {
-        x = interval[i];
-        it = 0;
-
-        f = sigma[0] * sigma[1] - x * (sigma[0] + sigma[1]) + x * x - sigma[3] * sigma[3];
-        res = abs(f);
-
-        while (it < numiterations && res > tol) {
-            df = -sigma[0] - sigma[1] + 2 * x;
-
-            x -= f / df;
-            f = sigma[0] * sigma[1] - x * (sigma[0] + sigma[1]) + x * x - sigma[3] * sigma[3];
-            res = abs(f);
-            it++;
-        }
-        eigenvalues[i] = x;
-
-    }
-    eigenvalues[2] = sigma[0] + sigma[1] + sigma[2] - eigenvalues[0] - eigenvalues[1];
-
-    eigenvalues[0] *= maxel;
-    eigenvalues[1] *= maxel;
-    eigenvalues[2] *= maxel;
-
-//    std::sort(eigenvalues, eigenvalues+3, [](int i, int j) { return i > j; }); //store eigenvalues in descending order (absolute value)
-    std::sort(eigenvalues, eigenvalues+3, greater<REAL>()); //store eigenvalues in descending order (absolute value)
-
-}
-
-//Project Sigma
-bool TPZIntPointsFEM::PhiPlane(double *eigenvalues, double *sigma_projected) {
-    REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();
-    REAL mc_cohesion = fMaterial->GetPlasticModel().fYC.Cohesion();
-
-    const REAL sinphi = sin(mc_phi);
-    const REAL cosphi = cos(mc_phi);
-
-    REAL phi = eigenvalues[0] - eigenvalues[2] + (eigenvalues[0] + eigenvalues[2]) * sinphi - 2. * mc_cohesion *cosphi;
-
-    sigma_projected[0] = eigenvalues[0];
-    sigma_projected[1] = eigenvalues[1];
-    sigma_projected[2] = eigenvalues[2];
-
-    bool check_validity = (fabs(phi) < 1.e-12) || (phi < 0.0);
-    return check_validity;
-}
-
-bool TPZIntPointsFEM::ReturnMappingMainPlane(double *eigenvalues, double *sigma_projected, double &m_hardening) {
-    REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();
-    REAL mc_psi = fMaterial->GetPlasticModel().fYC.Psi();
-    REAL mc_cohesion = fMaterial->GetPlasticModel().fYC.Cohesion();
-    REAL K = fMaterial->GetPlasticModel().fER.K();
-    REAL G = fMaterial->GetPlasticModel().fER.G();
-
-    const REAL sinphi = sin(mc_phi);
-    const REAL sinpsi = sin(mc_psi);
-    const REAL cosphi = cos(mc_phi);
-    const REAL sinphi2 = sinphi*sinphi;
-    const REAL cosphi2 = 1. - sinphi2;
-    const REAL constA = 4. * G *(1. + sinphi * sinpsi / 3.) + 4. * K * sinphi*sinpsi;
-
-    REAL phi = eigenvalues[0] - eigenvalues[2]+(eigenvalues[0] + eigenvalues[2]) * sinphi - 2. * mc_cohesion*cosphi;
-
-    REAL gamma = 0;
-    int n_iterations = 30;
-    for (int i = 0; i < n_iterations; i++) {
-        double jac = -constA - 4. * cosphi2 * 0; // H=0
-        double delta_gamma = - phi / jac;
-        gamma += delta_gamma;
-        phi = eigenvalues[0] - eigenvalues[2]+(eigenvalues[0] + eigenvalues[2]) * sinphi - 2. * mc_cohesion * cosphi - constA * gamma;
-        if (fabs(phi) < 1.e-12) {
-            break;
-        }
-    }
-
-    eigenvalues[0] -= (2. * G *(1 + sinpsi / 3.) + 2. * K * sinpsi) * gamma;
-    eigenvalues[1] += (4. * G / 3. - K * 2.) * sinpsi * gamma;
-    eigenvalues[2] += (2. * G * (1 - sinpsi / 3.) - 2. * K * sinpsi) * gamma;
-    sigma_projected[0] = eigenvalues[0];
-    sigma_projected[1] = eigenvalues[1];
-    sigma_projected[2] = eigenvalues[2];
-
-    m_hardening += gamma * 2. * cosphi;
-
-    bool check_validity = (eigenvalues[0] > eigenvalues[1] || fabs(eigenvalues[0]-eigenvalues[1]) < 1.e-12) && (eigenvalues[1] > eigenvalues[2] || fabs(eigenvalues[1]-eigenvalues[2]) < 1.e-12);
-    return check_validity;
-}
-
-bool TPZIntPointsFEM::ReturnMappingRightEdge(double *eigenvalues, double *sigma_projected, double &m_hardening) {
-    REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();
-    REAL mc_psi = fMaterial->GetPlasticModel().fYC.Psi();
-    REAL mc_cohesion = fMaterial->GetPlasticModel().fYC.Cohesion();
-    REAL K = fMaterial->GetPlasticModel().fER.K();
-    REAL G = fMaterial->GetPlasticModel().fER.G();
-
-    const REAL sinphi = sin(mc_phi);
-    const REAL sinpsi = sin(mc_psi);
-    const REAL cosphi = cos(mc_phi);
-
-    TPZVec<REAL> gamma(2, 0.), phi(2, 0.), sigma_bar(2, 0.), ab(2, 0.);
-
-    TPZVec<TPZVec<REAL>> jac(2), jac_inv(2);
-    for (int i = 0; i < 2; i++) {
-        jac[i].Resize(2, 0.);
-        jac_inv[i].Resize(2, 0.);
-    }
-
-    sigma_bar[0] = eigenvalues[0] - eigenvalues[2]+(eigenvalues[0] + eigenvalues[2]) * sinphi;
-    sigma_bar[1] = eigenvalues[0] - eigenvalues[1] + (eigenvalues[0] + eigenvalues[1]) * sinphi;
-
-    phi[0] = sigma_bar[0] - 2. * cosphi * mc_cohesion;
-    phi[1] = sigma_bar[1] - 2. * cosphi * mc_cohesion;
-
-    ab[0] = 4. * G * (1 + sinphi * sinpsi / 3.) + 4. * K * sinphi * sinpsi;
-    ab[1] = 2. * G * (1. + sinphi + sinpsi - sinphi * sinpsi / 3.) + 4. * K * sinphi * sinpsi;
-
-    int n_iterations = 30;
-    for (int i = 0; i < n_iterations; i++) {
-
-        jac[0][0] = -ab[0];
-        jac[1][0] = -ab[1];
-        jac[0][1] = -ab[1];
-        jac[1][1] = -ab[0];
-
-        double det_jac = jac[0][0] * jac[1][1] - jac[0][1] * jac[1][0];
-
-        jac_inv[0][0] = jac[1][1] / det_jac;
-        jac_inv[1][0] = -jac[1][0] / det_jac;
-        jac_inv[0][1] = -jac[0][1] / det_jac;
-        jac_inv[1][1] = jac[0][0] / det_jac;
-
-        gamma[0] -= (jac_inv[0][0] * phi[0] + jac_inv[0][1] * phi[1]);
-        gamma[1] -= (jac_inv[1][0] * phi[0] + jac_inv[1][1] * phi[1]);
-
-        phi[0] = sigma_bar[0] - ab[0] * gamma[0] - ab[1] * gamma[1] - 2. * cosphi * mc_cohesion;
-        phi[1] = sigma_bar[1] - ab[1] * gamma[0] - ab[0] * gamma[1] - 2. * cosphi * mc_cohesion;
-
-        double res = (fabs(phi[0]) + fabs(phi[1]));
-
-        if (fabs(res) < 1.e-12) {
-            break;
-        }
-    }
-
-    eigenvalues[0] -= (2. * G * (1 + sinpsi / 3.) + 2. * K * sinpsi) * (gamma[0] + gamma[1]);
-    eigenvalues[1] += ((4. * G / 3. - K * 2.) * sinpsi) * gamma[0] + (2. * G * (1. - sinpsi / 3.) - 2. * K * sinpsi) * gamma[1];
-    eigenvalues[2] += (2. * G * (1 - sinpsi / 3.) - 2. * K * sinpsi) * gamma[0] + ((4. * G / 3. - 2. * K) * sinpsi) * gamma[1];
-    sigma_projected[0] = eigenvalues[0];
-    sigma_projected[1] = eigenvalues[1];
-    sigma_projected[2] = eigenvalues[2];
-
-    m_hardening += (gamma[0] + gamma[1]) * 2. * cosphi;
-
-    bool check_validity = (eigenvalues[0] > eigenvalues[1] || fabs(eigenvalues[0]-eigenvalues[1]) < 1.e-12) && (eigenvalues[1] > eigenvalues[2] || fabs(eigenvalues[1]-eigenvalues[2]) < 1.e-12);
-    return check_validity;
-}
-
-bool TPZIntPointsFEM::ReturnMappingLeftEdge(double *eigenvalues, double *sigma_projected, double &m_hardening) {
-    REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();
-    REAL mc_psi = fMaterial->GetPlasticModel().fYC.Psi();
-    REAL mc_cohesion = fMaterial->GetPlasticModel().fYC.Cohesion();
-    REAL K = fMaterial->GetPlasticModel().fER.K();
-    REAL G = fMaterial->GetPlasticModel().fER.G();
-
-    const REAL sinphi = sin(mc_phi);
-    const REAL sinpsi = sin(mc_psi);
-    const REAL cosphi = cos(mc_phi);
-    const REAL sinphi2 = sinphi*sinphi;
-    const REAL cosphi2 = 1. - sinphi2;
-
-    TPZVec<REAL> gamma(2, 0.), phi(2, 0.), sigma_bar(2, 0.), ab(2, 0.);
-
-    TPZVec<TPZVec<REAL>> jac(2), jac_inv(2);
-    for (int i = 0; i < 2; i++) {
-        jac[i].Resize(2, 0.);
-        jac_inv[i].Resize(2, 0.);
-    }
-
-    sigma_bar[0] = eigenvalues[0] - eigenvalues[2]+(eigenvalues[0] + eigenvalues[2]) * sinphi;
-    sigma_bar[1] = eigenvalues[1] - eigenvalues[2]+(eigenvalues[1] + eigenvalues[2]) * sinphi;
-
-    ab[0] = 4. * G * (1 + sinphi * sinpsi / 3.) + 4. * K * sinphi * sinpsi;
-    ab[1] = 2. * G * (1. - sinphi - sinpsi - sinphi * sinpsi / 3.) + 4. * K * sinphi * sinpsi;
-
-    phi[0] = sigma_bar[0] - 2. * cosphi * mc_cohesion;
-    phi[1] = sigma_bar[1] - 2. * cosphi * mc_cohesion;
-
-    int n_iterations = 30;
-    for (int i = 0; i < n_iterations; i++) {
-
-        jac[0][0] = -ab[0] - 4. * cosphi2 * 0;
-        jac[1][0] = -ab[1] - 4. * cosphi2 * 0;
-        jac[0][1] = -ab[1] - 4. * cosphi2 * 0;
-        jac[1][1] = -ab[0] - 4. * cosphi2 * 0;
-
-        REAL det_jac = jac[0][0] * jac[1][1] - jac[0][1] * jac[1][0];
-
-        jac_inv[0][0] = jac[1][1] / det_jac;
-        jac_inv[1][0] = -jac[1][0] / det_jac;
-        jac_inv[0][1] = -jac[0][1] / det_jac;
-        jac_inv[1][1] = jac[0][0] / det_jac;
-
-        gamma[0] -= (jac_inv[0][0] * phi[0] + jac_inv[0][1] * phi[1]);
-        gamma[1] -= (jac_inv[1][0] * phi[0] + jac_inv[1][1] * phi[1]);
-
-        phi[0] = sigma_bar[0] - ab[0] * gamma[0] - ab[1] * gamma[1] - 2. * cosphi * mc_cohesion;
-        phi[1] = sigma_bar[1] - ab[1] * gamma[0] - ab[0] * gamma[1] - 2. * cosphi * mc_cohesion;
-
-        REAL res = (fabs(phi[0]) + fabs(phi[1]));
-
-        if (fabs(res) < 1.e-12) {
-            break;
-        }
-    }
-
-    eigenvalues[0] += -(2. * G * (1 + sinpsi / 3.) + 2. * K * sinpsi) * gamma[0] + ((4. * G / 3. - 2. * K) * sinpsi) * gamma[1];
-    eigenvalues[1] += ((4. * G / 3. - K * 2.) * sinpsi) * gamma[0] - (2. * G * (1. + sinpsi / 3.) + 2. * K * sinpsi) * gamma[1];
-    eigenvalues[2] += (2. * G * (1 - sinpsi / 3.) - 2. * K * sinpsi) * (gamma[0] + gamma[1]);
-    sigma_projected[0] = eigenvalues[0];
-    sigma_projected[1] = eigenvalues[1];
-    sigma_projected[2] = eigenvalues[2];
-
-    m_hardening += (gamma[0] + gamma[1]) * 2. * cosphi;
-
-    bool check_validity = (eigenvalues[0] > eigenvalues[1] || fabs(eigenvalues[0]-eigenvalues[1]) < 1.e-12) && (eigenvalues[1] > eigenvalues[2] || fabs(eigenvalues[1]-eigenvalues[2]) < 1.e-12);
-    return check_validity;
-}
-
-void TPZIntPointsFEM::ReturnMappingApex(double *eigenvalues, double *sigma_projected, double &m_hardening) {
-    REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();
-    REAL mc_psi = fMaterial->GetPlasticModel().fYC.Psi();
-    REAL mc_cohesion = fMaterial->GetPlasticModel().fYC.Cohesion();
-    REAL K = fMaterial->GetPlasticModel().fER.K();
-
-    const REAL cotphi = 1. / tan(mc_phi);
-
-    REAL ptrnp1 = 0.;
-    for (int i = 0; i < 3; i++) {
-        ptrnp1 += eigenvalues[i];
-    }
-    ptrnp1 /= 3.;
-
-    REAL DEpsPV = 0.;
-    REAL alpha = cos(mc_phi) / sin(mc_psi);
-    REAL res = mc_cohesion * cotphi - ptrnp1;
-    REAL pnp1;
-
-    int n_iterations = 30;
-    for (int i = 0; i < n_iterations; i++) {
-        const REAL jac = K; //H = 0
-        DEpsPV -= res / jac;
-
-        pnp1 = ptrnp1 - K * DEpsPV;
-        res = mc_cohesion * cotphi - pnp1;
-
-        if (fabs(res) < 1.e-12) {
-            break;
-        }
-    }
-
-    m_hardening += alpha * DEpsPV;
-    for (int i = 0; i < 3; i++) {
-        sigma_projected[i] = pnp1;
-    }
-}
-
-//Gather solution
 void TPZIntPointsFEM::GatherSolution(TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &gather_solution) {
     gather_solution.Resize(fNpts,1);
     gather_solution.Zero();
@@ -542,7 +101,6 @@ void TPZIntPointsFEM::GatherSolution(TPZFMatrix<REAL> &global_solution, TPZFMatr
     cblas_dgthr(fDim*fNphis, global_solution, &gather_solution(0,0), &fIndexes[0]);
 }
 
-//Strain
 void TPZIntPointsFEM::DeltaStrain(TPZFMatrix<REAL> &expandsolution, TPZFMatrix<REAL> &delta_strain) {
     int64_t nelem = fRowSizes.size();
 
@@ -574,7 +132,6 @@ void TPZIntPointsFEM::PlasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<R
     plastic_strain = delta_strain - elastic_strain;
 }
 
-//Compute stress
 void TPZIntPointsFEM::ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &sigma) {
     REAL lambda = fMaterial->GetPlasticModel().fER.Lambda();
     REAL mu = fMaterial->GetPlasticModel().fER.Mu();
@@ -589,7 +146,6 @@ void TPZIntPointsFEM::ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZFMatrix
     }
 }
 
-//Compute strain
 void TPZIntPointsFEM::ComputeStrain(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &elastic_strain) {
     REAL E = fMaterial->GetPlasticModel().fER.E();
     REAL nu = fMaterial->GetPlasticModel().fER.Poisson();
@@ -618,6 +174,10 @@ void TPZIntPointsFEM::SpectralDecomposition(TPZFMatrix<REAL> &sigma_trial, TPZFM
 
 void TPZIntPointsFEM::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &sigma_projected) {
     REAL mc_psi = fMaterial->GetPlasticModel().fYC.Psi();
+    REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();
+    REAL mc_cohesion = fMaterial->GetPlasticModel().fYC.Cohesion();
+    REAL K = fMaterial->GetPlasticModel().fER.K();
+    REAL G = fMaterial->GetPlasticModel().fER.G();
 
     sigma_projected.Resize(3*fNpts/fDim,1);
     sigma_projected.Zero();
@@ -629,19 +189,19 @@ void TPZIntPointsFEM::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REA
 
     for (int ipts = 0; ipts < fNpts/fDim; ipts++) {
         m_type(ipts,0) = 0;
-        check = PhiPlane(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0)); //elastic domain
+        check = PhiPlane(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), mc_phi, mc_cohesion); //elastic domain
         if (!check) { //plastic domain
             m_type(ipts,0) = 1;
-            check = ReturnMappingMainPlane(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), alpha(ipts,0)); //main plane
+            check = ReturnMappingMainPlane(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), alpha(ipts,0), mc_phi, mc_psi, mc_cohesion, K, G); //main plane
             if (!check) { //edges or apex
                 if  (((1 - sin(mc_psi)) * eigenvalues(0 + 3*ipts, 0) - 2. * eigenvalues(1 + 3*ipts, 0) + (1 + sin(mc_psi)) * eigenvalues(2 + 3*ipts, 0)) > 0) { // right edge
-                    check = ReturnMappingRightEdge(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), alpha(ipts,0));
+                    check = ReturnMappingRightEdge(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), alpha(ipts,0), mc_phi, mc_psi, mc_cohesion, K, G);
                 } else { //left edge
-                    check = ReturnMappingLeftEdge(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), alpha(ipts,0));
+                    check = ReturnMappingLeftEdge(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), alpha(ipts,0), mc_phi, mc_psi, mc_cohesion, K, G);
                 }
                 if (!check) { //apex
                     m_type(ipts,0) = -1;
-                    ReturnMappingApex(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), alpha(ipts,0));
+                    ReturnMappingApex(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), alpha(ipts,0), mc_phi, mc_psi, mc_cohesion, K);
                 }
             }
         }
@@ -672,11 +232,6 @@ void TPZIntPointsFEM::NodalForces(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &nod
             }
         }
     }
-
-
-    nodal_forces.Print("Fcpu = ",std::cout,EMathematicaInput);
-    nodal_forces.Print(std::cout);
-
 }
 
 void TPZIntPointsFEM::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces, TPZFMatrix<STATE> &residual) {
@@ -700,64 +255,6 @@ void TPZIntPointsFEM::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces, TPZFMatr
     }
     residual.Resize(neq, 1);
 
-}
-
-void TPZIntPointsFEM::ColoringElements() const {
-    int64_t nelem_c = fCmesh->NElements();
-    int64_t nconnects = fCmesh->NConnects();
-    TPZVec<int64_t> connects_vec(nconnects,0);
-
-    int64_t contcolor = 0;
-    bool needstocontinue = true;
-
-    while (needstocontinue)
-    {
-        int it = 0;
-        needstocontinue = false;
-        for (int64_t iel = 0; iel < nelem_c; iel++) {
-            TPZCompEl *cel = fCmesh->Element(iel);
-            if (!cel || cel->Dimension() != fCmesh->Dimension()) continue;
-
-            it++;
-            if (fElemColor[it-1] != -1) continue;
-
-            TPZStack<int64_t> connectlist;
-            fCmesh->Element(iel)->BuildConnectList(connectlist);
-            int64_t ncon = connectlist.size();
-
-            int64_t icon;
-            for (icon = 0; icon < ncon; icon++) {
-                if (connects_vec[connectlist[icon]] != 0) break;
-            }
-            if (icon != ncon) {
-                needstocontinue = true;
-                continue;
-            }
-            fElemColor[it-1] = contcolor;
-//            cel->Reference()->SetMaterialId(contcolor);
-
-            for (icon = 0; icon < ncon; icon++) {
-                connects_vec[connectlist[icon]] = 1;
-            }
-        }
-        contcolor++;
-        connects_vec.Fill(0);
-    }
-//    ofstream file("colored.vtk");
-//    TPZVTKGeoMesh::PrintGMeshVTK(fCmesh->Reference(),file);
-
-
-    int64_t nelem = fRowSizes.size();
-    int64_t neq = fCmesh->NEquations();
-    for (int64_t iel = 0; iel < nelem; iel++) {
-        int64_t cols = fColSizes[iel];
-        int64_t cont_cols = fColFirstIndex[iel];
-
-        for (int64_t icols = 0; icols < cols; icols++) {
-            fIndexesColor[cont_cols + icols] = fIndexes[cont_cols + icols] + fElemColor[iel]*neq;
-            fIndexesColor[cont_cols+ fNphis + icols] = fIndexes[cont_cols + fNphis + icols] + fElemColor[iel]*neq;
-        }
-    }
 }
 
 void TPZIntPointsFEM::AssembleResidual() {
@@ -918,6 +415,64 @@ void TPZIntPointsFEM::SetDataStructure(){
 
     fPlasticStrain.Resize(fDim * fNpts, 1);
     fPlasticStrain.Zero();
+}
+
+void TPZIntPointsFEM::ColoringElements() const {
+    int64_t nelem_c = fCmesh->NElements();
+    int64_t nconnects = fCmesh->NConnects();
+    TPZVec<int64_t> connects_vec(nconnects,0);
+
+    int64_t contcolor = 0;
+    bool needstocontinue = true;
+
+    while (needstocontinue)
+    {
+        int it = 0;
+        needstocontinue = false;
+        for (int64_t iel = 0; iel < nelem_c; iel++) {
+            TPZCompEl *cel = fCmesh->Element(iel);
+            if (!cel || cel->Dimension() != fCmesh->Dimension()) continue;
+
+            it++;
+            if (fElemColor[it-1] != -1) continue;
+
+            TPZStack<int64_t> connectlist;
+            fCmesh->Element(iel)->BuildConnectList(connectlist);
+            int64_t ncon = connectlist.size();
+
+            int64_t icon;
+            for (icon = 0; icon < ncon; icon++) {
+                if (connects_vec[connectlist[icon]] != 0) break;
+            }
+            if (icon != ncon) {
+                needstocontinue = true;
+                continue;
+            }
+            fElemColor[it-1] = contcolor;
+//            cel->Reference()->SetMaterialId(contcolor);
+
+            for (icon = 0; icon < ncon; icon++) {
+                connects_vec[connectlist[icon]] = 1;
+            }
+        }
+        contcolor++;
+        connects_vec.Fill(0);
+    }
+//    ofstream file("colored.vtk");
+//    TPZVTKGeoMesh::PrintGMeshVTK(fCmesh->Reference(),file);
+
+
+    int64_t nelem = fRowSizes.size();
+    int64_t neq = fCmesh->NEquations();
+    for (int64_t iel = 0; iel < nelem; iel++) {
+        int64_t cols = fColSizes[iel];
+        int64_t cont_cols = fColFirstIndex[iel];
+
+        for (int64_t icols = 0; icols < cols; icols++) {
+            fIndexesColor[cont_cols + icols] = fIndexes[cont_cols + icols] + fElemColor[iel]*neq;
+            fIndexesColor[cont_cols+ fNphis + icols] = fIndexes[cont_cols + fNphis + icols] + fElemColor[iel]*neq;
+        }
+    }
 }
 
 void TPZIntPointsFEM::AssembleRhsBoundary() {

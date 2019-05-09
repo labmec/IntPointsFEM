@@ -182,13 +182,13 @@ endif(USING_CUDA)
 # This file can only use the @VARIABLE@ syntax in the file
 configure_file(path.h.in ${PROJECT_SOURCE_DIR}/path.h @ONLY)
 
-cuda_add_executable(IntPointsFEM ${main_SRCS})
-
 if(USING_CUDA)
+    cuda_add_executable(IntPointsFEM ${main_SRCS})
     target_link_libraries(IntPointsFEM pz ${PTHREAD_LIB} ${CUDA_cublas_LIBRARY} ${CUDA_cusparse_LIBRARY} ${CUDA_cusolver_LIBRARY} ${CUDA_cublas_device_LIBRARY} ${CUDA_cudadevrt_LIBRARY})
     configure_file(gmsh/wellbore.msh wellbore.msh COPYONLY)
     
 else()
+    add_executable(IntPointsFEM ${main_SRCS})
     target_link_libraries(IntPointsFEM pz ${PTHREAD_LIB})
     configure_file(gmsh/wellbore.msh wellbore.msh COPYONLY)
 endif(USING_CUDA)

@@ -20,7 +20,6 @@
 
 
 #ifdef __CUDACC__
-//#include "TPZVecGPU.h"
 #include <cublas_v2.h>
 #include <cusparse.h>
 #include <cuda.h>
@@ -135,60 +134,37 @@ public:
         fDim = dim;
     }
 
-    void SetDataStructure();
-
-    void GatherSolution(TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &gather_solution);
-    void DeltaStrain(TPZFMatrix<REAL> &gather_solution, TPZFMatrix<REAL> &delta_strain);
-
-    void ElasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &elastic_strain);
-    void PlasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &plastic_strain);
-
-    void ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &sigma);
-
-    void SpectralDecomposition(TPZFMatrix<REAL> &sigma_trial, TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &eigenvectors);
-    void Normalize(double *sigma, double &maxel);
-    void Interval(double *sigma, double *interval);
-    void NewtonIterations(double *interval, double *sigma, double *eigenvalues, double &maxel);
-    void Eigenvectors(double *sigma, double *eigenvalue, double *eigenvector, double &maxel);
-    void Multiplicity1(double *sigma, double eigenvalue, double *eigenvector);
-    void Multiplicity2(double *sigma, double eigenvalue, double *eigenvector1, double *eigenvector2);
-
-    void ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &sigma_projected);
-    bool PhiPlane(double *eigenvalues, double *sigma_projected);
-    bool ReturnMappingMainPlane(double *eigenvalues, double *sigma_projected, double &m_hardening);
-    bool ReturnMappingRightEdge(double *eigenvalues, double *sigma_projected, double &m_hardening);
-    bool ReturnMappingLeftEdge(double *eigenvalues, double *sigma_projected, double &m_hardening);
-    void ReturnMappingApex(double *eigenvalues, double *sigma_projected, double &m_hardening);
-
-    void StressCompleteTensor(TPZFMatrix<REAL> &sigma_projected, TPZFMatrix<REAL> &eigenvectors, TPZFMatrix<REAL> &sigma);
-
-    void ComputeStrain(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &elastic_strain);
-
-    void NodalForces(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &nodal_forces);
-
-    void ColoredAssemble(TPZFMatrix<REAL> &nodal_forces, TPZFMatrix<REAL> &residual);
-
     void AssembleResidual();
-
+    void SetDataStructure();
     void ColoringElements() const;
-
     void AssembleRhsBoundary();
 
 #ifdef __CUDACC__
     void TransferDataStructure();
 
-    void GatherSolutionGPU(REAL *gather_solution);
-    void DeltaStrainGPU(REAL *gather_solution, REAL *delta_strain);
-    void ElasticStrainGPU(REAL *delta_strain, REAL *plastic_strain, REAL *elastic_strain);
-    void ComputeStressGPU(REAL *elastic_strain, REAL *sigma);
-    void SpectralDecompositionGPU(REAL *sigma_trial, REAL *eigenvalues, REAL *eigenvectors);
-    void ProjectSigmaGPU(REAL *eigenvalues, REAL *sigma_projected);
-    void StressCompleteTensorGPU(REAL *sigma_projected, REAL *eigenvectors, REAL *sigma);
-    void NodalForcesGPU(REAL *sigma, REAL *nodal_forces);
-    void ColoredAssembleGPU(REAL *nodal_forces, REAL *residual);
-    void ComputeStrainGPU(REAL *sigma, REAL *elastic_strain);
-    void PlasticStrainGPU(REAL *delta_strain, REAL *elastic_strain, REAL *plastic_strain);
-
+    void GatherSolution(REAL *gather_solution);
+    void DeltaStrain(REAL *gather_solution, REAL *delta_strain);
+    void ElasticStrain(REAL *delta_strain, REAL *plastic_strain, REAL *elastic_strain);
+    void ComputeStress(REAL *elastic_strain, REAL *sigma);
+    void SpectralDecomposition(REAL *sigma_trial, REAL *eigenvalues, REAL *eigenvectors);
+    void ProjectSigma(REAL *eigenvalues, REAL *sigma_projected);
+    void StressCompleteTensor(REAL *sigma_projected, REAL *eigenvectors, REAL *sigma);
+    void NodalForces(REAL *sigma, REAL *nodal_forces);
+    void ColoredAssemble(REAL *nodal_forces, REAL *residual);
+    void ComputeStrain(REAL *sigma, REAL *elastic_strain);
+    void PlasticStrain(REAL *delta_strain, REAL *elastic_strain, REAL *plastic_strain);
+#else
+    void GatherSolution(TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &gather_solution);
+    void DeltaStrain(TPZFMatrix<REAL> &gather_solution, TPZFMatrix<REAL> &delta_strain);
+    void ElasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &elastic_strain);
+    void ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &sigma);
+    void SpectralDecomposition(TPZFMatrix<REAL> &sigma_trial, TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &eigenvectors);
+    void ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &sigma_projected);
+    void StressCompleteTensor(TPZFMatrix<REAL> &sigma_projected, TPZFMatrix<REAL> &eigenvectors, TPZFMatrix<REAL> &sigma);
+    void NodalForces(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &nodal_forces);
+    void ColoredAssemble(TPZFMatrix<REAL> &nodal_forces, TPZFMatrix<REAL> &residual);
+    void ComputeStrain(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &elastic_strain);
+    void PlasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &plastic_strain);
 #endif
 
 protected:
@@ -238,8 +214,6 @@ protected:
 
     int *dRowPtr;
     int *dColInd;
-//#endif
-
 
 };
 
