@@ -224,27 +224,126 @@ __device__ void Eigenvectors(REAL *sigma, REAL *eigenvalues, REAL *eigenvectors,
 	}
 }
 
-__global__ void DeltaStrainKernel(int64_t nelem, REAL *storage, int *rowsizes, int *colsizes, int *matrixpos, int *rowfirstindex, int* colfirstindex, int npts, int nphis, REAL *gather_solution, REAL *delta_strain) {
+extern "C" {
+__global__ void MatMulcuBLASKernel(cublasOperation_t trans, int64_t nelem,
+		REAL *A, int *rowsizes, int *colsizes, int *matrixpos,
+		int *rowfirstindex, int* colfirstindex, int npts, int nphis, REAL *B,
+		REAL *C) {
+
 	int iel = blockIdx.x * blockDim.x + threadIdx.x;
 
+	REAL alpha;
+	REAL beta;
+
+	int lda, ldb, ldc;
+	int Bpos, Cpos;
+	int Boffset, Coffset;
+	int m, n, k;
+	int Apos;
+
 	if (iel < nelem) {
-		for (int i = 0; i < rowsizes[iel]; i++) {
-			for (int k = 0; k < colsizes[iel]; k++) {
-				delta_strain[i + rowfirstindex[iel]] += storage[k * rowsizes[iel] + i + matrixpos[iel]] * gather_solution[k + colfirstindex[iel]];
-				delta_strain[i + rowfirstindex[iel] + npts] += storage[k * rowsizes[iel] + i + matrixpos[iel]] * gather_solution[k + colfirstindex[iel] + nphis];
-			}
+		cublasHandle_t cnpHandle; //each thread must have its own handle
+		cublasCreate(&cnpHandle);
+
+		Apos = matrixpos[iel];
+
+		if (trans == CUBLAS_OP_N) {
+			m = rowsizes[iel];
+			n = 1;
+			k = colsizes[iel];
+
+			alpha = 1.;
+			beta = 0;
+
+			lda = m;
+			ldb = k;
+			ldc = m;
+
+			Bpos = colfirstindex[iel];
+			Boffset = nphis;
+
+			Cpos = rowfirstindex[iel];
+			Coffset = npts;
+
+		} else if (trans == CUBLAS_OP_T) {
+			m = colsizes[iel];
+			n = 1;
+			k = rowsizes[iel];
+
+			alpha = -1.;
+			beta = 0;
+
+			lda = k;
+			ldb = k;
+			ldc = m;
+
+			Bpos = rowfirstindex[iel];
+			Boffset = npts;
+
+			Cpos = colfirstindex[iel];
+			Coffset = nphis;
 		}
+		cublasDgemm(cnpHandle, trans, CUBLAS_OP_N, m, n, k, &alpha, &A[Apos],
+				lda, &B[Bpos], ldb, &beta, &C[Cpos], ldc);
+
+		cublasDgemm(cnpHandle, trans, CUBLAS_OP_N, m, n, k, &alpha, &A[Apos],
+				lda, &B[Bpos + Boffset], ldb, &beta, &C[Cpos + Coffset], ldc);
+
 	}
 }
+}
 
-__global__ void NodalForcesKernel(int64_t nelem, REAL *storage, int *rowsizes, int *colsizes, int *matrixpos, int *rowfirstindex, int* colfirstindex, int npts, int nphis, REAL *sigma, REAL *nodal_forces) {
+__global__ void MatMulKernel(bool trans, int64_t nelem, REAL *A, int *rowsizes,
+		int *colsizes, int *matrixpos, int *rowfirstindex, int* colfirstindex,
+		int npts, int nphis, REAL *B, REAL *C) {
 	int iel = blockIdx.x * blockDim.x + threadIdx.x;
 
+	REAL alpha;
+
+	int Bpos, Cpos;
+	int Boffset, Coffset;
+	int m, k;
+	int Apos;
+	int aux1;
+	int aux2;
+
 	if (iel < nelem) {
-		for (int i = 0; i < colsizes[iel]; i++) {
-			for (int k = 0; k < rowsizes[iel]; k++) {
-				nodal_forces[i + colfirstindex[iel]] -= storage[k + i * rowsizes[iel] + matrixpos[iel]] * sigma[k + rowfirstindex[iel]];
-				nodal_forces[i + colfirstindex[iel] + nphis] -= storage[k + i * rowsizes[iel] + matrixpos[iel]] * sigma[k + rowfirstindex[iel] + npts];
+		Apos = matrixpos[iel];
+
+		if (trans == false) {
+			m = rowsizes[iel];
+			k = colsizes[iel];
+
+			aux1 = rowsizes[iel];
+			aux2 = 1;
+
+			alpha = 1.;
+
+			Bpos = colfirstindex[iel];
+			Boffset = nphis;
+
+			Cpos = rowfirstindex[iel];
+			Coffset = npts;
+
+		} else if (trans == true) {
+			m = colsizes[iel];
+			k = rowsizes[iel];
+
+			aux1 = 1;
+			aux2 = rowsizes[iel];
+
+			alpha = -1.;
+
+			Bpos = rowfirstindex[iel];
+			Boffset = npts;
+
+			Cpos = colfirstindex[iel];
+			Coffset = nphis;
+		}
+		for (int i = 0; i < m; i++) {
+			for (int j = 0; j < k; j++) {
+				C[i + Cpos] += alpha * A[j * aux1 + i * aux2 + Apos] * B[j + Bpos];
+				C[i + Cpos + Coffset] += alpha * A[j * aux1 + i * aux2 + Apos] * B[j + Bpos + Boffset];
 			}
 		}
 	}
@@ -821,7 +920,9 @@ void TPZIntPointsFEM::SetDataStructure() {
 					elmatrix(inpts * dim + idim, inf) = dphiXY(idim, inf);
 			}
 		}
+#ifdef USING_CUSPARSE_MULT
 		elmatrix.Transpose();
+#endif
 		this->SetElementMatrix(it, elmatrix);
 		it++;
 
@@ -853,7 +954,9 @@ void TPZIntPointsFEM::SetDataStructure() {
 	this->SetWeightVector(weight);
 	this->ColoringElements();
 	this->AssembleRhsBoundary();
+#ifdef USING_CUSPARSE_MULT
 	this->CSRInfo();
+#endif
 	this->TransferDataStructure();
 }
 
@@ -958,6 +1061,23 @@ void TPZIntPointsFEM::TransferDataStructure() {
 	cudaMalloc((void**) &dStorage, fStorage.size() * sizeof(REAL));
 	cudaMemcpy(dStorage, &fStorage[0], fStorage.size() * sizeof(REAL), cudaMemcpyHostToDevice);
 
+	cudaMalloc((void**) &dIndexes, fIndexes.size() * sizeof(int));
+	cudaMemcpy(dIndexes, &fIndexes[0], fIndexes.size() * sizeof(int), cudaMemcpyHostToDevice);
+
+	cudaMalloc((void**) &dIndexesColor, fIndexesColor.size() * sizeof(int));
+	cudaMemcpy(dIndexesColor, &fIndexesColor[0],
+			fIndexesColor.size() * sizeof(int), cudaMemcpyHostToDevice);
+
+	cudaMalloc((void**) &dWeight, fWeight.size() * sizeof(REAL));
+	cudaMemcpy(dWeight, &fWeight[0], fWeight.size() * sizeof(REAL), cudaMemcpyHostToDevice);
+
+#ifdef USING_CUSPARSE_MULT
+	cudaMalloc((void**) &dRowPtr, (fNpts + 1) * sizeof(int));
+	cudaMemcpy(dRowPtr, &fRowPtr[0], (fNpts + 1) * sizeof(int), cudaMemcpyHostToDevice);
+
+	cudaMalloc((void**) &dColInd, nnz * sizeof(int));
+	cudaMemcpy(dColInd, &fColInd[0], nnz * sizeof(int), cudaMemcpyHostToDevice);
+#else
 	cudaMalloc((void**) &dRowSizes, nelem * sizeof(int));
 	cudaMemcpy(dRowSizes, &fRowSizes[0], nelem * sizeof(int), cudaMemcpyHostToDevice);
 
@@ -973,21 +1093,7 @@ void TPZIntPointsFEM::TransferDataStructure() {
 	cudaMalloc((void**) &dColFirstIndex, nelem * sizeof(int));
 	cudaMemcpy(dColFirstIndex, &fColFirstIndex[0], nelem * sizeof(int), cudaMemcpyHostToDevice);
 
-	cudaMalloc((void**) &dIndexes, fIndexes.size() * sizeof(int));
-	cudaMemcpy(dIndexes, &fIndexes[0], fIndexes.size() * sizeof(int), cudaMemcpyHostToDevice);
-
-	cudaMalloc((void**) &dIndexesColor, fIndexesColor.size() * sizeof(int));
-	cudaMemcpy(dIndexesColor, &fIndexesColor[0],
-			fIndexesColor.size() * sizeof(int), cudaMemcpyHostToDevice);
-
-	cudaMalloc((void**) &dWeight, fWeight.size() * sizeof(REAL));
-	cudaMemcpy(dWeight, &fWeight[0], fWeight.size() * sizeof(REAL), cudaMemcpyHostToDevice);
-
-	cudaMalloc((void**) &dRowPtr, (fNpts + 1) * sizeof(int));
-	cudaMemcpy(dRowPtr, &fRowPtr[0], (fNpts + 1) * sizeof(int), cudaMemcpyHostToDevice);
-
-	cudaMalloc((void**) &dColInd, nnz * sizeof(int));
-	cudaMemcpy(dColInd, &fColInd[0], nnz * sizeof(int), cudaMemcpyHostToDevice);
+#endif
 }
 
 void TPZIntPointsFEM::AssembleResidual() {
@@ -1073,11 +1179,13 @@ void TPZIntPointsFEM::GatherSolutionGPU(REAL *gather_solution) {
 
 void TPZIntPointsFEM::DeltaStrainGPU(REAL *gather_solution, REAL *delta_strain) {
 	int64_t nelem = fRowSizes.size();
+	int numBlocks = (nelem + NT - 1) / NT;
 
-//	int numBlocks = (nelem + NT - 1) / NT;
-//	DeltaStrainKernel<<<numBlocks, NT>>>(nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, gather_solution, delta_strain);
-//	cudaDeviceSynchronize();
-
+#ifdef USING_CUBLAS_MULT
+	cublasOperation_t trans = CUBLAS_OP_N;
+	MatMulcuBLASKernel<<<numBlocks, NT>>>(trans, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, gather_solution, delta_strain);
+	cudaDeviceSynchronize();
+#elif USING_CUSPARSE_MULT
 	int nnz = fStorage.size();
 	REAL alpha = 1.;
 	REAL beta = 0.;
@@ -1089,6 +1197,12 @@ void TPZIntPointsFEM::DeltaStrainGPU(REAL *gather_solution, REAL *delta_strain) 
 
 	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_NON_TRANSPOSE, fNpts, fNphis, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &gather_solution[0], &beta, &delta_strain[0]);
 	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_NON_TRANSPOSE, fNpts, fNphis, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &gather_solution[fNphis], &beta, &delta_strain[fNpts]);
+#else
+	//Using a loop over each line of the matrices
+	bool trans = false;
+	MatMulKernel<<<numBlocks, NT>>>(trans, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, gather_solution, delta_strain);
+	cudaDeviceSynchronize();
+#endif
 }
 
 void TPZIntPointsFEM::ElasticStrainGPU(REAL *delta_strain, REAL *plastic_strain, REAL *elastic_strain) {
@@ -1162,11 +1276,13 @@ void TPZIntPointsFEM::StressCompleteTensorGPU(REAL *sigma_projected, REAL *eigen
 
 void TPZIntPointsFEM::NodalForcesGPU(REAL *sigma, REAL *nodal_forces) {
 	int64_t nelem = fRowSizes.size();
+	int numBlocks = (nelem + NT - 1) / NT;
 
-//	int numBlocks = (nelem + NT - 1) / NT;
-//	NodalForcesKernel<<<numBlocks, NT>>>(nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, sigma, nodal_forces);
-//	cudaDeviceSynchronize();
-
+#ifdef USING_CUBLAS_MULT
+	cublasOperation_t transA = CUBLAS_OP_T;
+	MatMulcuBLASKernel<<<numBlocks, NT>>>(transA, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, sigma, nodal_forces);
+	cudaDeviceSynchronize();
+#elif USING_CUSPARSE_MULT
 	int nnz = fStorage.size();
 	REAL alpha = -1.;
 	REAL beta = 0.;
@@ -1178,6 +1294,14 @@ void TPZIntPointsFEM::NodalForcesGPU(REAL *sigma, REAL *nodal_forces) {
 
 	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_TRANSPOSE, fNpts, fNphis, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &sigma[0], &beta, &nodal_forces[0]);
 	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_TRANSPOSE, fNpts, fNphis, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &sigma[fNpts], &beta, &nodal_forces[fNphis]);
+
+#else
+	//Using a loop over each line of the matrices
+	bool trans = true;
+	MatMulKernel<<<numBlocks, NT>>>(trans, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, sigma, nodal_forces);
+	cudaDeviceSynchronize();
+#endif
+
 }
 
 void TPZIntPointsFEM::ColoredAssembleGPU(REAL *nodal_forces, REAL *residual) {
