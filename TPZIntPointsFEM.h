@@ -64,6 +64,24 @@ public:
         fElemColor.Fill(-1);
     }
 
+    void CSRInfo() {
+        int64_t nelem = fRowSizes.size();
+        int64_t nnz = fStorage.size();
+
+        fRowPtr.resize(fNpts + 1); //m+1
+        fColInd.resize(nnz);
+        for (int iel = 0; iel < nelem; ++iel) {
+            for (int irow = 0; irow < fRowSizes[iel]; ++irow) {
+                fRowPtr[irow + fRowFirstIndex[iel]] = fMatrixPosition[iel] + irow*fColSizes[iel];
+
+                 for (int icol = 0; icol < fColSizes[iel]; ++icol) {
+                    fColInd[icol + fMatrixPosition[iel] + irow*fColSizes[iel]] = icol + fColFirstIndex[iel];
+                }
+            }
+        }
+        fRowPtr[fNpts] = fMatrixPosition[nelem];
+    }
+
     void SetElementMatrix(int iel, TPZFMatrix<REAL> &elmat) {
         int64_t rows = fRowSizes[iel];
         int64_t cols = fColSizes[iel];
@@ -196,6 +214,9 @@ protected:
 	TPZVec<int> fIndexesColor;
 	TPZVec<REAL> fWeight;
 
+    TPZVec<int> fRowPtr;
+    TPZVec<int> fColInd;
+
 #ifdef __CUDACC__
 	cusparseHandle_t handle_cusparse;
 	cublasHandle_t handle_cublas;
@@ -214,6 +235,9 @@ protected:
     int *dIndexes;
     int *dIndexesColor;
     REAL *dWeight;
+
+    int *dRowPtr;
+    int *dColInd;
 //#endif
 
 

@@ -672,6 +672,11 @@ void TPZIntPointsFEM::NodalForces(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &nod
             }
         }
     }
+
+
+    nodal_forces.Print("Fcpu = ",std::cout,EMathematicaInput);
+    nodal_forces.Print(std::cout);
+
 }
 
 void TPZIntPointsFEM::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces, TPZFMatrix<STATE> &residual) {

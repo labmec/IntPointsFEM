@@ -187,7 +187,6 @@ cuda_add_executable(IntPointsFEM ${main_SRCS})
 if(USING_CUDA)
     target_link_libraries(IntPointsFEM pz ${PTHREAD_LIB} ${CUDA_cublas_LIBRARY} ${CUDA_cusparse_LIBRARY} ${CUDA_cusolver_LIBRARY} ${CUDA_cublas_device_LIBRARY} ${CUDA_cudadevrt_LIBRARY})
     configure_file(gmsh/wellbore.msh wellbore.msh COPYONLY)
-    configure_file(gmsh/wellbore-10.msh wellbore-10.msh COPYONLY)
     
 else()
     target_link_libraries(IntPointsFEM pz ${PTHREAD_LIB})
