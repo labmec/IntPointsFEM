@@ -73,11 +73,12 @@ void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_mate
 int main(int argc, char *argv[]) {
 
     int pOrder = 2; // Computational mesh order
-    bool render_vtk_Q = true;
+    bool render_vtk_Q = false;
     
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
-    std::string msh_file = source_dir + "/gmsh/wellbore.msh";
+//    std::string msh_file = source_dir + "/gmsh/wellbore.msh";
+    std::string msh_file = source_dir + "/gmsh/wellbore-10.msh";
     TPZGeoMesh *gmesh = ReadGeometry(msh_file);
     PrintGeometry(gmesh);
 
@@ -93,7 +94,7 @@ int main(int argc, char *argv[]) {
 // Calculates the solution using Newton method
     int n_iterations = 80;
     REAL tolerance = 1.e-3;
-    Solution(analysis, n_iterations, tolerance);
+//    Solution(analysis, n_iterations, tolerance);
 
 // Post process
    if (render_vtk_Q) {

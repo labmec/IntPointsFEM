@@ -142,16 +142,34 @@ set(PROJECTSOURCE ${BASIC_TYPES} ${HEADERS})
 file(GLOB headers *.h)
 file(GLOB sources *.cpp)
 
+
 #enabling cuda
 option(USING_CUDA on)
 if(USING_CUDA)
+
+    option(USING_CUBLAS_MULT off)
+    if(USING_CUBLAS_MULT)
+        set(CUDA_NVCC_FLAGS "-DUSING_CUBLAS_MULT")
+    endif(USING_CUBLAS_MULT)
+    
+    option(USING_CUSPARSE_MULT off)
+    if(USING_CUSPARSE_MULT)
+        set(CUDA_NVCC_FLAGS "-DUSING_CUSPARSE_MULT")
+    endif(USING_CUSPARSE_MULT)
+
     find_package(CUDA REQUIRED)
     enable_language(CXX CUDA)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSING_CUDA")
-    set(CMAKE_CUDA_FLAGS "--default-stream per-thread -ftz=true -Xcompiler -fopenmp -O3 -w -Wno-deprecated-gpu-targets")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --default-stream per-thread  -ftz=true -Xcompiler -fopenmp -O3 -w -Wno-deprecated-gpu-targets")
 
     set(CMAKE_CUDA_STANDARD 11)
-    set(CUDA_NVCC_FLAGS -gencode arch=compute_35,code=sm_35)	
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}; -arch=compute_35 -rdc=true -lcudadevrt)
+    #set(CUDA_NVCC_FLAGS "-gencode arch=compute_35,code=sm_35")
+    
+    set(CUDA_SEPARABLE_COMPILATION ON)
+    
+    include_directories(/usr/local/cuda-8.0/include/)
+    link_directories(/usr/local/cuda-8.0/lib64/)
 
     file(GLOB cuda *.cu)
     list(REMOVE_ITEM sources ${CMAKE_CURRENT_SOURCE_DIR}/TPZIntPointsFEM.cpp)
@@ -164,11 +182,13 @@ endif(USING_CUDA)
 # This file can only use the @VARIABLE@ syntax in the file
 configure_file(path.h.in ${PROJECT_SOURCE_DIR}/path.h @ONLY)
 
-add_executable(IntPointsFEM ${main_SRCS})
+cuda_add_executable(IntPointsFEM ${main_SRCS})
 
 if(USING_CUDA)
-    target_link_libraries(IntPointsFEM pz ${PTHREAD_LIB} ${CUDA_cublas_LIBRARY} ${CUDA_cusparse_LIBRARY})
+    target_link_libraries(IntPointsFEM pz ${PTHREAD_LIB} ${CUDA_cublas_LIBRARY} ${CUDA_cusparse_LIBRARY} ${CUDA_cusolver_LIBRARY} ${CUDA_cublas_device_LIBRARY} ${CUDA_cudadevrt_LIBRARY})
     configure_file(gmsh/wellbore.msh wellbore.msh COPYONLY)
+    configure_file(gmsh/wellbore-10.msh wellbore-10.msh COPYONLY)
+    
 else()
     target_link_libraries(IntPointsFEM pz ${PTHREAD_LIB})
     configure_file(gmsh/wellbore.msh wellbore.msh COPYONLY)

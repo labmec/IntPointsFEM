@@ -201,8 +201,6 @@ protected:
 	cublasHandle_t handle_cublas;
 #endif
 
-//	 @omar:: Cara Natalia AO DEFINIR dSolution DA ERRADO COMENTA dSolution QUALQUER COISA NO wapp
-
     REAL *dRhs;
     REAL *dRhsBoundary;
     REAL *dSolution;
