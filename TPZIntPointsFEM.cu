@@ -12,7 +12,7 @@
 #include "StressStrainKernels.h"
 #include "SigmaProjectionKernels.h"
 
-#define NT 512
+#define NT 32
 
 TPZIntPointsFEM::TPZIntPointsFEM() :
 		fDim(-1), fBoundaryElements(), fCmesh(0), fNpts(-1), fNphis(-1), fElemColor(

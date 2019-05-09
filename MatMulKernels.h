@@ -65,6 +65,9 @@ __global__ void MatMulcuBLASKernel(cublasOperation_t trans, int64_t nelem,
 		cublasDgemm(cnpHandle, trans, CUBLAS_OP_N, m, n, k, &alpha, &A[Apos],
 				lda, &B[Bpos + Boffset], ldb, &beta, &C[Cpos + Coffset], ldc);
 
+		__syncthreads();
+		cublasDestroy(cnpHandle);
+
 	}
 }
 }
