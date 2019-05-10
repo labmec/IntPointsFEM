@@ -4,6 +4,17 @@ __global__ void ComputeStressKernel(int64_t fNpts, int fDim,
 		REAL *elastic_strain, REAL *sigma, REAL mu, REAL lambda) {
 	int ipts = blockIdx.x * blockDim.x + threadIdx.x;
 
+//	extern __shared__ REAL elastic_strain_s[];
+//	memcpy(&elastic_strain_s[0], &elastic_strain[2 * blockIdx.x * blockDim.x], 2 * blockDim.x * sizeof(REAL));
+//	memcpy(&elastic_strain_s[2 * blockDim.x], &elastic_strain[fNpts + 2 * blockIdx.x * blockDim.x], 2 * blockDim.x * sizeof(REAL));
+//	__syncthreads();
+//	if (ipts < blockDim.x) {
+//		sigma[4 * ipts] = elastic_strain_s[2 * ipts] * (lambda + 2. * mu) + elastic_strain[2 * ipts + 2 * blockDim.x + 1] * lambda; // Sigma xx
+//		sigma[4 * ipts + 1] = elastic_strain[2 * ipts + 2 * blockDim.x + 1] * (lambda + 2. * mu) + elastic_strain_s[2 * ipts] * lambda; // Sigma yy
+//		sigma[4 * ipts + 2] = lambda * (elastic_strain_s[2 * ipts] + elastic_strain[2 * ipts + 2 * blockDim.x + 1]); // Sigma zz
+//		sigma[4 * ipts + 3] = mu * (elastic_strain_s[2 * ipts + 1] + elastic_strain[2 * ipts + 2 * blockDim.x]); // Sigma xy
+//	}
+
 	if (ipts < fNpts / fDim) {
 		sigma[4 * ipts] = elastic_strain[2 * ipts] * (lambda + 2. * mu) + elastic_strain[2 * ipts + fNpts + 1] * lambda; // Sigma xx
 		sigma[4 * ipts + 1] = elastic_strain[2 * ipts + fNpts + 1] * (lambda + 2. * mu) + elastic_strain[2 * ipts] * lambda; // Sigma yy

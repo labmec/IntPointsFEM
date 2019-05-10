@@ -12,7 +12,8 @@
 #include "StressStrainKernels.h"
 #include "SigmaProjectionKernels.h"
 
-#define NT 32
+#define NT 128
+#define NT_MULT 128
 
 TPZIntPointsFEM::TPZIntPointsFEM() :
 		fDim(-1), fBoundaryElements(), fCmesh(0), fNpts(-1), fNphis(-1), fElemColor(
@@ -256,6 +257,8 @@ void TPZIntPointsFEM::GatherSolution(REAL *gather_solution) {
 void TPZIntPointsFEM::DeltaStrain(REAL *gather_solution, REAL *delta_strain) {
 	int64_t nelem = fRowSizes.size();
 	int numBlocks = (nelem + NT - 1) / NT;
+	int bytes_shared = NT_MULT*6*12*sizeof(REAL) + NT_MULT*1*sizeof(int) + NT_MULT*1*sizeof(int) + NT_MULT*1*sizeof(int) + NT_MULT*1*sizeof(int) + NT_MULT*1*sizeof(int);
+
 
 #ifdef USING_CUBLAS_MULT //Using cuBLAS matrix-multiplication (each multiplication is done in one thread through cuBLAS library)
 	cublasOperation_t trans = CUBLAS_OP_N;
@@ -275,10 +278,20 @@ void TPZIntPointsFEM::DeltaStrain(REAL *gather_solution, REAL *delta_strain) {
 	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_NON_TRANSPOSE, fNpts, fNphis, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &gather_solution[0], &beta, &delta_strain[0]);
 	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_NON_TRANSPOSE, fNpts, fNphis, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &gather_solution[fNphis], &beta, &delta_strain[fNpts]);
 
+#elif USING_CUBLASBATCHED_MULT //Using cuBlas matrix-multiplication using gemmBatched
+    int64_t cols = fColSizes[0];
+    int64_t rows = fRowSizes[0];
+	REAL alpha = 1.;
+	REAL beta = 0.;
+	cublasOperation_t transA = CUBLAS_OP_N;
+	cublasOperation_t transB = CUBLAS_OP_N;
+
+    cublasDgemmStridedBatched(handle_cublas, transA, transB, rows, 1, cols, &alpha, dStorage, rows, rows*cols, &gather_solution[0], cols, cols*1, &beta, &delta_strain[0], rows, rows*1, nelem);
+    cublasDgemmStridedBatched(handle_cublas, transA, transB, rows, 1, cols, &alpha, dStorage, rows, rows*cols, &gather_solution[fNphis], cols, cols*1, &beta,  &delta_strain[fNpts], rows, rows*1, nelem);
 #else //Using a loop over each line of the matrices
-	bool trans = false;
-	MatMulKernel<<<numBlocks, NT>>>(trans, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, gather_solution, delta_strain);
-	cudaDeviceSynchronize();
+		bool trans = false;
+		MatMulKernel<<<numBlocks, NT>>>(trans, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, gather_solution, delta_strain);
+		cudaDeviceSynchronize();
 #endif
 }
 
@@ -302,7 +315,8 @@ void TPZIntPointsFEM::ComputeStress(REAL *elastic_strain, REAL *sigma) {
 	REAL mu = fMaterial->GetPlasticModel().fER.Mu();
 
 	int numBlocks = (fNpts / fDim + NT - 1) / NT;
-	ComputeStressKernel<<<numBlocks, NT>>>(fNpts, fDim, elastic_strain, sigma, mu, lambda);
+	int shared_bytes = NT*4*sizeof(REAL);//number of int points per threadblock * number of positions per int point * bytes per type
+	ComputeStressKernel<<<numBlocks, NT, shared_bytes>>>(fNpts, fDim, elastic_strain, sigma, mu, lambda);
 	cudaDeviceSynchronize();
 }
 
@@ -311,12 +325,14 @@ void TPZIntPointsFEM::ComputeStrain(REAL *sigma, REAL *elastic_strain) {
 	REAL nu = fMaterial->GetPlasticModel().fER.Poisson();
 
 	int numBlocks = (fNpts / fDim + NT - 1) / NT;
+	int shared_bytes = (NT*4*sizeof(REAL) + NT*4*sizeof(REAL)); //number of int points per threadblock * number of positions per int point * bytes per type
 	ComputeStrainKernel<<<numBlocks, NT>>>(fNpts, fDim, sigma, elastic_strain, nu, E, dWeight);
 	cudaDeviceSynchronize();
 }
 
 void TPZIntPointsFEM::SpectralDecomposition(REAL *sigma_trial, REAL *eigenvalues, REAL *eigenvectors) {
 	int numBlocks = (fNpts / fDim + NT - 1) / NT;
+	int shared_bytes = (NT*4*sizeof(REAL) + NT*3*sizeof(REAL) + NT*9*sizeof(REAL)); //number of int points per threadblock * number of positions per int point * bytes per type
 	SpectralDecompositionKernel<<<numBlocks, NT>>>(fNpts, fDim, sigma_trial, eigenvalues, eigenvectors);
 	cudaDeviceSynchronize();
 }
@@ -331,13 +347,12 @@ void TPZIntPointsFEM::ProjectSigma(REAL *eigenvalues, REAL *sigma_projected) {
 
 	REAL *m_type;
 	cudaMalloc((void**) &m_type, fNpts / fDim * sizeof(REAL));
-//	cudaMemset(m_type, 0, fNpts / fDim * sizeof(REAL));
 
 	REAL *alpha;
 	cudaMalloc((void**) &alpha, fNpts / fDim * sizeof(REAL));
-//	cudaMemset(alpha, 0, fNpts / fDim * sizeof(REAL));
 
 	int numBlocks = (fNpts / fDim + NT - 1) / NT;
+	int shared_bytes = (NT*3*sizeof(REAL) + NT*3*sizeof(REAL) + NT*1*sizeof(REAL)+ NT*1*sizeof(REAL)); //number of int points per threadblock * number of positions per int point * bytes per type
 	ProjectSigmaKernel<<<numBlocks, NT>>>(fNpts, fDim, mc_phi, mc_psi, mc_cohesion, K, G, eigenvalues, sigma_projected, m_type, alpha);
 	cudaDeviceSynchronize();
 
@@ -345,6 +360,7 @@ void TPZIntPointsFEM::ProjectSigma(REAL *eigenvalues, REAL *sigma_projected) {
 
 void TPZIntPointsFEM::StressCompleteTensor(REAL *sigma_projected, REAL *eigenvectors, REAL *sigma) {
 	int numBlocks = (fNpts / fDim + NT - 1) / NT;
+	int shared_bytes = (NT*3*sizeof(REAL) + NT*9*sizeof(REAL) + NT*4*sizeof(REAL)+ NT*1*sizeof(REAL)); //number of int points per threadblock * number of positions per int point * bytes per type
 	StressCompleteTensorKernel<<<numBlocks, NT>>>(fNpts, fDim, sigma_projected, eigenvectors, sigma, dWeight);
 	cudaDeviceSynchronize();
 }
@@ -371,10 +387,22 @@ void TPZIntPointsFEM::NodalForces(REAL *sigma, REAL *nodal_forces) {
 	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_TRANSPOSE, fNpts, fNphis, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &sigma[0], &beta, &nodal_forces[0]);
 	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_TRANSPOSE, fNpts, fNphis, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &sigma[fNpts], &beta, &nodal_forces[fNphis]);
 
+#elif USING_CUBLASBATCHED_MULT //Using cuBlas matrix-multiplication using gemmBatched
+    int64_t cols = fColSizes[0];
+    int64_t rows = fRowSizes[0];
+	REAL alpha = -1.;
+	REAL beta = 0.;
+
+	cublasOperation_t transA = CUBLAS_OP_T;
+	cublasOperation_t transB = CUBLAS_OP_N;
+
+	cublasDgemmStridedBatched(handle_cublas, CUBLAS_OP_T, CUBLAS_OP_N, cols, 1, rows, &alpha, dStorage, rows, rows*cols, &sigma[0], rows, rows*1, &beta, &nodal_forces[0], cols, cols*1, nelem);
+    cublasDgemmStridedBatched(handle_cublas, CUBLAS_OP_T, CUBLAS_OP_N, cols, 1, rows, &alpha, dStorage, rows, rows*cols, &sigma[fNpts], rows, rows*1, &beta,  &nodal_forces[fNphis], cols, cols*1, nelem);
 #else //Using a loop over each line of the matrices
 	bool trans = true;
 	MatMulKernel<<<numBlocks, NT>>>(trans, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, sigma, nodal_forces);
 	cudaDeviceSynchronize();
+
 #endif
 }
 

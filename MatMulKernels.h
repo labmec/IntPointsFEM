@@ -77,7 +77,7 @@ __global__ void MatMulKernel(bool trans, int64_t nelem, REAL *A, int *rowsizes,
 		int npts, int nphis, REAL *B, REAL *C) {
 	int iel = blockIdx.x * blockDim.x + threadIdx.x;
 
-	REAL alpha;
+	__shared__ REAL alpha;
 
 	int Bpos, Cpos;
 	int Boffset, Coffset;
