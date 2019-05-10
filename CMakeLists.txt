@@ -10,7 +10,7 @@ IF (WIN32)
     # Prevents timespec redefinition problem with Visual Studio 2015
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHAVE_STRUCT_TIMESPEC")
 ELSE ()
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -std=c++11") #ligar -O3
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -O3 -fopenmp  -std=c++11") #ligar -O3
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing")#this flag is for preventing errors when casting from double to float
 ENDIF()
 
@@ -188,6 +188,13 @@ endif(USING_CUDA)
 # This file can only use the @VARIABLE@ syntax in the file
 configure_file(path.h.in ${PROJECT_SOURCE_DIR}/path.h @ONLY)
 
+find_package(OpenMP)
+if (OPENMP_FOUND)
+    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+    set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+endif()
+
 if(USING_CUDA)
     cuda_add_executable(IntPointsFEM ${main_SRCS})
     target_link_libraries(IntPointsFEM pz ${PTHREAD_LIB} ${CUDA_cublas_LIBRARY} ${CUDA_cusparse_LIBRARY} ${CUDA_cusolver_LIBRARY} ${CUDA_cublas_device_LIBRARY} ${CUDA_cudadevrt_LIBRARY})
@@ -195,7 +202,7 @@ if(USING_CUDA)
     
 else()
     add_executable(IntPointsFEM ${main_SRCS})
-    target_link_libraries(IntPointsFEM pz ${PTHREAD_LIB})
+    target_link_libraries(IntPointsFEM pz ${PTHREAD_LIB} OpenMP::OpenMP_CXX)
     configure_file(gmsh/wellbore.msh wellbore.msh COPYONLY)
 endif(USING_CUDA)
 

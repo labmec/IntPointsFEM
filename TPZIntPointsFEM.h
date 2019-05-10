@@ -68,10 +68,12 @@ public:
         int64_t nnz = fStorage.size();
 
         fRowPtr.resize(fNpts + 1); //m+1
+        fRowPtr_last.resize(fNpts + 1); //m+1
         fColInd.resize(nnz);
         for (int iel = 0; iel < nelem; ++iel) {
             for (int irow = 0; irow < fRowSizes[iel]; ++irow) {
                 fRowPtr[irow + fRowFirstIndex[iel]] = fMatrixPosition[iel] + irow*fColSizes[iel];
+                fRowPtr_last[irow + fRowFirstIndex[iel]] = fMatrixPosition[iel] + (irow+1)*fColSizes[iel];
 
                  for (int icol = 0; icol < fColSizes[iel]; ++icol) {
                     fColInd[icol + fMatrixPosition[iel] + irow*fColSizes[iel]] = icol + fColFirstIndex[iel];
@@ -79,6 +81,12 @@ public:
             }
         }
         fRowPtr[fNpts] = fMatrixPosition[nelem];
+        for (int iel = 0; iel < nelem; ++iel) {
+            for (int irow = 0; irow < fRowSizes[iel]; ++irow) {
+                fRowPtr_last[irow + fRowFirstIndex[iel]] = fRowPtr[irow + fRowFirstIndex[iel] + 1];
+            }
+        }
+
     }
 
     void SetElementMatrix(int iel, TPZFMatrix<REAL> &elmat) {
@@ -191,6 +199,7 @@ protected:
 	TPZVec<REAL> fWeight;
 
     TPZVec<int> fRowPtr;
+    TPZVec<int> fRowPtr_last;
     TPZVec<int> fColInd;
 
 #ifdef __CUDACC__
