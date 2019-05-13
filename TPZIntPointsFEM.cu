@@ -6,11 +6,25 @@
 #include "TPZVTKGeoMesh.h"
 #include "pzintel.h"
 #include "pzskylstrmatrix.h"
+#include "Timer.h"
 
 #include "SpectralDecompKernels.h"
 #include "MatMulKernels.h"
 #include "StressStrainKernels.h"
 #include "SigmaProjectionKernels.h"
+
+ofstream file("timing-gpu.txt");
+REAL timeGatherSolution = 0;
+REAL timeDeltaStrain = 0;
+REAL timeElasticStrain = 0;
+REAL timePlasticStrain = 0;
+REAL timeComputeStress = 0;
+REAL timeComputeStrain = 0;
+REAL timeSpectralDecomposition = 0;
+REAL timeProjectSigma = 0;
+REAL timeStressCompleteTensor = 0;
+REAL timeNodalForces = 0;
+REAL timeColoredAssemble = 0;
 
 #define NT 128
 #define NT_MULT 128
@@ -20,7 +34,8 @@ TPZIntPointsFEM::TPZIntPointsFEM() :
 				0), fMaterial(0), fRhs(0, 0), fRhsBoundary(0, 0), fSolution(0,
 				0), fPlasticStrain(0, 0), fStorage(0), fRowSizes(0), fColSizes(
 				0), fMatrixPosition(0), fRowFirstIndex(0), fColFirstIndex(0), fIndexes(
-				0), fIndexesColor(0), fWeight(0), fRowPtr(0), fColInd(0) {
+				0), fIndexesColor(0), fWeight(0), fRowPtr(0), fColInd(0),
+				fTimer() {
 
 	dRhs = new REAL[0];
 	dRhsBoundary = new REAL[0];
@@ -47,7 +62,8 @@ TPZIntPointsFEM::TPZIntPointsFEM(TPZCompMesh *cmesh, int materialid) :
 				0), fMaterial(0), fRhs(0, 0), fRhsBoundary(0, 0), fSolution(0,
 				0), fPlasticStrain(0, 0), fStorage(0), fRowSizes(0), fColSizes(
 				0), fMatrixPosition(0), fRowFirstIndex(0), fColFirstIndex(0), fIndexes(
-				0), fIndexesColor(0), fWeight(0), fRowPtr(0), fColInd(0)  {
+				0), fIndexesColor(0), fWeight(0), fRowPtr(0), fColInd(0),
+				fTimer () {
 	SetCompMesh(cmesh);
 	SetMaterialId(materialid);
 
@@ -100,6 +116,8 @@ TPZIntPointsFEM::TPZIntPointsFEM(const TPZIntPointsFEM &copy) {
 	fElemColor = copy.fElemColor;
 	fMaterial = copy.fMaterial;
 
+	fTimer = copy.fTimer;
+
 	fRhs = copy.fRhs;
 	fRhsBoundary = copy.fRhsBoundary;
 	fSolution = copy.fSolution;
@@ -151,6 +169,8 @@ TPZIntPointsFEM &TPZIntPointsFEM::operator=(const TPZIntPointsFEM &copy) {
 	fElemColor = copy.fElemColor;
 	fMaterial = copy.fMaterial;
 
+	fTimer = copy.fTimer;
+
 	fRhs = copy.fRhs;
 	fRhsBoundary = copy.fRhsBoundary;
 	fSolution = copy.fSolution;
@@ -191,17 +211,25 @@ TPZIntPointsFEM &TPZIntPointsFEM::operator=(const TPZIntPointsFEM &copy) {
 	return *this;
 }
 
+void TPZIntPointsFEM::SetTimerConfig(Timer::WhichUnit unit) {
+	fTimer.TimerConfig(unit);
+}
+
 void TPZIntPointsFEM::TransferDataStructure() {
 
 	std::cout << "Initializing libraries contexts ... " << std::endl;
+				fTimer.Start();
 	cublasCreate(&handle_cublas);
 	cusparseCreate(&handle_cusparse);
 
 	int64_t neq = fCmesh->NEquations();
 	int64_t nelem = fColSizes.size();
     int64_t nnz = fStorage.size();
+				fTimer.Stop();
+				std::cout << "It took:  " << fTimer.ElapsedTime() << "	ms" << std::endl;
 
 	std::cout << "Allocating and trasnfering data to GPU ... " << std::endl;
+			fTimer.Start();
 	cudaMalloc((void**) &dRhs, neq * sizeof(REAL));
 
 	cudaMalloc((void**) &dRhsBoundary, neq * sizeof(REAL));
@@ -247,36 +275,47 @@ void TPZIntPointsFEM::TransferDataStructure() {
 	cudaMemcpy(dColFirstIndex, &fColFirstIndex[0], nelem * sizeof(int), cudaMemcpyHostToDevice);
 
 #endif
-	std::cout << "Done . " << std::endl;
+					fTimer.Stop();
+					std::cout << "It took:  " << fTimer.ElapsedTime() << "	ms" << std::endl;
 }
 
 void TPZIntPointsFEM::GatherSolution(REAL *gather_solution) {
+				fTimer.Start();
 	cusparseDgthr(handle_cusparse, fDim * fNphis, dSolution, gather_solution, dIndexes, CUSPARSE_INDEX_BASE_ZERO);
+    			fTimer.Stop();
+    			timeGatherSolution+= fTimer.ElapsedTime();
+    			file << "GatherSolution	" << timeGatherSolution << std::endl;
 }
 
 void TPZIntPointsFEM::DeltaStrain(REAL *gather_solution, REAL *delta_strain) {
 	int64_t nelem = fRowSizes.size();
 	int numBlocks = (nelem + NT - 1) / NT;
-	int bytes_shared = NT_MULT*6*12*sizeof(REAL) + NT_MULT*1*sizeof(int) + NT_MULT*1*sizeof(int) + NT_MULT*1*sizeof(int) + NT_MULT*1*sizeof(int) + NT_MULT*1*sizeof(int);
-
 
 #ifdef USING_CUBLAS_MULT //Using cuBLAS matrix-multiplication (each multiplication is done in one thread through cuBLAS library)
 	cublasOperation_t trans = CUBLAS_OP_N;
+
+				fTimer.Start();
 	MatMulcuBLASKernel<<<numBlocks, NT>>>(trans, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, gather_solution, delta_strain);
 	cudaDeviceSynchronize();
+				fTimer.Stop();
+				timeDeltaStrain+= fTimer.ElapsedTime();
+				file << "MatMult	" << timeDeltaStrain << std::endl;
 
 #elif USING_CUSPARSE_MULT //Using cuSPARSE Spmv
 	int nnz = fStorage.size();
 	REAL alpha = 1.;
 	REAL beta = 0.;
-
 	cusparseMatDescr_t descr;
 	cusparseCreateMatDescr(&descr);
 	cusparseSetMatType(descr, CUSPARSE_MATRIX_TYPE_GENERAL);
 	cusparseSetMatIndexBase(descr, CUSPARSE_INDEX_BASE_ZERO);
 
+				fTimer.Start();
 	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_NON_TRANSPOSE, fNpts, fNphis, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &gather_solution[0], &beta, &delta_strain[0]);
 	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_NON_TRANSPOSE, fNpts, fNphis, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &gather_solution[fNphis], &beta, &delta_strain[fNpts]);
+				fTimer.Stop();
+				timeDeltaStrain+= fTimer.ElapsedTime();
+				file << "MatMult	" << timeDeltaStrain << std::endl;
 
 #elif USING_CUBLASBATCHED_MULT //Using cuBlas matrix-multiplication using gemmBatched
     int64_t cols = fColSizes[0];
@@ -286,55 +325,84 @@ void TPZIntPointsFEM::DeltaStrain(REAL *gather_solution, REAL *delta_strain) {
 	cublasOperation_t transA = CUBLAS_OP_N;
 	cublasOperation_t transB = CUBLAS_OP_N;
 
+				fTimer.Start();
     cublasDgemmStridedBatched(handle_cublas, transA, transB, rows, 1, cols, &alpha, dStorage, rows, rows*cols, &gather_solution[0], cols, cols*1, &beta, &delta_strain[0], rows, rows*1, nelem);
     cublasDgemmStridedBatched(handle_cublas, transA, transB, rows, 1, cols, &alpha, dStorage, rows, rows*cols, &gather_solution[fNphis], cols, cols*1, &beta,  &delta_strain[fNpts], rows, rows*1, nelem);
+				fTimer.Stop();
+				timeDeltaStrain+= fTimer.ElapsedTime();
+				file << "MatMult	" << timeDeltaStrain << std::endl;
+
 #else //Using a loop over each line of the matrices
-		bool trans = false;
-		MatMulKernel<<<numBlocks, NT>>>(trans, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, gather_solution, delta_strain);
-		cudaDeviceSynchronize();
+	bool trans = false;
+
+				fTimer.Start();
+	MatMulKernel<<<numBlocks, NT>>>(trans, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, gather_solution, delta_strain);
+	cudaDeviceSynchronize();
+				fTimer.Stop();
+				timeDeltaStrain+= fTimer.ElapsedTime();
+				file << "MatMult	" << timeDeltaStrain << std::endl;
 #endif
+
 }
 
 void TPZIntPointsFEM::ElasticStrain(REAL *delta_strain, REAL *plastic_strain, REAL *elastic_strain) {
 	cudaMemcpy(elastic_strain, &delta_strain[0], fDim * fNpts * sizeof(REAL), cudaMemcpyDeviceToDevice);
 	cudaMemset(plastic_strain, 0, fDim * fNpts * sizeof(REAL));
 
+    			fTimer.Start();
 	REAL a = -1.;
 	cublasDaxpy(handle_cublas, fDim * fNpts, &a, &plastic_strain[0], 1, &elastic_strain[0], 1);
+				fTimer.Stop();
+				timeElasticStrain+= fTimer.ElapsedTime();
+				file << "ElasticStrain	" << timeElasticStrain << std::endl;
 }
 
 void TPZIntPointsFEM::PlasticStrain(REAL *delta_strain, REAL *elastic_strain, REAL *plastic_strain) {
 	cudaMemcpy(plastic_strain, &delta_strain[0], fDim * fNpts * sizeof(REAL), cudaMemcpyDeviceToDevice);
 
+    			fTimer.Start();
 	REAL a = -1.;
 	cublasDaxpy(handle_cublas, fDim * fNpts, &a, &elastic_strain[0], 1, &plastic_strain[0], 1);
+				fTimer.Stop();
+				timePlasticStrain+= fTimer.ElapsedTime();
+				file << "PlasticStrain	" << timeElasticStrain << std::endl;
 }
 
 void TPZIntPointsFEM::ComputeStress(REAL *elastic_strain, REAL *sigma) {
 	REAL lambda = fMaterial->GetPlasticModel().fER.Lambda();
 	REAL mu = fMaterial->GetPlasticModel().fER.Mu();
-
 	int numBlocks = (fNpts / fDim + NT - 1) / NT;
-	int shared_bytes = NT*4*sizeof(REAL);//number of int points per threadblock * number of positions per int point * bytes per type
-	ComputeStressKernel<<<numBlocks, NT, shared_bytes>>>(fNpts, fDim, elastic_strain, sigma, mu, lambda);
+
+				fTimer.Start();
+	ComputeStressKernel<<<numBlocks, NT>>>(fNpts, fDim, elastic_strain, sigma, mu, lambda);
 	cudaDeviceSynchronize();
+				fTimer.Stop();
+				timeComputeStress+= fTimer.ElapsedTime();
+				file << "ComputeStress	" << timeComputeStress << std::endl;
 }
 
 void TPZIntPointsFEM::ComputeStrain(REAL *sigma, REAL *elastic_strain) {
 	REAL E = fMaterial->GetPlasticModel().fER.E();
 	REAL nu = fMaterial->GetPlasticModel().fER.Poisson();
-
 	int numBlocks = (fNpts / fDim + NT - 1) / NT;
-	int shared_bytes = (NT*4*sizeof(REAL) + NT*4*sizeof(REAL)); //number of int points per threadblock * number of positions per int point * bytes per type
+
+				fTimer.Start();
 	ComputeStrainKernel<<<numBlocks, NT>>>(fNpts, fDim, sigma, elastic_strain, nu, E, dWeight);
 	cudaDeviceSynchronize();
+				fTimer.Stop();
+				timeComputeStrain+= fTimer.ElapsedTime();
+				file << "ComputeStrain	" << timeComputeStrain << std::endl;
 }
 
 void TPZIntPointsFEM::SpectralDecomposition(REAL *sigma_trial, REAL *eigenvalues, REAL *eigenvectors) {
 	int numBlocks = (fNpts / fDim + NT - 1) / NT;
-	int shared_bytes = (NT*4*sizeof(REAL) + NT*3*sizeof(REAL) + NT*9*sizeof(REAL)); //number of int points per threadblock * number of positions per int point * bytes per type
+
+				fTimer.Start();
 	SpectralDecompositionKernel<<<numBlocks, NT>>>(fNpts, fDim, sigma_trial, eigenvalues, eigenvectors);
 	cudaDeviceSynchronize();
+				fTimer.Stop();
+				timeSpectralDecomposition+= fTimer.ElapsedTime();
+				file << "SpectralDecomposition	" << timeSpectralDecomposition << std::endl;
 }
 
 void TPZIntPointsFEM::ProjectSigma(REAL *eigenvalues, REAL *sigma_projected) {
@@ -352,27 +420,41 @@ void TPZIntPointsFEM::ProjectSigma(REAL *eigenvalues, REAL *sigma_projected) {
 	cudaMalloc((void**) &alpha, fNpts / fDim * sizeof(REAL));
 
 	int numBlocks = (fNpts / fDim + NT - 1) / NT;
-	int shared_bytes = (NT*3*sizeof(REAL) + NT*3*sizeof(REAL) + NT*1*sizeof(REAL)+ NT*1*sizeof(REAL)); //number of int points per threadblock * number of positions per int point * bytes per type
+
+				fTimer.Start();
 	ProjectSigmaKernel<<<numBlocks, NT>>>(fNpts, fDim, mc_phi, mc_psi, mc_cohesion, K, G, eigenvalues, sigma_projected, m_type, alpha);
 	cudaDeviceSynchronize();
+				fTimer.Stop();
+				timeProjectSigma+= fTimer.ElapsedTime();
+				file << "ProjectSigma	" << timeProjectSigma << std::endl;
 
 }
 
 void TPZIntPointsFEM::StressCompleteTensor(REAL *sigma_projected, REAL *eigenvectors, REAL *sigma) {
 	int numBlocks = (fNpts / fDim + NT - 1) / NT;
-	int shared_bytes = (NT*3*sizeof(REAL) + NT*9*sizeof(REAL) + NT*4*sizeof(REAL)+ NT*1*sizeof(REAL)); //number of int points per threadblock * number of positions per int point * bytes per type
+
+				fTimer.Start();
 	StressCompleteTensorKernel<<<numBlocks, NT>>>(fNpts, fDim, sigma_projected, eigenvectors, sigma, dWeight);
 	cudaDeviceSynchronize();
+				fTimer.Stop();
+				timeStressCompleteTensor+= fTimer.ElapsedTime();
+				file << "StressCompleteTensor	" << timeStressCompleteTensor << std::endl;
 }
 
 void TPZIntPointsFEM::NodalForces(REAL *sigma, REAL *nodal_forces) {
 	int64_t nelem = fRowSizes.size();
 	int numBlocks = (nelem + NT - 1) / NT;
 
+
 #ifdef USING_CUBLAS_MULT //Using cuBLAS matrix-multiplication (each multiplication is done in one thread through cuBLAS library)
 	cublasOperation_t transA = CUBLAS_OP_T;
+
+    			fTimer.Start();
 	MatMulcuBLASKernel<<<numBlocks, NT>>>(transA, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, sigma, nodal_forces);
 	cudaDeviceSynchronize();
+				fTimer.Stop();
+				timeNodalForces+= fTimer.ElapsedTime();
+				file << "NodalForces	" << timeNodalForces << std::endl;
 
 #elif USING_CUSPARSE_MULT //Using cuSPARSE Spmv
 	int nnz = fStorage.size();
@@ -384,8 +466,13 @@ void TPZIntPointsFEM::NodalForces(REAL *sigma, REAL *nodal_forces) {
 	cusparseSetMatType(descr, CUSPARSE_MATRIX_TYPE_GENERAL);
 	cusparseSetMatIndexBase(descr, CUSPARSE_INDEX_BASE_ZERO);
 
+
+				fTimer.Start();
 	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_TRANSPOSE, fNpts, fNphis, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &sigma[0], &beta, &nodal_forces[0]);
 	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_TRANSPOSE, fNpts, fNphis, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &sigma[fNpts], &beta, &nodal_forces[fNphis]);
+				fTimer.Stop();
+				timeNodalForces+= fTimer.ElapsedTime();
+				file << "NodalForces	" << timeNodalForces << std::endl;
 
 #elif USING_CUBLASBATCHED_MULT //Using cuBlas matrix-multiplication using gemmBatched
     int64_t cols = fColSizes[0];
@@ -396,14 +483,23 @@ void TPZIntPointsFEM::NodalForces(REAL *sigma, REAL *nodal_forces) {
 	cublasOperation_t transA = CUBLAS_OP_T;
 	cublasOperation_t transB = CUBLAS_OP_N;
 
+				fTimer.Start();
 	cublasDgemmStridedBatched(handle_cublas, CUBLAS_OP_T, CUBLAS_OP_N, cols, 1, rows, &alpha, dStorage, rows, rows*cols, &sigma[0], rows, rows*1, &beta, &nodal_forces[0], cols, cols*1, nelem);
     cublasDgemmStridedBatched(handle_cublas, CUBLAS_OP_T, CUBLAS_OP_N, cols, 1, rows, &alpha, dStorage, rows, rows*cols, &sigma[fNpts], rows, rows*1, &beta,  &nodal_forces[fNphis], cols, cols*1, nelem);
+				fTimer.Stop();
+				timeNodalForces+= fTimer.ElapsedTime();
+				file << "NodalForces	" << timeNodalForces << std::endl;
 #else //Using a loop over each line of the matrices
 	bool trans = true;
+
+				fTimer.Start();
 	MatMulKernel<<<numBlocks, NT>>>(trans, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, sigma, nodal_forces);
 	cudaDeviceSynchronize();
-
+				fTimer.Stop();
+				timeNodalForces+= fTimer.ElapsedTime();
+				file << "NodalForces	" << timeNodalForces << std::endl;
 #endif
+
 }
 
 void TPZIntPointsFEM::ColoredAssemble(REAL *nodal_forces, REAL *residual) {
@@ -412,6 +508,7 @@ void TPZIntPointsFEM::ColoredAssemble(REAL *nodal_forces, REAL *residual) {
 	int64_t sz = fIndexes.size();
 	int64_t neq = fCmesh->NEquations();
 
+    			fTimer.Start();
 	cusparseDsctr(handle_cusparse, sz, &nodal_forces[0], &dIndexesColor[0], &residual[0], CUSPARSE_INDEX_BASE_ZERO);
 
 	int64_t colorassemb = ncolor / 2.;
@@ -424,6 +521,9 @@ void TPZIntPointsFEM::ColoredAssemble(REAL *nodal_forces, REAL *residual) {
 		ncolor -= colorassemb;
 		colorassemb = ncolor / 2;
 	}
+				fTimer.Stop();
+				timeColoredAssemble+= fTimer.ElapsedTime();
+				file << "ColoredAssemble	" << timeColoredAssemble << std::endl;
 }
 
 void TPZIntPointsFEM::AssembleResidual() {

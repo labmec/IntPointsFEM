@@ -9,7 +9,7 @@
 #include <omp.h>
 #include "Timer.h"
 
-Timer timer;
+ofstream file("timing-cpu.txt");
 REAL timeGatherSolution = 0;
 REAL timeDeltaStrain = 0;
 REAL timeElasticStrain = 0;
@@ -36,7 +36,8 @@ TPZIntPointsFEM::TPZIntPointsFEM() :
 				0), fMaterial(0), fRhs(0, 0), fRhsBoundary(0, 0), fSolution(0,
 				0), fPlasticStrain(0, 0), fStorage(0), fRowSizes(0), fColSizes(
 				0), fMatrixPosition(0), fRowFirstIndex(0), fColFirstIndex(0), fIndexes(
-				0), fIndexesColor(0), fWeight() {
+				0), fIndexesColor(0), fWeight(),
+				fTimer() {
 
 }
 
@@ -45,7 +46,8 @@ TPZIntPointsFEM::TPZIntPointsFEM(TPZCompMesh *cmesh, int materialid) :
 				0), fMaterial(0), fRhs(0, 0), fRhsBoundary(0, 0), fSolution(0,
 				0), fPlasticStrain(0, 0), fStorage(0), fRowSizes(0), fColSizes(
 				0), fMatrixPosition(0), fRowFirstIndex(0), fColFirstIndex(0), fIndexes(
-				0), fIndexesColor(0), fWeight() {
+				0), fIndexesColor(0), fWeight(),
+				fTimer() {
 
 	SetCompMesh(cmesh);
 	SetMaterialId(materialid);
@@ -56,6 +58,8 @@ TPZIntPointsFEM::~TPZIntPointsFEM() {
 }
 
 TPZIntPointsFEM::TPZIntPointsFEM(const TPZIntPointsFEM &copy) {
+	fTimer = copy.fTimer;
+
     fDim = copy.fDim;
     fBoundaryElements = copy.fBoundaryElements;
     fCmesh = copy.fCmesh;
@@ -83,6 +87,7 @@ TPZIntPointsFEM &TPZIntPointsFEM::operator=(const TPZIntPointsFEM &copy) {
     if(&copy == this){
         return *this;
     }
+	fTimer = copy.fTimer;
 
     fDim = copy.fDim;
     fBoundaryElements = copy.fBoundaryElements;
@@ -109,15 +114,19 @@ TPZIntPointsFEM &TPZIntPointsFEM::operator=(const TPZIntPointsFEM &copy) {
     return *this;
 }
 
+void TPZIntPointsFEM::SetTimerConfig(Timer::WhichUnit unit) {
+	fTimer.TimerConfig(unit);
+}
+
 void TPZIntPointsFEM::GatherSolution(TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &gather_solution) {
     gather_solution.Resize(fNpts,1);
     gather_solution.Zero();
 
-    timer.Start();
+    fTimer.Start();
     cblas_dgthr(fDim*fNphis, global_solution, &gather_solution(0,0), &fIndexes[0]);
-    timer.End();
-    timeGatherSolution+= timer.ElapsedTime();
-    std::cout << "GatherSolution:  " << timeGatherSolution << std::endl;
+    fTimer.Stop();
+    timeGatherSolution+= fTimer.ElapsedTime();
+    file << "GatherSolution	" << timeGatherSolution << std::endl;
 }
 
 void TPZIntPointsFEM::DeltaStrain(TPZFMatrix<REAL> &gather_solution, TPZFMatrix<REAL> &delta_strain) {
@@ -138,7 +147,7 @@ void TPZIntPointsFEM::DeltaStrain(TPZFMatrix<REAL> &gather_solution, TPZFMatrix<
 //            ' '
 //    };
 
-    timer.Start();
+    fTimer.Start();
 //    mkl_dcsrmv(&trans, (const int*) fNpts, (const int*) fNphis , &alpha, matdescra , &fStorage[0] , &fColInd[0], &fRowPtr[0], &fRowPtr_last[0], &gather_solution(0,0) , &beta, &delta_strain(0,0));
 //    mkl_dcsrmv(&trans, (const int*) fNpts, (const int*) fNphis , &alpha, matdescra , &fStorage[0] , &fColInd[0], &fRowPtr[0], &fRowPtr_last[0], &gather_solution(fNphis,0) , &beta, &delta_strain(fNpts,0));
 
@@ -151,9 +160,9 @@ void TPZIntPointsFEM::DeltaStrain(TPZFMatrix<REAL> &gather_solution, TPZFMatrix<
             }
         }
     }
-    timer.End();
-    timeDeltaStrain+= timer.ElapsedTime();
-    std::cout << "MatMult:  " << timeDeltaStrain << std::endl;
+    fTimer.Stop();
+    timeDeltaStrain+= fTimer.ElapsedTime();
+    file << "MatMult	" << timeDeltaStrain << std::endl;
 }
 
 void TPZIntPointsFEM::ElasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &elastic_strain) {
@@ -162,21 +171,21 @@ void TPZIntPointsFEM::ElasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<R
 
     plastic_strain.Zero();
 
-    timer.Start();
+    fTimer.Start();
     elastic_strain = delta_strain - plastic_strain;
-    timer.End();
-    timeElasticStrain+= timer.ElapsedTime();
-    std::cout << "ElasticStrain:  " << timeElasticStrain << std::endl;
+    fTimer.Stop();
+    timeElasticStrain+= fTimer.ElapsedTime();
+    file << "ElasticStrain	" << timeElasticStrain << std::endl;
 }
 
 void TPZIntPointsFEM::PlasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &plastic_strain) {
     plastic_strain.Resize(fDim*fNpts,1);
 
-    timer.Start();
+    fTimer.Start();
     plastic_strain = delta_strain - elastic_strain;
-    timer.End();
-    timePlasticStrain+= timer.ElapsedTime();
-    std::cout << "PlasticStrain:  " << timeElasticStrain << std::endl;
+    fTimer.Stop();
+    timePlasticStrain+= fTimer.ElapsedTime();
+    file << "PlasticStrain	" << timeElasticStrain << std::endl;
 }
 
 void TPZIntPointsFEM::ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &sigma) {
@@ -184,7 +193,7 @@ void TPZIntPointsFEM::ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZFMatrix
     REAL mu = fMaterial->GetPlasticModel().fER.Mu();
     sigma.Resize(fDim*fNpts,1);
 
-    timer.Start();
+    fTimer.Start();
 #pragma omp parallel for
     for (int64_t ipts=0; ipts < fNpts/fDim; ipts++) {
         //plane strain
@@ -193,16 +202,16 @@ void TPZIntPointsFEM::ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZFMatrix
         sigma(4 * ipts + 2, 0) = lambda * (elastic_strain(2 * ipts, 0) + elastic_strain(2 * ipts + fNpts + 1, 0)); // Sigma zz
         sigma(4 * ipts + 3, 0) = mu * (elastic_strain(2 * ipts + 1, 0) + elastic_strain(2 * ipts + fNpts, 0)); // Sigma xy
     }
-    timer.End();
-    timeComputeStress+= timer.ElapsedTime();
-    std::cout << "ComputeStress:  " << timeComputeStress << std::endl;
+    fTimer.Stop();
+    timeComputeStress+= fTimer.ElapsedTime();
+    file << "ComputeStress	" << timeComputeStress << std::endl;
 }
 
 void TPZIntPointsFEM::ComputeStrain(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &elastic_strain) {
     REAL E = fMaterial->GetPlasticModel().fER.E();
     REAL nu = fMaterial->GetPlasticModel().fER.Poisson();
 
-    timer.Start();
+    fTimer.Start();
 #pragma omp parallel for
     for (int ipts = 0; ipts < fNpts / fDim; ipts++) {
         elastic_strain(2 * ipts + 0, 0) = 1 / fWeight[ipts] * (1. / E * (sigma(2 * ipts, 0) * (1. - nu * nu) - sigma(2 * ipts + fNpts + 1, 0) * (nu + nu * nu))); //exx
@@ -210,29 +219,29 @@ void TPZIntPointsFEM::ComputeStrain(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &e
         elastic_strain(2 * ipts + fNpts + 0, 0) = elastic_strain(2 * ipts + 1, 0); //exy
         elastic_strain(2 * ipts + fNpts + 1, 0) = 1 / fWeight[ipts] * (1. / E * (sigma(2 * ipts + fNpts + 1, 0) * (1. - nu * nu) - sigma(2 * ipts, 0) * (nu + nu * nu))); //eyy
     }
-    timer.End();
-    timeComputeStrain+= timer.ElapsedTime();
-    std::cout << "ComputeStrain:  " << timeComputeStrain << std::endl;
+    fTimer.Stop();
+    timeComputeStrain+= fTimer.ElapsedTime();
+    file << "ComputeStrain	" << timeComputeStrain << std::endl;
 }
 
 void TPZIntPointsFEM::SpectralDecomposition(TPZFMatrix<REAL> &sigma_trial, TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &eigenvectors) {
     REAL maxel;
-    TPZVec<REAL> interval(2);
+    TPZVec<REAL> interval(2*fNpts/fDim);
     eigenvalues.Resize(3*fNpts/fDim,1);
     eigenvectors.Resize(9*fNpts/fDim,1);
-    timer.Start();
+    fTimer.Start();
 
     int64_t ipts;
-//#pragma omp parallel for private(ipts)
+#pragma omp parallel for private(maxel)
     for (ipts = 0; ipts < fNpts/fDim; ipts++) {
         Normalize(&sigma_trial(4*ipts, 0), maxel);
-        Interval(&sigma_trial(4*ipts, 0), &interval[0]);
-        NewtonIterations(&interval[0], &sigma_trial(4*ipts, 0), &eigenvalues(3*ipts, 0), maxel);
+        Interval(&sigma_trial(4*ipts, 0), &interval[2*ipts]);
+        NewtonIterations(&interval[2*ipts], &sigma_trial(4*ipts, 0), &eigenvalues(3*ipts, 0), maxel);
         Eigenvectors(&sigma_trial(4*ipts, 0), &eigenvalues(3*ipts, 0), &eigenvectors(9*ipts,0),maxel);
     }
-    timer.End();
-    timeSpectralDecomposition+= timer.ElapsedTime();
-    std::cout << "SpectralDecomposition:  " << timeSpectralDecomposition << std::endl;
+    fTimer.Stop();
+    timeSpectralDecomposition+= fTimer.ElapsedTime();
+    file << "SpectralDecomposition	" << timeSpectralDecomposition << std::endl;
 }
 
 void TPZIntPointsFEM::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &sigma_projected) {
@@ -249,7 +258,7 @@ void TPZIntPointsFEM::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REA
     TPZFMatrix<REAL> m_type(fNpts/fDim, 1, 0.);
     TPZFMatrix<REAL> alpha(fNpts/fDim, 1, 0.);
     bool check = false;
-    timer.Start();
+    fTimer.Start();
     #pragma omp parallel for
     for (int ipts = 0; ipts < fNpts/fDim; ipts++) {
         m_type(ipts,0) = 0;
@@ -270,15 +279,15 @@ void TPZIntPointsFEM::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REA
             }
         }
     }
-    timer.End();
-    timeProjectSigma+= timer.ElapsedTime();
-    std::cout << "ProjectSigma:  " << timeProjectSigma << std::endl;
+    fTimer.Stop();
+    timeProjectSigma+= fTimer.ElapsedTime();
+    file << "ProjectSigma	" << timeProjectSigma << std::endl;
 }
 
 void TPZIntPointsFEM::StressCompleteTensor(TPZFMatrix<REAL> &sigma_projected, TPZFMatrix<REAL> &eigenvectors, TPZFMatrix<REAL> &sigma){
     sigma.Resize(fDim*fNpts,1);
 
-    timer.Start();
+    fTimer.Start();
 #pragma omp parallel for
     for (int ipts = 0; ipts < fNpts/fDim; ipts++) {
         sigma(2*ipts + 0,0) = fWeight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 0,0)*eigenvectors(9*ipts + 0,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 3,0)*eigenvectors(9*ipts + 3,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 6,0)*eigenvectors(9*ipts + 6,0));
@@ -286,9 +295,9 @@ void TPZIntPointsFEM::StressCompleteTensor(TPZFMatrix<REAL> &sigma_projected, TP
         sigma(2*ipts + fNpts,0) = sigma(2*ipts + 1,0);
         sigma(2*ipts + fNpts + 1,0) = fWeight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 1,0)*eigenvectors(9*ipts + 1,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 4,0)*eigenvectors(9*ipts + 4,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 7,0)*eigenvectors(9*ipts + 7,0));
     }
-    timer.End();
-    timeStressCompleteTensor+= timer.ElapsedTime();
-    std::cout << "StressCompleteTensor:  " << timeStressCompleteTensor << std::endl;
+    fTimer.Stop();
+    timeStressCompleteTensor+= fTimer.ElapsedTime();
+    file << "StressCompleteTensor	" << timeStressCompleteTensor << std::endl;
 }
 
 void TPZIntPointsFEM::NodalForces(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &nodal_forces) {
@@ -296,7 +305,7 @@ void TPZIntPointsFEM::NodalForces(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &nod
     nodal_forces.Resize(fDim*fNphis,1);
     nodal_forces.Zero();
 
-    timer.Start();
+    fTimer.Start();
 #pragma omp parallel for
     for (int iel = 0; iel < nelem; iel++) {
         for (int i = 0; i < fColSizes[iel]; i++) {
@@ -306,9 +315,9 @@ void TPZIntPointsFEM::NodalForces(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &nod
             }
         }
     }
-    timer.End();
-    timeNodalForces+= timer.ElapsedTime();
-    std::cout << "NodalForces:  " << timeNodalForces << std::endl;
+    fTimer.Stop();
+    timeNodalForces+= fTimer.ElapsedTime();
+    file << "NodalForces	" << timeNodalForces << std::endl;
 }
 
 void TPZIntPointsFEM::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces, TPZFMatrix<STATE> &residual) {
@@ -318,7 +327,7 @@ void TPZIntPointsFEM::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces, TPZFMatr
     residual.Resize(neq*ncolor,1);
     residual.Zero();
 
-    timer.Start();
+    fTimer.Start();
     cblas_dsctr(sz, nodal_forces, &fIndexesColor[0], &residual(0,0));
 
     int64_t colorassemb = ncolor / 2.;
@@ -331,9 +340,9 @@ void TPZIntPointsFEM::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces, TPZFMatr
         colorassemb = ncolor/2;
     }
     residual.Resize(neq, 1);
-    timer.End();
-    timeColoredAssemble+= timer.ElapsedTime();
-    std::cout << "ColoredAssemble:  " << timeColoredAssemble << std::endl;
+    fTimer.Stop();
+    timeColoredAssemble+= fTimer.ElapsedTime();
+    file << "ColoredAssemble	" << timeColoredAssemble << std::endl;
 
 }
 

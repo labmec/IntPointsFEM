@@ -32,6 +32,7 @@
 #include "TPZYCMohrCoulombPV.h"
 #include "TPZBndCondWithMem.h"
 #include "TPZIntPointsFEM.h"
+#include "Timer.h"
 
 #include "TElastoPlasticData.h"
 #include "TRKSolution.h"
@@ -499,6 +500,7 @@ void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
 
     TPZIntPointsFEM solveintpoints(analysis->Mesh(), wellbore_material.Id());
     solveintpoints.SetDataStructure();
+    solveintpoints.SetTimerConfig(Timer::EMilliseconds);
 
     analysis->Solution().Zero();
     analysis->Assemble();

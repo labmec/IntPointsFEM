@@ -13,6 +13,7 @@
 #include "TPZYCMohrCoulombPV.h"
 #include "TPZElastoPlasticMem.h"
 #include "TPZMatElastoPlastic2D.h"
+#include "Timer.h"
 
 #ifdef USING_MKL
 #include "mkl.h"
@@ -142,6 +143,8 @@ public:
         fDim = dim;
     }
 
+    void SetTimerConfig(Timer::WhichUnit unit);
+
     void AssembleResidual();
     void SetDataStructure();
     void ColoringElements() const;
@@ -202,10 +205,13 @@ protected:
     TPZVec<int> fRowPtr_last;
     TPZVec<int> fColInd;
 
+    Timer fTimer;
+
 #ifdef __CUDACC__
 	cusparseHandle_t handle_cusparse;
 	cublasHandle_t handle_cublas;
 #endif
+
 
     REAL *dRhs;
     REAL *dRhsBoundary;
