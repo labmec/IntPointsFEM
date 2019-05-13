@@ -13,7 +13,6 @@
 #include "StressStrainKernels.h"
 #include "SigmaProjectionKernels.h"
 
-ofstream file("timing-gpu.txt");
 REAL timeGatherSolution = 0;
 REAL timeDeltaStrain = 0;
 REAL timeElasticStrain = 0;
@@ -218,18 +217,18 @@ void TPZIntPointsFEM::SetTimerConfig(Timer::WhichUnit unit) {
 void TPZIntPointsFEM::TransferDataStructure() {
 
 	std::cout << "Initializing libraries contexts ... " << std::endl;
-				fTimer.Start();
+	fTimer.Start();
 	cublasCreate(&handle_cublas);
 	cusparseCreate(&handle_cusparse);
 
 	int64_t neq = fCmesh->NEquations();
 	int64_t nelem = fColSizes.size();
     int64_t nnz = fStorage.size();
-				fTimer.Stop();
-				std::cout << "It took:  " << fTimer.ElapsedTime() << "	ms" << std::endl;
+    fTimer.Stop();
+    std::cout << "It took:  " << fTimer.ElapsedTime() <<  fTimer.Unit() << std::endl;
 
-	std::cout << "Allocating and trasnfering data to GPU ... " << std::endl;
-			fTimer.Start();
+	std::cout << "Allocating and transfering data to GPU ... " << std::endl;
+	fTimer.Start();
 	cudaMalloc((void**) &dRhs, neq * sizeof(REAL));
 
 	cudaMalloc((void**) &dRhsBoundary, neq * sizeof(REAL));
@@ -246,8 +245,7 @@ void TPZIntPointsFEM::TransferDataStructure() {
 	cudaMemcpy(dIndexes, &fIndexes[0], fIndexes.size() * sizeof(int), cudaMemcpyHostToDevice);
 
 	cudaMalloc((void**) &dIndexesColor, fIndexesColor.size() * sizeof(int));
-	cudaMemcpy(dIndexesColor, &fIndexesColor[0],
-			fIndexesColor.size() * sizeof(int), cudaMemcpyHostToDevice);
+	cudaMemcpy(dIndexesColor, &fIndexesColor[0], fIndexesColor.size() * sizeof(int), cudaMemcpyHostToDevice);
 
 	cudaMalloc((void**) &dWeight, fWeight.size() * sizeof(REAL));
 	cudaMemcpy(dWeight, &fWeight[0], fWeight.size() * sizeof(REAL), cudaMemcpyHostToDevice);
@@ -275,16 +273,15 @@ void TPZIntPointsFEM::TransferDataStructure() {
 	cudaMemcpy(dColFirstIndex, &fColFirstIndex[0], nelem * sizeof(int), cudaMemcpyHostToDevice);
 
 #endif
-					fTimer.Stop();
-					std::cout << "It took:  " << fTimer.ElapsedTime() << "	ms" << std::endl;
+	fTimer.Stop();
+	std::cout << "It took:  " << fTimer.ElapsedTime() <<  fTimer.Unit() << std::endl;
 }
 
 void TPZIntPointsFEM::GatherSolution(REAL *gather_solution) {
-				fTimer.Start();
+    fTimer.Start();
 	cusparseDgthr(handle_cusparse, fDim * fNphis, dSolution, gather_solution, dIndexes, CUSPARSE_INDEX_BASE_ZERO);
-    			fTimer.Stop();
-    			timeGatherSolution+= fTimer.ElapsedTime();
-    			file << "GatherSolution	" << timeGatherSolution << std::endl;
+	fTimer.Stop();
+	timeGatherSolution+= fTimer.ElapsedTime();
 }
 
 void TPZIntPointsFEM::DeltaStrain(REAL *gather_solution, REAL *delta_strain) {
@@ -294,12 +291,11 @@ void TPZIntPointsFEM::DeltaStrain(REAL *gather_solution, REAL *delta_strain) {
 #ifdef USING_CUBLAS_MULT //Using cuBLAS matrix-multiplication (each multiplication is done in one thread through cuBLAS library)
 	cublasOperation_t trans = CUBLAS_OP_N;
 
-				fTimer.Start();
+	fTimer.Start();
 	MatMulcuBLASKernel<<<numBlocks, NT>>>(trans, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, gather_solution, delta_strain);
 	cudaDeviceSynchronize();
-				fTimer.Stop();
-				timeDeltaStrain+= fTimer.ElapsedTime();
-				file << "MatMult	" << timeDeltaStrain << std::endl;
+	fTimer.Stop();
+	timeDeltaStrain+= fTimer.ElapsedTime();
 
 #elif USING_CUSPARSE_MULT //Using cuSPARSE Spmv
 	int nnz = fStorage.size();
@@ -310,12 +306,11 @@ void TPZIntPointsFEM::DeltaStrain(REAL *gather_solution, REAL *delta_strain) {
 	cusparseSetMatType(descr, CUSPARSE_MATRIX_TYPE_GENERAL);
 	cusparseSetMatIndexBase(descr, CUSPARSE_INDEX_BASE_ZERO);
 
-				fTimer.Start();
+	fTimer.Start();
 	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_NON_TRANSPOSE, fNpts, fNphis, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &gather_solution[0], &beta, &delta_strain[0]);
 	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_NON_TRANSPOSE, fNpts, fNphis, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &gather_solution[fNphis], &beta, &delta_strain[fNpts]);
-				fTimer.Stop();
-				timeDeltaStrain+= fTimer.ElapsedTime();
-				file << "MatMult	" << timeDeltaStrain << std::endl;
+	fTimer.Stop();
+	timeDeltaStrain+= fTimer.ElapsedTime();
 
 #elif USING_CUBLASBATCHED_MULT //Using cuBlas matrix-multiplication using gemmBatched
     int64_t cols = fColSizes[0];
@@ -325,22 +320,20 @@ void TPZIntPointsFEM::DeltaStrain(REAL *gather_solution, REAL *delta_strain) {
 	cublasOperation_t transA = CUBLAS_OP_N;
 	cublasOperation_t transB = CUBLAS_OP_N;
 
-				fTimer.Start();
+	fTimer.Start();
     cublasDgemmStridedBatched(handle_cublas, transA, transB, rows, 1, cols, &alpha, dStorage, rows, rows*cols, &gather_solution[0], cols, cols*1, &beta, &delta_strain[0], rows, rows*1, nelem);
     cublasDgemmStridedBatched(handle_cublas, transA, transB, rows, 1, cols, &alpha, dStorage, rows, rows*cols, &gather_solution[fNphis], cols, cols*1, &beta,  &delta_strain[fNpts], rows, rows*1, nelem);
-				fTimer.Stop();
-				timeDeltaStrain+= fTimer.ElapsedTime();
-				file << "MatMult	" << timeDeltaStrain << std::endl;
+    fTimer.Stop();
+    timeDeltaStrain+= fTimer.ElapsedTime();
 
 #else //Using a loop over each line of the matrices
 	bool trans = false;
 
-				fTimer.Start();
+	fTimer.Start();
 	MatMulKernel<<<numBlocks, NT>>>(trans, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, gather_solution, delta_strain);
 	cudaDeviceSynchronize();
-				fTimer.Stop();
-				timeDeltaStrain+= fTimer.ElapsedTime();
-				file << "MatMult	" << timeDeltaStrain << std::endl;
+	fTimer.Stop();
+	timeDeltaStrain+= fTimer.ElapsedTime();
 #endif
 
 }
@@ -349,23 +342,21 @@ void TPZIntPointsFEM::ElasticStrain(REAL *delta_strain, REAL *plastic_strain, RE
 	cudaMemcpy(elastic_strain, &delta_strain[0], fDim * fNpts * sizeof(REAL), cudaMemcpyDeviceToDevice);
 	cudaMemset(plastic_strain, 0, fDim * fNpts * sizeof(REAL));
 
-    			fTimer.Start();
+	fTimer.Start();
 	REAL a = -1.;
 	cublasDaxpy(handle_cublas, fDim * fNpts, &a, &plastic_strain[0], 1, &elastic_strain[0], 1);
-				fTimer.Stop();
-				timeElasticStrain+= fTimer.ElapsedTime();
-				file << "ElasticStrain	" << timeElasticStrain << std::endl;
+	fTimer.Stop();
+	timeElasticStrain+= fTimer.ElapsedTime();
 }
 
 void TPZIntPointsFEM::PlasticStrain(REAL *delta_strain, REAL *elastic_strain, REAL *plastic_strain) {
 	cudaMemcpy(plastic_strain, &delta_strain[0], fDim * fNpts * sizeof(REAL), cudaMemcpyDeviceToDevice);
 
-    			fTimer.Start();
+	fTimer.Start();
 	REAL a = -1.;
 	cublasDaxpy(handle_cublas, fDim * fNpts, &a, &elastic_strain[0], 1, &plastic_strain[0], 1);
-				fTimer.Stop();
-				timePlasticStrain+= fTimer.ElapsedTime();
-				file << "PlasticStrain	" << timeElasticStrain << std::endl;
+	fTimer.Stop();
+	timePlasticStrain+= fTimer.ElapsedTime();
 }
 
 void TPZIntPointsFEM::ComputeStress(REAL *elastic_strain, REAL *sigma) {
@@ -373,12 +364,11 @@ void TPZIntPointsFEM::ComputeStress(REAL *elastic_strain, REAL *sigma) {
 	REAL mu = fMaterial->GetPlasticModel().fER.Mu();
 	int numBlocks = (fNpts / fDim + NT - 1) / NT;
 
-				fTimer.Start();
+	fTimer.Start();
 	ComputeStressKernel<<<numBlocks, NT>>>(fNpts, fDim, elastic_strain, sigma, mu, lambda);
 	cudaDeviceSynchronize();
-				fTimer.Stop();
-				timeComputeStress+= fTimer.ElapsedTime();
-				file << "ComputeStress	" << timeComputeStress << std::endl;
+	fTimer.Stop();
+	timeComputeStress+= fTimer.ElapsedTime();
 }
 
 void TPZIntPointsFEM::ComputeStrain(REAL *sigma, REAL *elastic_strain) {
@@ -386,23 +376,21 @@ void TPZIntPointsFEM::ComputeStrain(REAL *sigma, REAL *elastic_strain) {
 	REAL nu = fMaterial->GetPlasticModel().fER.Poisson();
 	int numBlocks = (fNpts / fDim + NT - 1) / NT;
 
-				fTimer.Start();
+	fTimer.Start();
 	ComputeStrainKernel<<<numBlocks, NT>>>(fNpts, fDim, sigma, elastic_strain, nu, E, dWeight);
 	cudaDeviceSynchronize();
-				fTimer.Stop();
-				timeComputeStrain+= fTimer.ElapsedTime();
-				file << "ComputeStrain	" << timeComputeStrain << std::endl;
+	fTimer.Stop();
+	timeComputeStrain+= fTimer.ElapsedTime();
 }
 
 void TPZIntPointsFEM::SpectralDecomposition(REAL *sigma_trial, REAL *eigenvalues, REAL *eigenvectors) {
 	int numBlocks = (fNpts / fDim + NT - 1) / NT;
 
-				fTimer.Start();
+	fTimer.Start();
 	SpectralDecompositionKernel<<<numBlocks, NT>>>(fNpts, fDim, sigma_trial, eigenvalues, eigenvectors);
 	cudaDeviceSynchronize();
-				fTimer.Stop();
-				timeSpectralDecomposition+= fTimer.ElapsedTime();
-				file << "SpectralDecomposition	" << timeSpectralDecomposition << std::endl;
+	fTimer.Stop();
+	timeSpectralDecomposition+= fTimer.ElapsedTime();
 }
 
 void TPZIntPointsFEM::ProjectSigma(REAL *eigenvalues, REAL *sigma_projected) {
@@ -421,24 +409,21 @@ void TPZIntPointsFEM::ProjectSigma(REAL *eigenvalues, REAL *sigma_projected) {
 
 	int numBlocks = (fNpts / fDim + NT - 1) / NT;
 
-				fTimer.Start();
+	fTimer.Start();
 	ProjectSigmaKernel<<<numBlocks, NT>>>(fNpts, fDim, mc_phi, mc_psi, mc_cohesion, K, G, eigenvalues, sigma_projected, m_type, alpha);
 	cudaDeviceSynchronize();
-				fTimer.Stop();
-				timeProjectSigma+= fTimer.ElapsedTime();
-				file << "ProjectSigma	" << timeProjectSigma << std::endl;
-
+	fTimer.Stop();
+	timeProjectSigma+= fTimer.ElapsedTime();
 }
 
 void TPZIntPointsFEM::StressCompleteTensor(REAL *sigma_projected, REAL *eigenvectors, REAL *sigma) {
 	int numBlocks = (fNpts / fDim + NT - 1) / NT;
 
-				fTimer.Start();
+	fTimer.Start();
 	StressCompleteTensorKernel<<<numBlocks, NT>>>(fNpts, fDim, sigma_projected, eigenvectors, sigma, dWeight);
 	cudaDeviceSynchronize();
-				fTimer.Stop();
-				timeStressCompleteTensor+= fTimer.ElapsedTime();
-				file << "StressCompleteTensor	" << timeStressCompleteTensor << std::endl;
+	fTimer.Stop();
+	timeStressCompleteTensor+= fTimer.ElapsedTime();
 }
 
 void TPZIntPointsFEM::NodalForces(REAL *sigma, REAL *nodal_forces) {
@@ -449,12 +434,11 @@ void TPZIntPointsFEM::NodalForces(REAL *sigma, REAL *nodal_forces) {
 #ifdef USING_CUBLAS_MULT //Using cuBLAS matrix-multiplication (each multiplication is done in one thread through cuBLAS library)
 	cublasOperation_t transA = CUBLAS_OP_T;
 
-    			fTimer.Start();
+	fTimer.Start();
 	MatMulcuBLASKernel<<<numBlocks, NT>>>(transA, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, sigma, nodal_forces);
 	cudaDeviceSynchronize();
-				fTimer.Stop();
-				timeNodalForces+= fTimer.ElapsedTime();
-				file << "NodalForces	" << timeNodalForces << std::endl;
+	fTimer.Stop();
+	timeNodalForces+= fTimer.ElapsedTime();
 
 #elif USING_CUSPARSE_MULT //Using cuSPARSE Spmv
 	int nnz = fStorage.size();
@@ -466,13 +450,11 @@ void TPZIntPointsFEM::NodalForces(REAL *sigma, REAL *nodal_forces) {
 	cusparseSetMatType(descr, CUSPARSE_MATRIX_TYPE_GENERAL);
 	cusparseSetMatIndexBase(descr, CUSPARSE_INDEX_BASE_ZERO);
 
-
-				fTimer.Start();
+	fTimer.Start();
 	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_TRANSPOSE, fNpts, fNphis, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &sigma[0], &beta, &nodal_forces[0]);
 	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_TRANSPOSE, fNpts, fNphis, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &sigma[fNpts], &beta, &nodal_forces[fNphis]);
-				fTimer.Stop();
-				timeNodalForces+= fTimer.ElapsedTime();
-				file << "NodalForces	" << timeNodalForces << std::endl;
+	fTimer.Stop();
+	timeNodalForces+= fTimer.ElapsedTime();
 
 #elif USING_CUBLASBATCHED_MULT //Using cuBlas matrix-multiplication using gemmBatched
     int64_t cols = fColSizes[0];
@@ -483,21 +465,19 @@ void TPZIntPointsFEM::NodalForces(REAL *sigma, REAL *nodal_forces) {
 	cublasOperation_t transA = CUBLAS_OP_T;
 	cublasOperation_t transB = CUBLAS_OP_N;
 
-				fTimer.Start();
+	fTimer.Start();
 	cublasDgemmStridedBatched(handle_cublas, CUBLAS_OP_T, CUBLAS_OP_N, cols, 1, rows, &alpha, dStorage, rows, rows*cols, &sigma[0], rows, rows*1, &beta, &nodal_forces[0], cols, cols*1, nelem);
     cublasDgemmStridedBatched(handle_cublas, CUBLAS_OP_T, CUBLAS_OP_N, cols, 1, rows, &alpha, dStorage, rows, rows*cols, &sigma[fNpts], rows, rows*1, &beta,  &nodal_forces[fNphis], cols, cols*1, nelem);
-				fTimer.Stop();
-				timeNodalForces+= fTimer.ElapsedTime();
-				file << "NodalForces	" << timeNodalForces << std::endl;
+    fTimer.Stop();
+    timeNodalForces+= fTimer.ElapsedTime();
 #else //Using a loop over each line of the matrices
 	bool trans = true;
 
-				fTimer.Start();
+	fTimer.Start();
 	MatMulKernel<<<numBlocks, NT>>>(trans, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, sigma, nodal_forces);
 	cudaDeviceSynchronize();
-				fTimer.Stop();
-				timeNodalForces+= fTimer.ElapsedTime();
-				file << "NodalForces	" << timeNodalForces << std::endl;
+	fTimer.Stop();
+	timeNodalForces+= fTimer.ElapsedTime();
 #endif
 
 }
@@ -508,7 +488,7 @@ void TPZIntPointsFEM::ColoredAssemble(REAL *nodal_forces, REAL *residual) {
 	int64_t sz = fIndexes.size();
 	int64_t neq = fCmesh->NEquations();
 
-    			fTimer.Start();
+	fTimer.Start();
 	cusparseDsctr(handle_cusparse, sz, &nodal_forces[0], &dIndexesColor[0], &residual[0], CUSPARSE_INDEX_BASE_ZERO);
 
 	int64_t colorassemb = ncolor / 2.;
@@ -521,9 +501,8 @@ void TPZIntPointsFEM::ColoredAssemble(REAL *nodal_forces, REAL *residual) {
 		ncolor -= colorassemb;
 		colorassemb = ncolor / 2;
 	}
-				fTimer.Stop();
-				timeColoredAssemble+= fTimer.ElapsedTime();
-				file << "ColoredAssemble	" << timeColoredAssemble << std::endl;
+	fTimer.Stop();
+	timeColoredAssemble+= fTimer.ElapsedTime();
 }
 
 void TPZIntPointsFEM::AssembleResidual() {
@@ -584,6 +563,20 @@ void TPZIntPointsFEM::AssembleResidual() {
 
 	fRhs.Resize(neq, 1);
 	cudaMemcpy(&fRhs(0,0), residual, neq * sizeof(REAL), cudaMemcpyDeviceToHost);
+
+    ofstream file("timing-gpu.txt");
+    file << "GatherSolution	    " << timeGatherSolution << fTimer.Unit() << std::endl;
+    file << "DeltaStrain	    " << timeDeltaStrain << fTimer.Unit() << std::endl;
+    file << "ElasticStrain	    " << timeElasticStrain <<  fTimer.Unit() << std::endl;
+    file << "ComputeStress	    " << timeComputeStress <<  fTimer.Unit() << std::endl;
+    file << "SpectralDecomp	    " << timeSpectralDecomposition <<  fTimer.Unit() << std::endl;
+    file << "ProjectSigma	    " << timeProjectSigma <<  fTimer.Unit() << std::endl;
+    file << "StressTensor	    " << timeStressCompleteTensor <<  fTimer.Unit() << std::endl;
+    file << "NodalForeces	    " << timeNodalForces <<  fTimer.Unit() << std::endl;
+    file << "ColoredAssemble	" << timeColoredAssemble << fTimer.Unit() << std::endl;
+
+    file << "ComputeStrain	    " << timeComputeStrain <<  fTimer.Unit() << std::endl;
+    file << "PlasticStrain	    " << timeElasticStrain <<  fTimer.Unit() << std::endl;
 
 	cudaFree(gather_solution);
 	cudaFree(delta_strain);
