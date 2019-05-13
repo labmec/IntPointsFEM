@@ -397,10 +397,6 @@ void TPZIntPointsFEM::AssembleResidual() {
     file << "ComputeStrain	    " << timeComputeStrain <<  fTimer.Unit() << std::endl;
     file << "PlasticStrain	    " << timeElasticStrain <<  fTimer.Unit() << std::endl;
 
-
-
-
-
 }
 
 void TPZIntPointsFEM::SetDataStructure(){

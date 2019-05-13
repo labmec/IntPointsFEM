@@ -216,7 +216,6 @@ protected:
 
     int *dRowPtr;
     int *dColInd;
-
 };
 
 #endif /* TPZIntPointsFEM_h */
