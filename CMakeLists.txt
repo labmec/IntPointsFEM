@@ -142,26 +142,24 @@ set(PROJECTSOURCE ${BASIC_TYPES} ${HEADERS})
 file(GLOB headers *.h)
 file(GLOB sources *.cpp)
 
+option(USING_CSRMV_MULT off)
+option(USING_CUBLAS_MULT off)
+option(USING_CUBLASBATCHED_MULT off)
 
 #enabling cuda
 option(USING_CUDA on)
 if(USING_CUDA)
-
-    option(USING_CUBLAS_MULT off)
     if(USING_CUBLAS_MULT)
         set(CUDA_NVCC_FLAGS "-DUSING_CUBLAS_MULT")
     endif(USING_CUBLAS_MULT)
     
-    option(USING_CUSPARSE_MULT off)
-    if(USING_CUSPARSE_MULT)
-        set(CUDA_NVCC_FLAGS "-DUSING_CUSPARSE_MULT")
-    endif(USING_CUSPARSE_MULT)
-    
-    option(USING_CUBLASBATCHED_MULT off)
+    if(USING_CSRMV_MULT)
+        set(CUDA_NVCC_FLAGS "-DUSING_CSRMV_MULT")
+    endif(USING_CSRMV_MULT)
+
     if(USING_CUBLASBATCHED_MULT)
         set(CUDA_NVCC_FLAGS "-DUSING_CUBLASBATCHED_MULT")
     endif(USING_CUBLASBATCHED_MULT)
-    
 
     find_package(CUDA REQUIRED)
     enable_language(CXX CUDA)
@@ -181,6 +179,10 @@ if(USING_CUDA)
     list(REMOVE_ITEM sources ${CMAKE_CURRENT_SOURCE_DIR}/TPZIntPointsFEM.cpp)
     set(main_SRCS ${sources} ${headers} ${cuda})
 else()
+    if(USING_CSRMV_MULT)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSING_CSRMV_MULT")
+    endif(USING_CSRMV_MULT)
+
     set(main_SRCS ${sources} ${headers})
 endif(USING_CUDA)
 

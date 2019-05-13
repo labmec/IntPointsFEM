@@ -32,22 +32,18 @@ REAL timeColoredAssemble = 0;
 
 
 TPZIntPointsFEM::TPZIntPointsFEM() :
-		fDim(-1), fBoundaryElements(), fCmesh(0), fNpts(-1), fNphis(-1), fElemColor(
-				0), fMaterial(0), fRhs(0, 0), fRhsBoundary(0, 0), fSolution(0,
-				0), fPlasticStrain(0, 0), fStorage(0), fRowSizes(0), fColSizes(
-				0), fMatrixPosition(0), fRowFirstIndex(0), fColFirstIndex(0), fIndexes(
-				0), fIndexesColor(0), fWeight(),
-				fTimer() {
+        fDim(-1), fBoundaryElements(), fCmesh(0), fNpts(-1), fNphis(-1), fElemColor(0), fMaterial(0), fRhs(0, 0),
+        fRhsBoundary(0, 0), fSolution(0,0), fPlasticStrain(0, 0), fStorage(0), fRowSizes(0), fColSizes(0),
+        fMatrixPosition(0), fRowFirstIndex(0), fColFirstIndex(0), fIndexes(0), fIndexesColor(0), fWeight(0),
+        fRowPtr(0), fColInd(0), fTimer() {
 
 }
 
 TPZIntPointsFEM::TPZIntPointsFEM(TPZCompMesh *cmesh, int materialid) :
-		fDim(-1), fBoundaryElements(), fCmesh(0), fNpts(-1), fNphis(-1), fElemColor(
-				0), fMaterial(0), fRhs(0, 0), fRhsBoundary(0, 0), fSolution(0,
-				0), fPlasticStrain(0, 0), fStorage(0), fRowSizes(0), fColSizes(
-				0), fMatrixPosition(0), fRowFirstIndex(0), fColFirstIndex(0), fIndexes(
-				0), fIndexesColor(0), fWeight(),
-				fTimer() {
+        fDim(-1), fBoundaryElements(), fCmesh(0), fNpts(-1), fNphis(-1), fElemColor(0), fMaterial(0), fRhs(0, 0),
+        fRhsBoundary(0, 0), fSolution(0,0), fPlasticStrain(0, 0), fStorage(0), fRowSizes(0), fColSizes(0),
+        fMatrixPosition(0), fRowFirstIndex(0), fColFirstIndex(0), fIndexes(0), fIndexesColor(0), fWeight(0),
+        fRowPtr(0), fColInd(0), fTimer() {
 
 	SetCompMesh(cmesh);
 	SetMaterialId(materialid);
@@ -58,8 +54,6 @@ TPZIntPointsFEM::~TPZIntPointsFEM() {
 }
 
 TPZIntPointsFEM::TPZIntPointsFEM(const TPZIntPointsFEM &copy) {
-	fTimer = copy.fTimer;
-
     fDim = copy.fDim;
     fBoundaryElements = copy.fBoundaryElements;
     fCmesh = copy.fCmesh;
@@ -67,6 +61,8 @@ TPZIntPointsFEM::TPZIntPointsFEM(const TPZIntPointsFEM &copy) {
     fNphis = copy.fNphis;
     fElemColor = copy.fElemColor;
     fMaterial = copy.fMaterial;
+
+    fTimer = copy.fTimer;
 
     fRhs = copy.fRhs;
     fRhsBoundary = copy.fRhsBoundary;
@@ -81,14 +77,15 @@ TPZIntPointsFEM::TPZIntPointsFEM(const TPZIntPointsFEM &copy) {
     fIndexes = copy.fIndexes;
     fIndexesColor = copy.fIndexesColor;
     fWeight = copy.fWeight;
+
+    fRowPtr = copy.fRowPtr;
+    fColInd = copy.fColInd;
 }
 
 TPZIntPointsFEM &TPZIntPointsFEM::operator=(const TPZIntPointsFEM &copy) {
     if(&copy == this){
         return *this;
     }
-	fTimer = copy.fTimer;
-
     fDim = copy.fDim;
     fBoundaryElements = copy.fBoundaryElements;
     fCmesh = copy.fCmesh;
@@ -96,6 +93,8 @@ TPZIntPointsFEM &TPZIntPointsFEM::operator=(const TPZIntPointsFEM &copy) {
     fNphis = copy.fNphis;
     fElemColor = copy.fElemColor;
     fMaterial = copy.fMaterial;
+
+    fTimer = copy.fTimer;
 
     fRhs = copy.fRhs;
     fRhsBoundary = copy.fRhsBoundary;
@@ -110,6 +109,9 @@ TPZIntPointsFEM &TPZIntPointsFEM::operator=(const TPZIntPointsFEM &copy) {
     fIndexes = copy.fIndexes;
     fIndexesColor = copy.fIndexesColor;
     fWeight = copy.fWeight;
+
+    fRowPtr = copy.fRowPtr;
+    fColInd = copy.fColInd;
 
     return *this;
 }
@@ -131,26 +133,27 @@ void TPZIntPointsFEM::GatherSolution(TPZFMatrix<REAL> &global_solution, TPZFMatr
 
 void TPZIntPointsFEM::DeltaStrain(TPZFMatrix<REAL> &gather_solution, TPZFMatrix<REAL> &delta_strain) {
     int64_t nelem = fRowSizes.size();
+    delta_strain.Resize(fDim*fNpts,1);
+    delta_strain.Zero();
 
+#ifdef USING_CSRMV_MULT
     REAL alpha = 1.;
     REAL beta = 0.;
 
-    delta_strain.Resize(fDim*fNpts,1);
-    delta_strain.Zero();
-//    char trans = 'N';
-//    char matdescra[6] = {
-//            'G', // type of matrix
-//            ' ', // triangular indicator (ignored in multiplication)
-//            ' ', // diagonal indicator (ignored in multiplication)
-//            'C', // type of indexing
-//            ' ',
-//            ' '
-//    };
+    char trans = 'N';
+    char matdescra[] = {'G',' ',' ','C'};
+
+    const int m = fNpts;
+    const int n = fNphis;
 
     fTimer.Start();
-//    mkl_dcsrmv(&trans, (const int*) fNpts, (const int*) fNphis , &alpha, matdescra , &fStorage[0] , &fColInd[0], &fRowPtr[0], &fRowPtr_last[0], &gather_solution(0,0) , &beta, &delta_strain(0,0));
-//    mkl_dcsrmv(&trans, (const int*) fNpts, (const int*) fNphis , &alpha, matdescra , &fStorage[0] , &fColInd[0], &fRowPtr[0], &fRowPtr_last[0], &gather_solution(fNphis,0) , &beta, &delta_strain(fNpts,0));
-
+    mkl_dcsrmv(&trans, &m, &n, &alpha, matdescra , &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &gather_solution(0,0) , &beta, &delta_strain(0,0));
+    mkl_dcsrmv(&trans, &m, &n, &alpha, matdescra , &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &gather_solution(fNphis,0) , &beta, &delta_strain(fNpts,0));
+    fTimer.Stop();
+    timeDeltaStrain+= fTimer.ElapsedTime();
+    file << "MatMult	" << timeDeltaStrain << std::endl;
+#else
+    fTimer.Start();
 #pragma omp parallel for
     for (int64_t iel = 0; iel < nelem; iel++) {
         for (int i = 0; i < fRowSizes[iel]; i++) {
@@ -163,6 +166,7 @@ void TPZIntPointsFEM::DeltaStrain(TPZFMatrix<REAL> &gather_solution, TPZFMatrix<
     fTimer.Stop();
     timeDeltaStrain+= fTimer.ElapsedTime();
     file << "MatMult	" << timeDeltaStrain << std::endl;
+#endif
 }
 
 void TPZIntPointsFEM::ElasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &elastic_strain) {
@@ -305,6 +309,23 @@ void TPZIntPointsFEM::NodalForces(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &nod
     nodal_forces.Resize(fDim*fNphis,1);
     nodal_forces.Zero();
 
+#ifdef USING_CSRMV_MULT
+    REAL alpha = -1.;
+    REAL beta = 0.;
+
+    char trans = 'T';
+    char matdescra[] = {'G',' ',' ','C'};
+
+    const int m = fNpts;
+    const int n = fNphis;
+
+    fTimer.Start();
+    mkl_dcsrmv(&trans, &m, &n, &alpha, matdescra , &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &sigma(0,0) , &beta, &nodal_forces(0,0));
+    mkl_dcsrmv(&trans, &m, &n, &alpha, matdescra , &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &sigma(fNpts,0) , &beta, &nodal_forces(fNphis,0));
+    fTimer.Stop();
+    timeDeltaStrain+= fTimer.ElapsedTime();
+    file << "MatMult	" << timeDeltaStrain << std::endl;
+#else
     fTimer.Start();
 #pragma omp parallel for
     for (int iel = 0; iel < nelem; iel++) {
@@ -318,6 +339,7 @@ void TPZIntPointsFEM::NodalForces(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &nod
     fTimer.Stop();
     timeNodalForces+= fTimer.ElapsedTime();
     file << "NodalForces	" << timeNodalForces << std::endl;
+#endif
 }
 
 void TPZIntPointsFEM::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces, TPZFMatrix<STATE> &residual) {
@@ -473,7 +495,9 @@ void TPZIntPointsFEM::SetDataStructure(){
             }
         }
 
-//        elmatrix.Transpose();
+#ifdef USING_CSRMV_MULT
+        elmatrix.Transpose();
+#endif
         this->SetElementMatrix(it, elmatrix);
         it++;
 
