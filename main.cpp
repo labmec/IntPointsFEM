@@ -24,6 +24,8 @@
 #include "pzpostprocanalysis.h"
 #include "pzfstrmatrix.h"
 
+#include "omp.h"
+
 #include "TPZMatElastoPlastic2D.h"
 #include "TPZMatElastoPlastic.h"
 #include "TPZElastoPlasticMem.h"
@@ -72,7 +74,8 @@ void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData material, int n_threads,
 void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_material, int npoints, std::ostream &out, bool euler = false);
 
 int main(int argc, char *argv[]) {
-
+int nt = omp_get_max_threads();
+std::cout << "USING " << nt << " THREADS" << std::endl;
     int pOrder = 2; // Computational mesh order
     bool render_vtk_Q = false;
     
@@ -88,7 +91,7 @@ int main(int argc, char *argv[]) {
     TPZCompMesh *cmesh = CmeshElastoplasticity(gmesh, pOrder, wellbore_material);
 
 // Defines the analysis
-    int n_threads = 0;
+    int n_threads = 16;
     TPZAnalysis *analysis = Analysis(cmesh,n_threads);
     
 // Calculates the solution using Newton method
