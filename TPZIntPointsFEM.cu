@@ -302,10 +302,15 @@ void TPZIntPointsFEM::DeltaStrain(REAL *gather_solution, REAL *delta_strain) {
 	cusparseCreateMatDescr(&descr);
 	cusparseSetMatType(descr, CUSPARSE_MATRIX_TYPE_GENERAL);
 	cusparseSetMatIndexBase(descr, CUSPARSE_INDEX_BASE_ZERO);
+	int m = fNpts;
+	int n = 1;
+	int k = fNphis;
 
 	fTimer.Start();
-	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_NON_TRANSPOSE, fNpts, fNphis, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &gather_solution[0], &beta, &delta_strain[0]);
-	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_NON_TRANSPOSE, fNpts, fNphis, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &gather_solution[fNphis], &beta, &delta_strain[fNpts]);
+	cusparseDcsrmm(handle_cusparse,CUSPARSE_OPERATION_NON_TRANSPOSE, m, n, k, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &gather_solution[0], k, &beta, &delta_strain[0], m);
+	cusparseDcsrmm(handle_cusparse,CUSPARSE_OPERATION_NON_TRANSPOSE, m, n, k, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &gather_solution[fNphis], k, &beta, &delta_strain[fNpts], m);
+//	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_NON_TRANSPOSE, m, k, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &gather_solution[0], &beta, &delta_strain[0]);
+//	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_NON_TRANSPOSE, m, k, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &gather_solution[fNphis], &beta, &delta_strain[fNpts]);
 	fTimer.Stop();
 	timeDeltaStrain+= fTimer.ElapsedTime();
 #elif USING_CUBLASBATCHED_MULT //Using cuBlas matrix-multiplication using gemmBatched
@@ -440,6 +445,9 @@ void TPZIntPointsFEM::NodalForces(REAL *sigma, REAL *nodal_forces) {
 	int nnz = fStorage.size();
 	REAL alpha = -1.;
 	REAL beta = 0.;
+	int m = fNpts;
+	int n = 1;
+	int k = fNphis;
 
 	cusparseMatDescr_t descr;
 	cusparseCreateMatDescr(&descr);
@@ -448,8 +456,10 @@ void TPZIntPointsFEM::NodalForces(REAL *sigma, REAL *nodal_forces) {
 
 
 	fTimer.Start();
-	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_TRANSPOSE, fNpts, fNphis, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &sigma[0], &beta, &nodal_forces[0]);
-	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_TRANSPOSE, fNpts, fNphis, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &sigma[fNpts], &beta, &nodal_forces[fNphis]);
+	cusparseDcsrmm(handle_cusparse,CUSPARSE_OPERATION_TRANSPOSE, m, n, k, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &sigma[0], m, &beta, &nodal_forces[0], k);
+	cusparseDcsrmm(handle_cusparse,CUSPARSE_OPERATION_TRANSPOSE, m, n, k, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &sigma[fNpts], m, &beta, &nodal_forces[fNphis], k);
+//	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_TRANSPOSE, m, k, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &sigma[0], &beta, &nodal_forces[0]);
+//	cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_TRANSPOSE, m, k, nnz, &alpha, descr, dStorage, dRowPtr, dColInd, &sigma[fNpts], &beta, &nodal_forces[fNphis]);
 	fTimer.Stop();
 	timeNodalForces+= fTimer.ElapsedTime();
 
