@@ -135,18 +135,21 @@ void TPZIntPointsFEM::DeltaStrain(TPZFMatrix<REAL> &gather_solution, TPZFMatrix<
     delta_strain.Zero();
 
 #ifdef USING_CSRMV_MULT
+    const int m = fNpts;
+    const int n = 1;
+    const int k = fNphis;
+
     REAL alpha = 1.;
     REAL beta = 0.;
 
     char trans = 'N';
     char matdescra[] = {'G',' ',' ','C'};
 
-    const int m = fNpts;
-    const int n = fNphis;
-
     fTimer.Start();
-    mkl_dcsrmv(&trans, &m, &n, &alpha, matdescra , &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &gather_solution(0,0) , &beta, &delta_strain(0,0));
-    mkl_dcsrmv(&trans, &m, &n, &alpha, matdescra , &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &gather_solution(fNphis,0) , &beta, &delta_strain(fNpts,0));
+    mkl_dcsrmm (&trans, &m, &n, &k, &alpha, matdescra, &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &gather_solution(0,0), &n, &beta, &delta_strain(0,0), &n);
+    mkl_dcsrmm (&trans, &m, &n, &k, &alpha, matdescra, &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &gather_solution(fNphis,0), &n, &beta, &delta_strain(fNpts,0), &n);
+//    mkl_dcsrmv(&trans, &m, &n, &alpha, matdescra , &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &gather_solution(0,0) , &beta, &delta_strain(0,0));
+//    mkl_dcsrmv(&trans, &m, &n, &alpha, matdescra , &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &gather_solution(fNphis,0) , &beta, &delta_strain(fNpts,0));
     fTimer.Stop();
     timeDeltaStrain+= fTimer.ElapsedTime();
 #else
@@ -305,11 +308,14 @@ void TPZIntPointsFEM::NodalForces(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &nod
     char matdescra[] = {'G',' ',' ','C'};
 
     const int m = fNpts;
-    const int n = fNphis;
+    const int n = 1;
+    const int k = fNphis;
 
     fTimer.Start();
-    mkl_dcsrmv(&trans, &m, &n, &alpha, matdescra , &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &sigma(0,0) , &beta, &nodal_forces(0,0));
-    mkl_dcsrmv(&trans, &m, &n, &alpha, matdescra , &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &sigma(fNpts,0) , &beta, &nodal_forces(fNphis,0));
+    mkl_dcsrmm (&trans, &m, &n, &k, &alpha, matdescra, &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &sigma(0,0), &n, &beta, &nodal_forces(0,0), &n);
+    mkl_dcsrmm (&trans, &m, &n, &k, &alpha, matdescra, &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &sigma(fNpts,0), &n, &beta, &nodal_forces(fNphis,0), &n);
+//    mkl_dcsrmv(&trans, &m, &n, &alpha, matdescra , &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &sigma(0,0) , &beta, &nodal_forces(0,0));
+//    mkl_dcsrmv(&trans, &m, &n, &alpha, matdescra , &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &sigma(fNpts,0) , &beta, &nodal_forces(fNphis,0));
     fTimer.Stop();
     timeNodalForces+= fTimer.ElapsedTime();
 #else
