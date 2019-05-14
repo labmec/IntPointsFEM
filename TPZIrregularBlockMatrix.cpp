@@ -67,7 +67,7 @@ void TPZIrregularBlockMatrix::SetElementMatrix(int iel, TPZFMatrix<REAL> &elmat)
     elmatloc = elmat;
 }
 
-void TPZIrregularBlockMatrix::SetBlocks() {
+void TPZIrregularBlockMatrix::SetBlocksInfo() {
     int dim_mesh = (fCmesh->Reference())->Dimension(); // Mesh dimension
 
     TPZStack<int64_t> cel_indexes; // Indexes of domain elements
