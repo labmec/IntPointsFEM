@@ -76,7 +76,7 @@ void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_mate
 int main(int argc, char *argv[]) {
 int nt = omp_get_max_threads();
 std::cout << "USING " << nt << " THREADS" << std::endl;
-    int pOrder = 2; // Computational mesh order
+    int pOrder = atoi(argv[1]); // Computational mesh order
     bool render_vtk_Q = false;
     
 // Generates the geometry
@@ -97,7 +97,7 @@ std::cout << "USING " << nt << " THREADS" << std::endl;
 // Calculates the solution using Newton method
     int n_iterations = 80;
     REAL tolerance = 1.e-3;
-//    Solution(analysis, n_iterations, tolerance);
+    Solution(analysis, n_iterations, tolerance);
 
 // Post process
    if (render_vtk_Q) {
@@ -500,6 +500,8 @@ void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
     REAL norm_res, norm_delta_du;
     int neq = analysis->Solution().Rows();
     TPZFMatrix<REAL> du(neq, 1, 0.), delta_du;
+
+    std::cout  << "Solving a NLS with DOF = " << neq << std::endl;
 
     TPZIntPointsFEM solveintpoints(analysis->Mesh(), wellbore_material.Id());
     solveintpoints.SetDataStructure();

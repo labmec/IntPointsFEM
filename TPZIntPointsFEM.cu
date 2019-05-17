@@ -25,8 +25,8 @@ REAL timeStressCompleteTensor = 0;
 REAL timeNodalForces = 0;
 REAL timeColoredAssemble = 0;
 
-#define NT 128
-#define NT_MULT 128
+#define NT 8
+#define NT_MULT 8
 
 TPZIntPointsFEM::TPZIntPointsFEM() :
 		fDim(-1), fBoundaryElements(), fCmesh(0), fNpts(-1), fNphis(-1), fElemColor(
@@ -289,7 +289,9 @@ void TPZIntPointsFEM::DeltaStrain(REAL *gather_solution, REAL *delta_strain) {
 	cublasOperation_t trans = CUBLAS_OP_N;
 
 	fTimer.Start();
-	MatMulcuBLASKernel<<<numBlocks, NT>>>(trans, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, gather_solution, delta_strain);
+	MatMulcuBLASKernel<<<numBlocks, NT>>>(trans, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, &gather_solution[0], &delta_strain[0]);
+	MatMulcuBLASKernel<<<numBlocks, NT>>>(trans, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, &gather_solution[fNphis], &delta_strain[fNpts]);
+
 	cudaDeviceSynchronize();
 	fTimer.Stop();
 	timeDeltaStrain+= fTimer.ElapsedTime();
@@ -329,9 +331,9 @@ void TPZIntPointsFEM::DeltaStrain(REAL *gather_solution, REAL *delta_strain) {
 
 #else //Using a loop over each line of the matrices
 	bool trans = false;
-
 	fTimer.Start();
-	MatMulKernel<<<numBlocks, NT>>>(trans, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, gather_solution, delta_strain);
+	MatMulKernel<<<nelem, NT>>>(trans, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, &gather_solution[0], &delta_strain[0]);
+	MatMulKernel<<<nelem, NT>>>(trans, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, &gather_solution[fNphis], &delta_strain[fNpts]);
 	cudaDeviceSynchronize();
 	fTimer.Stop();
 	timeDeltaStrain+= fTimer.ElapsedTime();
@@ -436,7 +438,9 @@ void TPZIntPointsFEM::NodalForces(REAL *sigma, REAL *nodal_forces) {
 	cublasOperation_t transA = CUBLAS_OP_T;
 
     fTimer.Start();
-	MatMulcuBLASKernel<<<numBlocks, NT>>>(transA, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, sigma, nodal_forces);
+	MatMulcuBLASKernel<<<numBlocks, NT>>>(transA, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, &sigma[0], &nodal_forces[0]);
+	MatMulcuBLASKernel<<<numBlocks, NT>>>(transA, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, &sigma[fNpts], &nodal_forces[fNphis]);
+
 	cudaDeviceSynchronize();
 	fTimer.Stop();
 	timeNodalForces+= fTimer.ElapsedTime();
@@ -481,7 +485,8 @@ void TPZIntPointsFEM::NodalForces(REAL *sigma, REAL *nodal_forces) {
 	bool trans = true;
 
 	fTimer.Start();
-	MatMulKernel<<<numBlocks, NT>>>(trans, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, sigma, nodal_forces);
+	MatMulKernel<<<nelem, NT>>>(trans, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, &sigma[0], &nodal_forces[0]);
+	MatMulKernel<<<nelem, NT>>>(trans, nelem, dStorage, dRowSizes, dColSizes, dMatrixPosition, dRowFirstIndex, dColFirstIndex, fNpts, fNphis, &sigma[fNpts], &nodal_forces[fNphis]);
 	cudaDeviceSynchronize();
 	fTimer.Stop();
 	timeNodalForces+= fTimer.ElapsedTime();
