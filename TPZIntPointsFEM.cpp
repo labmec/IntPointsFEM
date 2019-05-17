@@ -31,20 +31,16 @@ REAL timeColoredAssemble = 0;
 
 
 TPZIntPointsFEM::TPZIntPointsFEM() :
-        fDim(-1), fBoundaryElements(), fCmesh(0), fNpts(-1), fNphis(-1), fElemColor(0), fMaterial(0), fRhs(0, 0),
-        fRhsBoundary(0, 0), fSolution(0,0), fPlasticStrain(0, 0), fStorage(0), fRowSizes(0), fColSizes(0),
-        fMatrixPosition(0), fRowFirstIndex(0), fColFirstIndex(0), fIndexes(0), fIndexesColor(0), fWeight(0),
-        fRowPtr(0), fColInd(0), fTimer() {
+        fDim(-1), fNpts(-1), fNphis(-1), fNColor(-1), fMaterial(0), fRhs(0, 0),
+        fRhsBoundary(0, 0), fPlasticStrain(0, 0), fIndexes(0), fIndexesColor(0), fWeight(0), fTimer() {
 
 }
 
-TPZIntPointsFEM::TPZIntPointsFEM(TPZCompMesh *cmesh, int materialid) :
-        fDim(-1), fBoundaryElements(), fCmesh(0), fNpts(-1), fNphis(-1), fElemColor(0), fMaterial(0), fRhs(0, 0),
-        fRhsBoundary(0, 0), fSolution(0,0), fPlasticStrain(0, 0), fStorage(0), fRowSizes(0), fColSizes(0),
-        fMatrixPosition(0), fRowFirstIndex(0), fColFirstIndex(0), fIndexes(0), fIndexesColor(0), fWeight(0),
-        fRowPtr(0), fColInd(0), fTimer() {
+TPZIntPointsFEM::TPZIntPointsFEM(TPZIrregularBlockMatrix *Bmatrix, int materialid) :
+        fDim(-1), fNpts(-1), fNphis(-1), fNColor(-1), fMaterial(0), fRhs(0, 0),
+        fRhsBoundary(0, 0), fPlasticStrain(0, 0), fIndexes(0), fIndexesColor(0), fWeight(0), fTimer() {
 
-	SetCompMesh(cmesh);
+	SetBMatrix(Bmatrix);
 	SetMaterialId(materialid);
 }
 
@@ -54,31 +50,19 @@ TPZIntPointsFEM::~TPZIntPointsFEM() {
 
 TPZIntPointsFEM::TPZIntPointsFEM(const TPZIntPointsFEM &copy) {
     fDim = copy.fDim;
-    fBoundaryElements = copy.fBoundaryElements;
-    fCmesh = copy.fCmesh;
     fNpts = copy.fNpts;
     fNphis = copy.fNphis;
-    fElemColor = copy.fElemColor;
+    fNColor = copy.fNColor;
     fMaterial = copy.fMaterial;
 
     fTimer = copy.fTimer;
 
     fRhs = copy.fRhs;
     fRhsBoundary = copy.fRhsBoundary;
-    fSolution = copy.fSolution;
     fPlasticStrain = copy.fPlasticStrain;
-    fStorage = copy.fStorage;
-    fColSizes = copy.fColSizes;
-    fRowSizes = copy.fRowSizes;
-    fMatrixPosition = copy.fMatrixPosition;
-    fRowFirstIndex = copy.fRowFirstIndex;
-    fColFirstIndex = copy.fColFirstIndex;
     fIndexes = copy.fIndexes;
     fIndexesColor = copy.fIndexesColor;
     fWeight = copy.fWeight;
-
-    fRowPtr = copy.fRowPtr;
-    fColInd = copy.fColInd;
 }
 
 TPZIntPointsFEM &TPZIntPointsFEM::operator=(const TPZIntPointsFEM &copy) {
@@ -86,31 +70,19 @@ TPZIntPointsFEM &TPZIntPointsFEM::operator=(const TPZIntPointsFEM &copy) {
         return *this;
     }
     fDim = copy.fDim;
-    fBoundaryElements = copy.fBoundaryElements;
-    fCmesh = copy.fCmesh;
     fNpts = copy.fNpts;
     fNphis = copy.fNphis;
-    fElemColor = copy.fElemColor;
+    fNColor = copy.fNColor;
     fMaterial = copy.fMaterial;
 
     fTimer = copy.fTimer;
 
     fRhs = copy.fRhs;
     fRhsBoundary = copy.fRhsBoundary;
-    fSolution = copy.fSolution;
     fPlasticStrain = copy.fPlasticStrain;
-    fStorage = copy.fStorage;
-    fColSizes = copy.fColSizes;
-    fRowSizes = copy.fRowSizes;
-    fMatrixPosition = copy.fMatrixPosition;
-    fRowFirstIndex = copy.fRowFirstIndex;
-    fColFirstIndex = copy.fColFirstIndex;
     fIndexes = copy.fIndexes;
     fIndexesColor = copy.fIndexesColor;
     fWeight = copy.fWeight;
-
-    fRowPtr = copy.fRowPtr;
-    fColInd = copy.fColInd;
 
     return *this;
 }
@@ -127,45 +99,6 @@ void TPZIntPointsFEM::GatherSolution(TPZFMatrix<REAL> &global_solution, TPZFMatr
     cblas_dgthr(fDim*fNphis, global_solution, &gather_solution(0,0), &fIndexes[0]);
     fTimer.Stop();
     timeGatherSolution+= fTimer.ElapsedTime();
-}
-
-void TPZIntPointsFEM::DeltaStrain(TPZFMatrix<REAL> &gather_solution, TPZFMatrix<REAL> &delta_strain) {
-    int64_t nelem = fRowSizes.size();
-    delta_strain.Resize(fDim*fNpts,1);
-    delta_strain.Zero();
-
-#ifdef USING_CSRMV_MULT
-    const int m = fNpts;
-    const int n = 1;
-    const int k = fNphis;
-
-    REAL alpha = 1.;
-    REAL beta = 0.;
-
-    char trans = 'N';
-    char matdescra[] = {'G',' ',' ','C'};
-
-    fTimer.Start();
-    mkl_dcsrmm (&trans, &m, &n, &k, &alpha, matdescra, &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &gather_solution(0,0), &n, &beta, &delta_strain(0,0), &n);
-    mkl_dcsrmm (&trans, &m, &n, &k, &alpha, matdescra, &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &gather_solution(fNphis,0), &n, &beta, &delta_strain(fNpts,0), &n);
-//    mkl_dcsrmv(&trans, &m, &k, &alpha, matdescra , &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &gather_solution(0,0) , &beta, &delta_strain(0,0));
-//    mkl_dcsrmv(&trans, &m, &k, &alpha, matdescra , &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &gather_solution(fNphis,0) , &beta, &delta_strain(fNpts,0));
-    fTimer.Stop();
-    timeDeltaStrain+= fTimer.ElapsedTime();
-#else
-    fTimer.Start();
-#pragma omp parallel for
-    for (int64_t iel = 0; iel < nelem; iel++) {
-        for (int i = 0; i < fRowSizes[iel]; i++) {
-            for (int k = 0; k < fColSizes[iel]; k++) {
-                delta_strain(i + fRowFirstIndex[iel], 0) += fStorage[k * fRowSizes[iel] + i + fMatrixPosition[iel]] * gather_solution(k + fColFirstIndex[iel], 0);
-                delta_strain(i + fRowFirstIndex[iel] + fNpts, 0) += fStorage[k * fRowSizes[iel] + i + fMatrixPosition[iel]] * gather_solution(k + fColFirstIndex[iel] + fNphis, 0);
-            }
-        }
-    }
-    fTimer.Stop();
-    timeDeltaStrain+= fTimer.ElapsedTime();
-#endif
 }
 
 void TPZIntPointsFEM::ElasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &elastic_strain) {
@@ -295,180 +228,65 @@ void TPZIntPointsFEM::StressCompleteTensor(TPZFMatrix<REAL> &sigma_projected, TP
     timeStressCompleteTensor+= fTimer.ElapsedTime();
 }
 
-void TPZIntPointsFEM::NodalForces(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &nodal_forces) {
-    int64_t nelem = fRowSizes.size();
-    nodal_forces.Resize(fDim*fNphis,1);
-    nodal_forces.Zero();
-
-#ifdef USING_CSRMV_MULT
-    REAL alpha = -1.;
-    REAL beta = 0.;
-
-    char trans = 'T';
-    char matdescra[] = {'G',' ',' ','C'};
-
-    const int m = fNpts;
-    const int n = 1;
-    const int k = fNphis;
-
-    fTimer.Start();
-    mkl_dcsrmm (&trans, &m, &n, &k, &alpha, matdescra, &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &sigma(0,0), &n, &beta, &nodal_forces(0,0), &n);
-    mkl_dcsrmm (&trans, &m, &n, &k, &alpha, matdescra, &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &sigma(fNpts,0), &n, &beta, &nodal_forces(fNphis,0), &n);
-//    mkl_dcsrmv(&trans, &m, &k, &alpha, matdescra , &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &sigma(0,0) , &beta, &nodal_forces(0,0));
-//    mkl_dcsrmv(&trans, &m, &k, &alpha, matdescra , &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &sigma(fNpts,0) , &beta, &nodal_forces(fNphis,0));
-    fTimer.Stop();
-    timeNodalForces+= fTimer.ElapsedTime();
-#else
-    fTimer.Start();
-#pragma omp parallel for
-    for (int iel = 0; iel < nelem; iel++) {
-        for (int i = 0; i < fColSizes[iel]; i++) {
-            for (int k = 0; k < fRowSizes[iel]; k++) {
-                nodal_forces(i + fColFirstIndex[iel], 0) -= fStorage[k + i * fRowSizes[iel] + fMatrixPosition[iel]] * sigma(k + fRowFirstIndex[iel], 0);
-                nodal_forces(i + fColFirstIndex[iel] + fNphis, 0) -=  fStorage[k + i * fRowSizes[iel] + fMatrixPosition[iel]] * sigma(k + fRowFirstIndex[iel] + fNpts, 0);
-            }
-        }
-    }
-    fTimer.Stop();
-    timeNodalForces+= fTimer.ElapsedTime();
-#endif
-}
-
-void TPZIntPointsFEM::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces, TPZFMatrix<STATE> &residual) {
-    int64_t ncolor = *std::max_element(fElemColor.begin(), fElemColor.end())+1;
+void TPZIntPointsFEM::ColoredAssemble(TPZFMatrix<STATE>  &nodal_forces) {
+    int64_t ncolor = fNColor;
     int64_t sz = fIndexes.size();
-    int64_t neq = fCmesh->NEquations();
-    residual.Resize(neq*ncolor,1);
-    residual.Zero();
+    int64_t neq = fBMatrix->CompMesh()->NEquations();
+    fRhs.Resize(neq*ncolor,1);
+    fRhs.Zero();
 
     fTimer.Start();
-    cblas_dsctr(sz, nodal_forces, &fIndexesColor[0], &residual(0,0));
+    cblas_dsctr(sz, nodal_forces, &fIndexesColor[0], &fRhs(0,0));
 
     int64_t colorassemb = ncolor / 2.;
     while (colorassemb > 0) {
 
         int64_t firsteq = (ncolor - colorassemb) * neq;
-        cblas_daxpy(colorassemb * neq, 1., &residual(firsteq, 0), 1., &residual(0, 0), 1.);
+        cblas_daxpy(colorassemb * neq, 1., &fRhs(firsteq, 0), 1., &fRhs(0, 0), 1.);
 
         ncolor -= colorassemb;
         colorassemb = ncolor/2;
     }
-    residual.Resize(neq, 1);
+    fRhs.Resize(neq, 1);
+
+    fRhs = fRhs + fRhsBoundary;
+
     fTimer.Stop();
     timeColoredAssemble+= fTimer.ElapsedTime();
 }
 
-void TPZIntPointsFEM::AssembleResidual() {
-    TPZFMatrix<REAL> gather_solution;
-    TPZFMatrix<REAL> delta_strain;
+void TPZIntPointsFEM::ComputeSigma(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &sigma) {
     TPZFMatrix<REAL> elastic_strain;
     TPZFMatrix<REAL> sigma_trial;
     TPZFMatrix<REAL> eigenvalues;
     TPZFMatrix<REAL> eigenvectors;
     TPZFMatrix<REAL> sigma_projected;
-    TPZFMatrix<REAL> sigma;
-    TPZFMatrix<REAL> nodal_forces;
-    TPZFMatrix<REAL> residual;
 
-    //residual assemble
-    GatherSolution(fSolution, gather_solution);
-    DeltaStrain(gather_solution, delta_strain);
     ElasticStrain(delta_strain, fPlasticStrain, elastic_strain);
     ComputeStress(elastic_strain, sigma_trial);
     SpectralDecomposition(sigma_trial, eigenvalues, eigenvectors); //check open mp usage in this method
     ProjectSigma(eigenvalues, sigma_projected);
     StressCompleteTensor(sigma_projected, eigenvectors, sigma);
-    NodalForces(sigma, nodal_forces);
-    ColoredAssemble(nodal_forces,residual);
 
-    //update strain
+//    update strain
     ComputeStrain(sigma, elastic_strain);
     PlasticStrain(delta_strain, elastic_strain, fPlasticStrain);
-
-    //add boundary contribution
-    fRhs = residual + fRhsBoundary;
-
-    //cumulated time elapsed to each method
-    ofstream file("timing-cpu.txt");
-    file << "GatherSolution	    " << timeGatherSolution << fTimer.Unit() << std::endl;
-    file << "DeltaStrain	    " << timeDeltaStrain << fTimer.Unit() << std::endl;
-    file << "ElasticStrain	    " << timeElasticStrain <<  fTimer.Unit() << std::endl;
-    file << "ComputeStress	    " << timeComputeStress <<  fTimer.Unit() << std::endl;
-    file << "SpectralDecomp	    " << timeSpectralDecomposition <<  fTimer.Unit() << std::endl;
-    file << "ProjectSigma	    " << timeProjectSigma <<  fTimer.Unit() << std::endl;
-    file << "StressTensor	    " << timeStressCompleteTensor <<  fTimer.Unit() << std::endl;
-    file << "NodalForeces	    " << timeNodalForces <<  fTimer.Unit() << std::endl;
-    file << "ColoredAssemble	" << timeColoredAssemble << fTimer.Unit() << std::endl;
-
-    file << "ComputeStrain	    " << timeComputeStrain <<  fTimer.Unit() << std::endl;
-    file << "PlasticStrain	    " << timeElasticStrain <<  fTimer.Unit() << std::endl;
-
 }
 
 void TPZIntPointsFEM::SetDataStructure(){
-    int dim_mesh = (fCmesh->Reference())->Dimension(); // Mesh dimension
-    this->SetMeshDimension(dim_mesh);
-    int64_t nelem_c = fCmesh->NElements(); // Number of computational elements
-    std::vector<int64_t> cel_indexes;
+    fDim = fBMatrix->Dimension();
+    fNpts = fBMatrix->Rows();
+    fNphis = fBMatrix->Cols();
 
-// Number of domain geometric elements
-    for (int64_t i = 0; i < nelem_c; i++) {
-        TPZCompEl *cel = fCmesh->Element(i);
-        if (!cel) continue;
-        TPZGeoEl *gel = fCmesh->Element(i)->Reference();
-        if (!gel) continue;
-        if( gel->Dimension() == dim_mesh) cel_indexes.push_back(cel->Index());
-        if( gel->Dimension() < dim_mesh) fBoundaryElements.Push(cel->Index());
-    }
-
-    if (cel_indexes.size() == 0) {
-        DebugStop();
-    }
-
-// RowSizes and ColSizes vectors
-    int64_t nelem = cel_indexes.size();
-    TPZVec<MKL_INT> rowsizes(nelem);
-    TPZVec<MKL_INT> colsizes(nelem);
-
-    int64_t npts_tot = 0;
-    int64_t nf_tot = 0;
-    int it = 0;
-    for (auto iel : cel_indexes) {
-        //Verification
-        TPZCompEl *cel = fCmesh->Element(iel);
-
-        //Integration rule
-        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement * >(cel);
-        if (!cel_inter) DebugStop();
-        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
-
-        int64_t npts = int_rule->NPoints(); // number of integration points of the element
-        int64_t dim = cel_inter->Dimension(); //dimension of the element
-        int64_t nf = cel_inter->NShapeF(); // number of shape functions of the element
-
-        rowsizes[it] = dim * npts;
-        colsizes[it] = nf;
-
-        it++;
-
-        npts_tot += npts;
-        nf_tot += nf;
-    }
-    this->SetNumberofIntPoints(dim_mesh*npts_tot);
-    this->SetNumberofPhis(nf_tot);
-    this->SetRowandColSizes(rowsizes, colsizes);
-
-// Dphi matrix, weight and indexes vectors
-    TPZFMatrix<REAL> elmatrix;
-    TPZStack<REAL> weight;
-    TPZManVector<MKL_INT> indexes(dim_mesh * nf_tot);
+    fWeight.resize(fNpts/fDim);
+    fIndexes.resize(fDim * fNphis);
 
     int64_t cont1 = 0;
     int64_t cont2 = 0;
-    it = 0;
-    for (auto iel : cel_indexes) {
+    int it = 0;
+    for (auto iel : fBMatrix->ElemIndexes()) {
         //Verification
-        TPZCompEl *cel = fCmesh->Element(iel);
+        TPZCompEl *cel = fBMatrix->CompMesh()->Element(iel);
 
         //Integration rule
         TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement * >(cel);
@@ -482,68 +300,51 @@ void TPZIntPointsFEM::SetDataStructure(){
         TPZMaterialData data;
         cel_inter->InitMaterialData(data);
 
-        elmatrix.Resize(dim * npts, nf);
         for (int64_t inpts = 0; inpts < npts; inpts++) {
             TPZManVector<REAL> qsi(dim, 1);
             REAL w;
             int_rule->Point(inpts, qsi, w);
             cel_inter->ComputeRequiredData(data, qsi);
-            weight.Push(w * std::abs(data.detjac)); //weight = w * detjac
-
-            TPZFMatrix<REAL> axes = data.axes;
-            TPZFMatrix<REAL> dphix = data.dphix;
-            TPZFMatrix<REAL> dphiXY;
-            axes.Transpose();
-            axes.Multiply(dphix,dphiXY);
-
-            for (int inf = 0; inf < nf; inf++) {
-                for (int idim = 0; idim < dim; idim++)
-                    elmatrix(inpts * dim + idim, inf) = dphiXY(idim, inf);
-            }
+            fWeight[it] = w * std::abs(data.detjac);
+            it++;
         }
 
-#ifdef USING_CSRMV_MULT
-        elmatrix.Transpose();
-#endif
-        this->SetElementMatrix(it, elmatrix);
-        it++;
 
         //Indexes vector
         int64_t ncon = cel->NConnects();
         for (int64_t icon = 0; icon < ncon; icon++) {
             int64_t id = cel->ConnectIndex(icon);
-            TPZConnect &df = fCmesh->ConnectVec()[id];
+            TPZConnect &df = fBMatrix->CompMesh()->ConnectVec()[id];
             int64_t conid = df.SequenceNumber();
-            if (df.NElConnected() == 0 || conid < 0 || fCmesh->Block().Size(conid) == 0) continue;
+            if (df.NElConnected() == 0 || conid < 0 || fBMatrix->CompMesh()->Block().Size(conid) == 0) continue;
             else {
-                int64_t pos = fCmesh->Block().Position(conid);
-                int64_t nsize = fCmesh->Block().Size(conid);
+                int64_t pos = fBMatrix->CompMesh()->Block().Position(conid);
+                int64_t nsize = fBMatrix->CompMesh()->Block().Size(conid);
                 for (int64_t isize = 0; isize < nsize; isize++) {
                     if (isize % 2 == 0) {
-                        indexes[cont1] = pos + isize;
+                        fIndexes[cont1] = pos + isize;
                         cont1++;
                     } else {
-                        indexes[cont2 + nf_tot] = pos + isize;
+                        fIndexes[cont2 + fNphis] = pos + isize;
                         cont2++;
                     }
                 }
             }
         }
     }
-    this->SetIndexes(indexes);
-    this->SetWeightVector(weight);
+
     this->ColoringElements();
-    this->CSRInfo();
     this->AssembleRhsBoundary();
 
     fPlasticStrain.Resize(fDim * fNpts, 1);
     fPlasticStrain.Zero();
 }
 
-void TPZIntPointsFEM::ColoringElements() const {
-    int64_t nelem_c = fCmesh->NElements();
-    int64_t nconnects = fCmesh->NConnects();
+void TPZIntPointsFEM::ColoringElements()  {
+    int64_t nelem_c = fBMatrix->CompMesh()->NElements();
+    int64_t nconnects = fBMatrix->CompMesh()->NConnects();
     TPZVec<int64_t> connects_vec(nconnects,0);
+    TPZVec<int64_t> elemcolor(fBMatrix->NumBlocks(),-1);
 
     int64_t contcolor = 0;
     bool needstocontinue = true;
@@ -553,14 +354,14 @@ void TPZIntPointsFEM::ColoringElements() const {
         int it = 0;
         needstocontinue = false;
         for (int64_t iel = 0; iel < nelem_c; iel++) {
-            TPZCompEl *cel = fCmesh->Element(iel);
-            if (!cel || cel->Dimension() != fCmesh->Dimension()) continue;
+            TPZCompEl *cel = fBMatrix->CompMesh()->Element(iel);
+            if (!cel || cel->Dimension() != fBMatrix->CompMesh()->Dimension()) continue;
 
             it++;
-            if (fElemColor[it-1] != -1) continue;
+            if (elemcolor[it-1] != -1) continue;
 
             TPZStack<int64_t> connectlist;
-            fCmesh->Element(iel)->BuildConnectList(connectlist);
+            fBMatrix->CompMesh()->Element(iel)->BuildConnectList(connectlist);
             int64_t ncon = connectlist.size();
 
             int64_t icon;
@@ -571,7 +372,7 @@ void TPZIntPointsFEM::ColoringElements() const {
                 needstocontinue = true;
                 continue;
             }
-            fElemColor[it-1] = contcolor;
+            elemcolor[it-1] = contcolor;
 //            cel->Reference()->SetMaterialId(contcolor);
 
             for (icon = 0; icon < ncon; icon++) {
@@ -582,31 +383,31 @@ void TPZIntPointsFEM::ColoringElements() const {
         connects_vec.Fill(0);
     }
 //    ofstream file("colored.vtk");
-//    TPZVTKGeoMesh::PrintGMeshVTK(fCmesh->Reference(),file);
-
-
-    int64_t nelem = fRowSizes.size();
-    int64_t neq = fCmesh->NEquations();
+//    TPZVTKGeoMesh::PrintGMeshVTK(fBMatrix->CompMesh()->Reference(),file);
+    fNColor = contcolor;
+    fIndexesColor.resize(fDim * fNphis);
+    int64_t nelem = fBMatrix->NumBlocks();
+    int64_t neq = fBMatrix->CompMesh()->NEquations();
     for (int64_t iel = 0; iel < nelem; iel++) {
-        int64_t cols = fColSizes[iel];
-        int64_t cont_cols = fColFirstIndex[iel];
+        int64_t cols = fBMatrix->ColSizes()[iel];
+        int64_t cont_cols = fBMatrix->ColFirstIndex()[iel];
 
         for (int64_t icols = 0; icols < cols; icols++) {
-            fIndexesColor[cont_cols + icols] = fIndexes[cont_cols + icols] + fElemColor[iel]*neq;
-            fIndexesColor[cont_cols+ fNphis + icols] = fIndexes[cont_cols + fNphis + icols] + fElemColor[iel]*neq;
+            fIndexesColor[cont_cols + icols] = fIndexes[cont_cols + icols] + elemcolor[iel]*neq;
+            fIndexesColor[cont_cols+ fNphis + icols] = fIndexes[cont_cols + fNphis + icols] + elemcolor[iel]*neq;
         }
     }
 }
 
 void TPZIntPointsFEM::AssembleRhsBoundary() {
-    int64_t neq = fCmesh->NEquations();
+    int64_t neq = fBMatrix->CompMesh()->NEquations();
     fRhsBoundary.Resize(neq, 1);
     fRhsBoundary.Zero();
 
-    for (auto iel : fBoundaryElements) {
-        TPZCompEl *cel = fCmesh->Element(iel);
+    for (auto iel : fBMatrix->BoundaryElemIndexes()) {
+        TPZCompEl *cel = fBMatrix->CompMesh()->Element(iel);
         if (!cel) continue;
-        TPZElementMatrix ef(fCmesh, TPZElementMatrix::EF);
+        TPZElementMatrix ef(fBMatrix->CompMesh(), TPZElementMatrix::EF);
         cel->CalcResidual(ef);
         ef.ComputeDestinationIndices();
         fRhsBoundary.AddFel(ef.fMat, ef.fSourceIndex, ef.fDestinationIndex);

@@ -501,9 +501,17 @@ void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
     int neq = analysis->Solution().Rows();
     TPZFMatrix<REAL> du(neq, 1, 0.), delta_du;
 
-    TPZIntPointsFEM solveintpoints(analysis->Mesh(), wellbore_material.Id());
-    solveintpoints.SetDataStructure();
-    solveintpoints.SetTimerConfig(Timer::EMilliseconds);
+    TPZIrregularBlockMatrix *BMatrix = new TPZIrregularBlockMatrix(analysis->Mesh());
+    BMatrix->BlocksInfo();
+
+    TPZIntPointsFEM *IntPoints = new TPZIntPointsFEM(BMatrix, wellbore_material.Id());
+    IntPoints->SetDataStructure();
+    IntPoints->SetTimerConfig(Timer::EMilliseconds);
+
+    TPZFMatrix<REAL> gather_solution;
+    TPZFMatrix<REAL> delta_strain;
+    TPZFMatrix<REAL> sigma;
+    TPZFMatrix<REAL> nodal_forces;
 
     analysis->Solution().Zero();
     analysis->Assemble();
@@ -511,11 +519,15 @@ void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
         analysis->Solve();
         delta_du = analysis->Solution();
         du += delta_du;
-        solveintpoints.LoadSolution(du);
         analysis->LoadSolution(du);
-        solveintpoints.AssembleResidual();
+        IntPoints->GatherSolution(du, gather_solution);
+        BMatrix->Multiply(gather_solution, delta_strain, 1., 0, false);
+        IntPoints->ComputeSigma(delta_strain, sigma);
+        BMatrix->Multiply(sigma, nodal_forces, -1, 0, true);
+        IntPoints->ColoredAssemble(nodal_forces);
+//        solveintpoints.AssembleResidual();
         norm_delta_du = Norm(delta_du);
-        norm_res = Norm(solveintpoints.Rhs());
+        norm_res = Norm(IntPoints->Rhs());
         stop_criterion_Q = norm_res < tolerance;
         std::cout << "Nonlinear process :: delta_du norm = " << norm_delta_du << std::endl;
         std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
@@ -528,7 +540,7 @@ void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
             break;
         }
 //        analysis->Assemble();
-        analysis->Rhs() = solveintpoints.Rhs();
+        analysis->Rhs() = IntPoints->Rhs();
 
     }
 
