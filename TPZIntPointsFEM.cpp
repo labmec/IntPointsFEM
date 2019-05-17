@@ -32,13 +32,13 @@ REAL timeColoredAssemble = 0;
 
 TPZIntPointsFEM::TPZIntPointsFEM() :
         fDim(-1), fNpts(-1), fNphis(-1), fNColor(-1), fMaterial(0), fRhs(0, 0),
-        fRhsBoundary(0, 0), fPlasticStrain(0, 0), fIndexes(0), fIndexesColor(0), fWeight(0), fTimer() {
+        fRhsBoundary(0, 0), fPlasticStrain(0, 0), fIndexes(0), fIndexesColor(0), fWeight(0), fBMatrix(), fTimer() {
 
 }
 
 TPZIntPointsFEM::TPZIntPointsFEM(TPZIrregularBlockMatrix *Bmatrix, int materialid) :
         fDim(-1), fNpts(-1), fNphis(-1), fNColor(-1), fMaterial(0), fRhs(0, 0),
-        fRhsBoundary(0, 0), fPlasticStrain(0, 0), fIndexes(0), fIndexesColor(0), fWeight(0), fTimer() {
+        fRhsBoundary(0, 0), fPlasticStrain(0, 0), fIndexes(0), fIndexesColor(0), fWeight(0), fBMatrix(), fTimer() {
 
 	SetBMatrix(Bmatrix);
 	SetMaterialId(materialid);
@@ -54,15 +54,18 @@ TPZIntPointsFEM::TPZIntPointsFEM(const TPZIntPointsFEM &copy) {
     fNphis = copy.fNphis;
     fNColor = copy.fNColor;
     fMaterial = copy.fMaterial;
-
-    fTimer = copy.fTimer;
-
     fRhs = copy.fRhs;
     fRhsBoundary = copy.fRhsBoundary;
-    fPlasticStrain = copy.fPlasticStrain;
     fIndexes = copy.fIndexes;
     fIndexesColor = copy.fIndexesColor;
     fWeight = copy.fWeight;
+    fBMatrix = copy.fBMatrix;
+
+    fPlasticStrain = copy.fPlasticStrain;
+
+    fTimer = copy.fTimer;
+
+
 }
 
 TPZIntPointsFEM &TPZIntPointsFEM::operator=(const TPZIntPointsFEM &copy) {
@@ -74,15 +77,14 @@ TPZIntPointsFEM &TPZIntPointsFEM::operator=(const TPZIntPointsFEM &copy) {
     fNphis = copy.fNphis;
     fNColor = copy.fNColor;
     fMaterial = copy.fMaterial;
-
-    fTimer = copy.fTimer;
-
     fRhs = copy.fRhs;
     fRhsBoundary = copy.fRhsBoundary;
-    fPlasticStrain = copy.fPlasticStrain;
     fIndexes = copy.fIndexes;
     fIndexesColor = copy.fIndexesColor;
     fWeight = copy.fWeight;
+    fBMatrix = copy.fBMatrix;
+
+    fPlasticStrain = copy.fPlasticStrain;
 
     return *this;
 }
