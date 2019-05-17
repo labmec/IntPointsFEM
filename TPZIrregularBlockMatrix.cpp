@@ -2,16 +2,19 @@
 // Created by natalia on 14/05/19.
 //
 #include "pzintel.h"
+#include "mkl.h"
 
 #include "TPZIrregularBlockMatrix.h"
 
-TPZIrregularBlockMatrix::TPZIrregularBlockMatrix() : fCmesh(), fNumBlocks(-1), fStorage(0), fRowSizes(0), fColSizes(0),
-                                                    fMatrixPosition(0), fRowFirstIndex(0), fColFirstIndex(0),
-                                                    fRow(-1), fCol(-1), fRowPtr(0), fColInd(0) {}
+TPZIrregularBlockMatrix::TPZIrregularBlockMatrix() : fDim(-1), fCmesh(), fNumBlocks(-1), fStorage(0), fRowSizes(0), fColSizes(0),
+                                                     fMatrixPosition(0), fRowFirstIndex(0), fColFirstIndex(0),
+                                                     fRow(-1), fCol(-1), fRowPtr(0), fColInd(0), fElemIndex(),
+                                                     fBoundaryElemIndex() {}
 
-TPZIrregularBlockMatrix::TPZIrregularBlockMatrix(TPZCompMesh *cmesh) : fCmesh(), fNumBlocks(-1), fStorage(0), fRowSizes(0), fColSizes(0),
+TPZIrregularBlockMatrix::TPZIrregularBlockMatrix(TPZCompMesh *cmesh) : fDim(-1), fCmesh(), fNumBlocks(-1), fStorage(0), fRowSizes(0), fColSizes(0),
                                                                        fMatrixPosition(0), fRowFirstIndex(0), fColFirstIndex(0),
-                                                                       fRow(-1), fCol(-1), fRowPtr(0), fColInd(0) {
+                                                                       fRow(-1), fCol(-1), fRowPtr(0), fColInd(0), fElemIndex(),
+                                                                       fBoundaryElemIndex() {
     SetCompMesh(cmesh);
 }
 
@@ -19,6 +22,7 @@ TPZIrregularBlockMatrix::~TPZIrregularBlockMatrix() {
 }
 
 TPZIrregularBlockMatrix::TPZIrregularBlockMatrix(const TPZIrregularBlockMatrix &copy) {
+    fDim = copy.fDim;
     fCmesh = copy.fCmesh;
     fNumBlocks = copy.fNumBlocks;
     fStorage = copy.fStorage;
@@ -31,6 +35,8 @@ TPZIrregularBlockMatrix::TPZIrregularBlockMatrix(const TPZIrregularBlockMatrix &
     fCol = copy.fCol;
     fRowPtr = copy.fRowPtr;
     fColInd = copy.fColInd;
+    fElemIndex = copy.fElemIndex;
+    fBoundaryElemIndex = copy.fBoundaryElemIndex;
 }
 
 TPZIrregularBlockMatrix &TPZIrregularBlockMatrix::operator=(const TPZIrregularBlockMatrix &copy) {
@@ -38,6 +44,7 @@ TPZIrregularBlockMatrix &TPZIrregularBlockMatrix::operator=(const TPZIrregularBl
         return *this;
     }
 
+    fDim = copy.fDim;
     fCmesh = copy.fCmesh;
     fNumBlocks = copy.fNumBlocks;
     fStorage = copy.fStorage;
@@ -50,6 +57,8 @@ TPZIrregularBlockMatrix &TPZIrregularBlockMatrix::operator=(const TPZIrregularBl
     fCol = copy.fCol;
     fRowPtr = copy.fRowPtr;
     fColInd = copy.fColInd;
+    fElemIndex = copy.fElemIndex;
+    fBoundaryElemIndex = copy.fBoundaryElemIndex;
 
     return *this;
 }
@@ -67,21 +76,22 @@ void TPZIrregularBlockMatrix::SetElementMatrix(int iel, TPZFMatrix<REAL> &elmat)
     elmatloc = elmat;
 }
 
-void TPZIrregularBlockMatrix::SetBlocksInfo() {
-    int dim_mesh = (fCmesh->Reference())->Dimension(); // Mesh dimension
+void TPZIrregularBlockMatrix::BlocksInfo() {
+    fDim = fCmesh->Reference()->Dimension(); // Mesh dimension
 
-    TPZStack<int64_t> cel_indexes; // Indexes of domain elements
+    //Vector with domain elements and boundary elements
     for (int64_t i = 0; i < fCmesh->NElements(); i++) {
         TPZCompEl *cel = fCmesh->Element(i);
         if (!cel) continue;
         TPZGeoEl *gel = fCmesh->Element(i)->Reference();
         if (!gel) continue;
-        if(gel->Dimension() == dim_mesh) cel_indexes.Push(cel->Index());
+        if(gel->Dimension() == fDim) fElemIndex.Push(cel->Index());
+        if (gel->Dimension() < fDim) fBoundaryElemIndex.Push(cel->Index());
     }
-    if (cel_indexes.size() == 0) DebugStop();
+    if (fElemIndex.size() == 0) DebugStop();
 
     // RowSizes and ColSizes vectors
-    fNumBlocks = cel_indexes.size();
+    fNumBlocks = fElemIndex.size();
     fRowSizes.resize(fNumBlocks);
     fColSizes.resize(fNumBlocks);
     fMatrixPosition.resize(fNumBlocks + 1);
@@ -96,7 +106,7 @@ void TPZIrregularBlockMatrix::SetBlocksInfo() {
     fCol = 0;
 
     int it = 0;
-    for (auto iel : cel_indexes) {
+    for (auto iel : fElemIndex) {
         TPZCompEl *cel = fCmesh->Element(iel);
 
         //Integration rule
@@ -117,6 +127,19 @@ void TPZIrregularBlockMatrix::SetBlocksInfo() {
 
         fRow += fRowSizes[it];
         fCol += fColSizes[it];
+        it++;
+    }
+
+    fStorage.resize(fMatrixPosition[fNumBlocks]);
+
+    it = 0;
+    for(auto iel : fElemIndex) {
+        TPZCompEl *cel = fCmesh->Element(iel);
+
+        //Integration rule
+        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement*>(cel);
+        if (!cel_inter) DebugStop();
+        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
 
         //Dphi element matrix
         TPZFMatrix<REAL> elmatrix;
@@ -124,6 +147,10 @@ void TPZIrregularBlockMatrix::SetBlocksInfo() {
 
         TPZMaterialData data;
         cel_inter->InitMaterialData(data);
+
+        int64_t npts = int_rule->NPoints(); // number of integration points of the element
+        int64_t dim = cel_inter->Dimension(); //dimension of the element
+        int64_t nf = cel_inter->NShapeF(); // number of shape functions of the element
 
         for (int64_t ipts = 0; ipts < npts; ipts++) {
             TPZVec<REAL> qsi(dim);
@@ -145,9 +172,10 @@ void TPZIrregularBlockMatrix::SetBlocksInfo() {
         }
         elmatrix.Transpose(); // Using CSR format
         this->SetElementMatrix(it, elmatrix);
-
         it++;
     }
+
+    CSRInfo();
 }
 
 void TPZIrregularBlockMatrix::CSRInfo() {
@@ -168,4 +196,31 @@ void TPZIrregularBlockMatrix::CSRInfo() {
     fRowPtr[fRow] = fMatrixPosition[nelem];
 }
 
+void TPZIrregularBlockMatrix::Multiply(TPZFMatrix<REAL> &A, TPZFMatrix<REAL> &res, REAL alpha, REAL beta, bool transpose) {
+    char trans;
+    char matdescra[] = {'G',' ',' ','C'};
 
+    int Apos, respos;
+    if (transpose == false) {
+        trans = 'N';
+        Apos = fCol;
+        respos = fRow;
+        res.Resize(fDim * fRow, A.Cols());
+        res.Zero();
+    }
+    else if (transpose == true) {
+        trans = 'T';
+        Apos = fRow;
+        respos = fCol;
+        res.Resize(fDim * fCol, A.Cols());
+        res.Zero();
+    }
+
+    const int m = fRow;
+    const int n = A.Cols();
+    const int k = fCol;
+
+//    mkl_dcsrmm (&trans, &m, &n, &k, &alpha, matdescra, &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &A(0,0), &n, &beta, &res(0,0), &n);
+    mkl_dcsrmv(&trans, &m, &k, &alpha, matdescra , &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &A(0,0) , &beta, &res(0,0));
+    mkl_dcsrmv(&trans, &m, &k, &alpha, matdescra , &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &A(Apos,0) , &beta, &res(respos,0));
+}
