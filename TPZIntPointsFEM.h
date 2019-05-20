@@ -25,20 +25,48 @@
 class TPZIntPointsFEM {
 
 public:
-
+    /** @brief Default constructor */
     TPZIntPointsFEM();
 
+    /** @brief Creates the object based on a TPZIrregularBlockMatrix
+     * @param Bmatrix : Irregular block matrix
+     */
     TPZIntPointsFEM(TPZIrregularBlockMatrix *Bmatrix);
 
+    /** @brief Default destructor */
     ~TPZIntPointsFEM();
 
+    /** @brief Creates a IntPointFEM object with copy constructor
+     * @param copy : original IntPointFEM object
+     */
     TPZIntPointsFEM(const TPZIntPointsFEM &copy);
 
+    /** @brief operator= */
     TPZIntPointsFEM &operator=(const TPZIntPointsFEM &copy);
 
+    /** @brief Sets the irregular block matrix
+     * @param Bmatrix : irregular block matrix
+     */
     void SetBMatrix(TPZIrregularBlockMatrix *Bmatrix) {
         fBMatrix = Bmatrix;
     }
+
+    /** @brief Sets integration points information (weight vector and indexes vector) */
+    void SetIntPointsInfo();
+
+    /** @brief Coloring elements process */
+    void ColoringElements();
+
+    /** @brief Assemble Rhs of boundary elements */
+    void AssembleRhsBoundary();
+
+    /** @brief Gathers the global solution in a solution vector ordered by the indexes vector */
+    void GatherSolution(TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &gather_solution);
+
+    /** @brief Assemble the domain elements residual */
+    void ColoredAssemble(TPZFMatrix<REAL> &nodal_forces);
+
+    /** @brief Access methods  */
 
     int64_t NumColors() {
         return fNColor;
@@ -67,16 +95,6 @@ public:
     TPZIrregularBlockMatrix *BMatrix() {
         return fBMatrix;
     }
-
-    void SetIntPointsInfo();
-
-    void ColoringElements();
-
-    void AssembleRhsBoundary();
-
-    void GatherSolution(TPZFMatrix<REAL> &global_solution, TPZFMatrix<REAL> &gather_solution);
-
-    void ColoredAssemble(TPZFMatrix<REAL> &nodal_forces);
 
 protected:
     int64_t fNColor;

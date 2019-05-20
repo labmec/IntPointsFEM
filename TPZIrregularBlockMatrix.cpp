@@ -98,8 +98,6 @@ void TPZIrregularBlockMatrix::BlocksInfo() {
     int it = 0;
     for (auto iel : fElemIndex) {
         TPZCompEl *cel = fCmesh->Element(iel);
-
-        //Integration rule
         TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement*>(cel);
         if (!cel_inter) DebugStop();
         TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
@@ -114,7 +112,6 @@ void TPZIrregularBlockMatrix::BlocksInfo() {
         fRowFirstIndex[it + 1] = fRowFirstIndex[it] + fRowSizes[it];
         fColFirstIndex[it + 1] = fColFirstIndex[it] + fColSizes[it];
 
-
         fRow += fRowSizes[it];
         fCol += fColSizes[it];
         it++;
@@ -125,22 +122,19 @@ void TPZIrregularBlockMatrix::BlocksInfo() {
     it = 0;
     for(auto iel : fElemIndex) {
         TPZCompEl *cel = fCmesh->Element(iel);
-
-        //Integration rule
         TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement*>(cel);
         if (!cel_inter) DebugStop();
         TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
 
-        //Dphi element matrix
+        int64_t npts = int_rule->NPoints(); // number of integration points of the element
+        int64_t dim = cel_inter->Dimension(); //dimension of the element
+        int64_t nf = cel_inter->NShapeF(); // number of shape functions of the element
+
         TPZFMatrix<REAL> elmatrix;
         elmatrix.Resize(fRowSizes[it], fColSizes[it]);
 
         TPZMaterialData data;
         cel_inter->InitMaterialData(data);
-
-        int64_t npts = int_rule->NPoints(); // number of integration points of the element
-        int64_t dim = cel_inter->Dimension(); //dimension of the element
-        int64_t nf = cel_inter->NShapeF(); // number of shape functions of the element
 
         for (int64_t ipts = 0; ipts < npts; ipts++) {
             TPZVec<REAL> qsi(dim);
@@ -163,7 +157,6 @@ void TPZIrregularBlockMatrix::BlocksInfo() {
         elmatrix.Transpose(); // Using CSR format
         TPZFMatrix<REAL> elmatloc(fRowSizes[it], fColSizes[it], &fStorage[fMatrixPosition[it]], fRowSizes[it] * fColSizes[it]);
         elmatloc = elmatrix;
-
         it++;
     }
 

@@ -15,15 +15,11 @@
 #endif
 
 
-TPZIntPointsFEM::TPZIntPointsFEM() :         fNColor(-1), fRhs(0, 0),
-                                             fRhsBoundary(0, 0), fIndexes(0), fIndexesColor(0), fWeight(0), fBMatrix()
-{
+TPZIntPointsFEM::TPZIntPointsFEM() : fNColor(-1), fRhs(0, 0), fRhsBoundary(0, 0), fIndexes(0), fIndexesColor(0), fWeight(0), fBMatrix() {
 
 }
 
-TPZIntPointsFEM::TPZIntPointsFEM(TPZIrregularBlockMatrix *Bmatrix) :         fNColor(-1), fRhs(0, 0),
-                                                                             fRhsBoundary(0, 0), fIndexes(0), fIndexesColor(0), fWeight(0), fBMatrix()
-{
+TPZIntPointsFEM::TPZIntPointsFEM(TPZIrregularBlockMatrix *Bmatrix) : fNColor(-1), fRhs(0, 0), fRhsBoundary(0, 0), fIndexes(0), fIndexesColor(0), fWeight(0), fBMatrix() {
     SetBMatrix(Bmatrix);
 }
 
@@ -102,10 +98,7 @@ void TPZIntPointsFEM::SetIntPointsInfo(){
     int64_t cont2 = 0;
     int it = 0;
     for (auto iel : fBMatrix->ElemIndexes()) {
-        //Verification
         TPZCompEl *cel = fBMatrix->CompMesh()->Element(iel);
-
-        //Integration rule
         TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement * >(cel);
         if (!cel_inter) DebugStop();
         TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
@@ -116,6 +109,7 @@ void TPZIntPointsFEM::SetIntPointsInfo(){
         TPZMaterialData data;
         cel_inter->InitMaterialData(data);
 
+        //Weight vector
         for (int64_t inpts = 0; inpts < npts; inpts++) {
             TPZManVector<REAL> qsi(dim, 1);
             REAL w;
@@ -154,10 +148,8 @@ void TPZIntPointsFEM::SetIntPointsInfo(){
 
 void TPZIntPointsFEM::ColoringElements()  {
     int dim = fBMatrix->Dimension();
-    int rows = fBMatrix->Rows();
     int cols = fBMatrix->Cols();
 
-    int64_t nelem_c = fBMatrix->CompMesh()->NElements();
     int64_t nconnects = fBMatrix->CompMesh()->NConnects();
     TPZVec<int64_t> connects_vec(nconnects,0);
     TPZVec<int64_t> elemcolor(fBMatrix->NumBlocks(),-1);
@@ -165,6 +157,7 @@ void TPZIntPointsFEM::ColoringElements()  {
     int64_t contcolor = 0;
     bool needstocontinue = true;
 
+    //Elements coloring
     while (needstocontinue)
     {
         int it = 0;
@@ -200,6 +193,8 @@ void TPZIntPointsFEM::ColoringElements()  {
     }
 //    ofstream file("colored.vtk");
 //    TPZVTKGeoMesh::PrintGMeshVTK(fBMatrix->CompMesh()->Reference(),file);
+
+    //Indexes coloring
     fNColor = contcolor;
     fIndexesColor.resize(dim * cols);
     int64_t nelem = fBMatrix->NumBlocks();

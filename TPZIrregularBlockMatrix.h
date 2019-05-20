@@ -18,7 +18,7 @@ public:
 
     /** @brief Creates the object based on cmesh
      * @param cmesh : computational mesh
-     * */
+     */
     TPZIrregularBlockMatrix(TPZCompMesh *cmesh, int materialid);
 
     /** @brief Default destructor */
@@ -32,19 +32,6 @@ public:
     /** @brief operator= */
     TPZIrregularBlockMatrix &operator=(const TPZIrregularBlockMatrix &copy);
 
-    /** @brief Sets blocks information */
-    void BlocksInfo();
-
-    /** @brief Sets blocks information for CSR format*/
-    void CSRInfo();
-
-    /** @brief Multiply the irrgular block matrix by a matrix A
-     * @param A : matrix that will be multipied
-     * @param res : result of the multiplication
-     * @param opt : indicates if transpose or not
-     */
-    void Multiply(TPZFMatrix<REAL> &A, TPZFMatrix<REAL> &res, REAL alpha, REAL beta, bool transpose = false);
-
     /** @brief Sets the computational mesh
      * @param cmesh : computational mesh
      */
@@ -52,10 +39,30 @@ public:
         fCmesh = cmesh;
     }
 
+    /** @brief Sets the material id
+     * @param materialid : material id
+     */
     void SetMaterialId (int materialid) {
         TPZMaterial *material = fCmesh->FindMaterial(materialid);
         fMaterial = dynamic_cast<TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse> , TPZElastoPlasticMem> *>(material);
     }
+
+    /** @brief Sets blocks information */
+    void BlocksInfo();
+
+    /** @brief Sets blocks information for CSR format*/
+    void CSRInfo();
+
+    /** @brief Performs the following operation: res = alpha * BMatrix * A + beta * res
+     * @param A : matrix that will be multipied
+     * @param res : result of the multiplication
+     * @param alpha : scalar parameter
+     * @param beta : scalar parameter
+     * @param opt : indicates if transpose or not
+     */
+    void Multiply(TPZFMatrix<REAL> &A, TPZFMatrix<REAL> &res, REAL alpha, REAL beta, bool transpose = false);
+
+    /** @brief Access methods */
 
     int Dimension() {
         return fDim;
@@ -128,27 +135,28 @@ private:
     /** @brief Computational mesh */
     TPZCompMesh *fCmesh;
 
+    /** @brief Material */
     TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse>, TPZElastoPlasticMem> *fMaterial;
 
     /** @brief Number of blocks */
     int64_t fNumBlocks;
 
-    /** @brief Vector with all matrices values */
+    /** @brief Vector of all matrices values */
     TPZVec<REAL> fStorage;
 
-    /** @brief Vector with number of rows of each matrix */
+    /** @brief Vector of number of rows of each matrix */
     TPZVec<int> fRowSizes;
 
-    /** @brief Vector with number of columns of each matrix */
+    /** @brief Vector of number of columns of each matrix */
     TPZVec<int> fColSizes;
 
-    /** @brief Vector with matrix position in fStorage */
+    /** @brief Vector of matrix position in fStorage */
     TPZVec<int> fMatrixPosition;
 
-    /** @brief Vector with first row index of each matrix */
+    /** @brief Vector of first row index of each matrix */
     TPZVec<int> fRowFirstIndex;
 
-    /** @brief Vector with first column index of each matrix */
+    /** @brief Vector of first column index of each matrix */
     TPZVec<int> fColFirstIndex;
 
     /** @brief Number of rows of the irregular block matrix */
@@ -157,16 +165,16 @@ private:
     /** @brief Number of columns of the irregular block matrix */
     int64_t fCol;
 
-    /** @brief Vector with the start of every row and the end of the last row plus one (this is for CSR format) */
+    /** @brief Vector of the start of every row and the end of the last row plus one (this is for CSR format) */
     TPZVec<int> fRowPtr;
 
-    /** @brief Vector with column indices for each non-zero element of the matrix (this is for CSR format)*/
+    /** @brief Vector of column indices for each non-zero element of the matrix (this is for CSR format)*/
     TPZVec<int> fColInd;
 
-    /** @brief Vector with the indexes of the domain elements*/
+    /** @brief Vector of indexes of the domain elements*/
     TPZStack<int64_t> fElemIndex;
 
-    /** @brief Vector with the indexes of the boundary elements*/
+    /** @brief Vector of indexes of the boundary elements*/
     TPZStack<int64_t> fBoundaryElemIndex;
 };
 
