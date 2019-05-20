@@ -33,9 +33,9 @@
 #include "TPZPlasticStepPV.h"
 #include "TPZYCMohrCoulombPV.h"
 #include "TPZBndCondWithMem.h"
-#include "TPZIntPointsFEM.h"
-#include "Timer.h"
 
+#include "TPZMyLambdaExpression.h"
+#include "TPZIntPointsFEM.h"
 #include "TElastoPlasticData.h"
 #include "TRKSolution.h"
 
@@ -53,7 +53,7 @@ TElastoPlasticData WellboreConfig();
 TElastoPlasticData WellboreConfigRK();
 
 /// Solve using assemble residual of all intg points at once
-void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance, TElastoPlasticData & wellbore_material);
+void SolutionIntPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance, TElastoPlasticData & wellbore_material);
 
 ///Set Analysis
 TPZAnalysis * Analysis(TPZCompMesh * cmesh, int n_threads);
@@ -75,7 +75,7 @@ void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_mate
 
 int main(int argc, char *argv[]) {
 int nt = omp_get_max_threads();
-std::cout << "USING " << nt << " THREADS" << std::endl;
+std::cout << "USING " << nt << " THREADS\n\n" << std::endl;
     int pOrder = 2; // Computational mesh order
     bool render_vtk_Q = false;
     
@@ -110,7 +110,7 @@ std::cout << "USING " << nt << " THREADS" << std::endl;
     TPZAnalysis *analysis_npts = Analysis(cmesh_npts,n_threads);
     
 // Calculates the solution using all intg points at once
-    SolutionAllPoints(analysis_npts, n_iterations, tolerance, wellbore_material);
+    SolutionIntPoints(analysis_npts, n_iterations, tolerance, wellbore_material);
     if (render_vtk_Q) { //Post process
 #ifdef USING_CUDA
         std::string vtk_file = "Approximation_IntPointFEM-GPU.vtk";
@@ -494,22 +494,23 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int p_order, TElastoPlasti
     return cmesh;
 }
 
-void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance, TElastoPlasticData & wellbore_material){
+void SolutionIntPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance, TElastoPlasticData & wellbore_material){
     std::cout << "\n\nSolving with IntPointsFEM ...\n" << std::endl;
     bool stop_criterion_Q = false;
     REAL norm_res, norm_delta_du;
     int neq = analysis->Solution().Rows();
     TPZFMatrix<REAL> du(neq, 1, 0.), delta_du;
 
-    TPZIrregularBlockMatrix *BMatrix = new TPZIrregularBlockMatrix(analysis->Mesh());
+    TPZIrregularBlockMatrix *BMatrix = new TPZIrregularBlockMatrix(analysis->Mesh(), wellbore_material.Id());
     BMatrix->BlocksInfo();
 
-    TPZIntPointsFEM *IntPoints = new TPZIntPointsFEM(BMatrix, wellbore_material.Id());
-    IntPoints->SetDataStructure();
-    IntPoints->SetTimerConfig(Timer::EMilliseconds);
+    TPZIntPointsFEM *IntPoints = new TPZIntPointsFEM(BMatrix);
+    IntPoints->SetIntPointsInfo();
+
+    TPZMyLambdaExpression *Lambda = new TPZMyLambdaExpression(IntPoints);
 
     TPZFMatrix<REAL> gather_solution;
-    TPZFMatrix<REAL> delta_strain;
+    TPZFMatrix<REAL> grad_u;
     TPZFMatrix<REAL> sigma;
     TPZFMatrix<REAL> nodal_forces;
 
@@ -521,8 +522,8 @@ void SolutionAllPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
         du += delta_du;
         analysis->LoadSolution(du);
         IntPoints->GatherSolution(du, gather_solution);
-        BMatrix->Multiply(gather_solution, delta_strain, 1., 0, false);
-        IntPoints->ComputeSigma(delta_strain, sigma);
+        BMatrix->Multiply(gather_solution, grad_u, 1., 0, false);
+        Lambda->ComputeSigma(grad_u, sigma);
         BMatrix->Multiply(sigma, nodal_forces, -1, 0, true);
         IntPoints->ColoredAssemble(nodal_forces);
 //        solveintpoints.AssembleResidual();

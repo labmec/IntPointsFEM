@@ -2,6 +2,10 @@
 // Created by natalia on 14/05/19.
 //
 #include "pzcmesh.h"
+#include "TPZPlasticStepPV.h"
+#include "TPZYCMohrCoulombPV.h"
+#include "TPZElastoPlasticMem.h"
+#include "TPZMatElastoPlastic2D.h"
 
 #ifndef INTPOINTSFEM_TPZIRREGULARBLOCKMATRIX_H
 #define INTPOINTSFEM_TPZIRREGULARBLOCKMATRIX_H
@@ -15,7 +19,7 @@ public:
     /** @brief Creates the object based on cmesh
      * @param cmesh : computational mesh
      * */
-    TPZIrregularBlockMatrix(TPZCompMesh *cmesh);
+    TPZIrregularBlockMatrix(TPZCompMesh *cmesh, int materialid);
 
     /** @brief Default destructor */
     ~TPZIrregularBlockMatrix();
@@ -27,17 +31,6 @@ public:
 
     /** @brief operator= */
     TPZIrregularBlockMatrix &operator=(const TPZIrregularBlockMatrix &copy);
-
-    /** @brief Sets the computational mesh
-     * @param cmesh : computational mesh
-     */
-    void SetCompMesh(TPZCompMesh *cmesh);
-
-    /** @brief Sets a matrix to the irregular block matrix
-     * @param iel : matrix index
-     * @param elmat : matrix to be set
-     */
-    void SetElementMatrix(int iel, TPZFMatrix<REAL> &elmat);
 
     /** @brief Sets blocks information */
     void BlocksInfo();
@@ -52,12 +45,28 @@ public:
      */
     void Multiply(TPZFMatrix<REAL> &A, TPZFMatrix<REAL> &res, REAL alpha, REAL beta, bool transpose = false);
 
+    /** @brief Sets the computational mesh
+     * @param cmesh : computational mesh
+     */
+    void SetCompMesh(TPZCompMesh *cmesh) {
+        fCmesh = cmesh;
+    }
+
+    void SetMaterialId (int materialid) {
+        TPZMaterial *material = fCmesh->FindMaterial(materialid);
+        fMaterial = dynamic_cast<TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse> , TPZElastoPlasticMem> *>(material);
+    }
+
     int Dimension() {
         return fDim;
     }
 
     TPZCompMesh *CompMesh() {
         return fCmesh;
+    }
+
+    TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse>, TPZElastoPlasticMem> *Material() {
+        return fMaterial;
     }
 
     int64_t NumBlocks() {
@@ -118,6 +127,8 @@ private:
 
     /** @brief Computational mesh */
     TPZCompMesh *fCmesh;
+
+    TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse>, TPZElastoPlasticMem> *fMaterial;
 
     /** @brief Number of blocks */
     int64_t fNumBlocks;

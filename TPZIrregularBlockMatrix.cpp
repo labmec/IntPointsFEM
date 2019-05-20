@@ -6,16 +6,17 @@
 
 #include "TPZIrregularBlockMatrix.h"
 
-TPZIrregularBlockMatrix::TPZIrregularBlockMatrix() : fDim(-1), fCmesh(), fNumBlocks(-1), fStorage(0), fRowSizes(0), fColSizes(0),
+TPZIrregularBlockMatrix::TPZIrregularBlockMatrix() : fDim(-1), fCmesh(), fMaterial(), fNumBlocks(-1), fStorage(0), fRowSizes(0), fColSizes(0),
                                                      fMatrixPosition(0), fRowFirstIndex(0), fColFirstIndex(0),
                                                      fRow(-1), fCol(-1), fRowPtr(0), fColInd(0), fElemIndex(),
                                                      fBoundaryElemIndex() {}
 
-TPZIrregularBlockMatrix::TPZIrregularBlockMatrix(TPZCompMesh *cmesh) : fDim(-1), fCmesh(), fNumBlocks(-1), fStorage(0), fRowSizes(0), fColSizes(0),
+TPZIrregularBlockMatrix::TPZIrregularBlockMatrix(TPZCompMesh *cmesh, int materialid) : fDim(-1), fCmesh(), fMaterial(), fNumBlocks(-1), fStorage(0), fRowSizes(0), fColSizes(0),
                                                                        fMatrixPosition(0), fRowFirstIndex(0), fColFirstIndex(0),
                                                                        fRow(-1), fCol(-1), fRowPtr(0), fColInd(0), fElemIndex(),
                                                                        fBoundaryElemIndex() {
     SetCompMesh(cmesh);
+    SetMaterialId(materialid);
 }
 
 TPZIrregularBlockMatrix::~TPZIrregularBlockMatrix() {
@@ -24,6 +25,7 @@ TPZIrregularBlockMatrix::~TPZIrregularBlockMatrix() {
 TPZIrregularBlockMatrix::TPZIrregularBlockMatrix(const TPZIrregularBlockMatrix &copy) {
     fDim = copy.fDim;
     fCmesh = copy.fCmesh;
+    fMaterial = copy.fMaterial;
     fNumBlocks = copy.fNumBlocks;
     fStorage = copy.fStorage;
     fRowSizes = copy.fRowSizes;
@@ -46,6 +48,7 @@ TPZIrregularBlockMatrix &TPZIrregularBlockMatrix::operator=(const TPZIrregularBl
 
     fDim = copy.fDim;
     fCmesh = copy.fCmesh;
+    fMaterial = copy.fMaterial;
     fNumBlocks = copy.fNumBlocks;
     fStorage = copy.fStorage;
     fRowSizes = copy.fRowSizes;
@@ -63,19 +66,6 @@ TPZIrregularBlockMatrix &TPZIrregularBlockMatrix::operator=(const TPZIrregularBl
     return *this;
 }
 
-void TPZIrregularBlockMatrix::SetCompMesh(TPZCompMesh *cmesh) {
-    fCmesh = cmesh;
-}
-
-void TPZIrregularBlockMatrix::SetElementMatrix(int iel, TPZFMatrix<REAL> &elmat) {
-    int64_t rows = fRowSizes[iel];
-    int64_t cols = fColSizes[iel];
-    int64_t pos = fMatrixPosition[iel];
-
-    TPZFMatrix<REAL> elmatloc(rows, cols, &fStorage[pos], rows*cols);
-    elmatloc = elmat;
-}
-
 void TPZIrregularBlockMatrix::BlocksInfo() {
     fDim = fCmesh->Reference()->Dimension(); // Mesh dimension
 
@@ -85,8 +75,8 @@ void TPZIrregularBlockMatrix::BlocksInfo() {
         if (!cel) continue;
         TPZGeoEl *gel = fCmesh->Element(i)->Reference();
         if (!gel) continue;
-        if(gel->Dimension() == fDim) fElemIndex.Push(cel->Index());
-        if (gel->Dimension() < fDim) fBoundaryElemIndex.Push(cel->Index());
+        if(cel->Material() == fMaterial) fElemIndex.Push(cel->Index());
+        else if (cel->Material() != fMaterial && gel->Dimension() < fDim) fBoundaryElemIndex.Push(cel->Index());
     }
     if (fElemIndex.size() == 0) DebugStop();
 
@@ -171,7 +161,9 @@ void TPZIrregularBlockMatrix::BlocksInfo() {
             }
         }
         elmatrix.Transpose(); // Using CSR format
-        this->SetElementMatrix(it, elmatrix);
+        TPZFMatrix<REAL> elmatloc(fRowSizes[it], fColSizes[it], &fStorage[fMatrixPosition[it]], fRowSizes[it] * fColSizes[it]);
+        elmatloc = elmatrix;
+
         it++;
     }
 
