@@ -7,7 +7,6 @@
 
 #include "TPZIntPointsFEM.h"
 
-
 class TPZMyLambdaExpression {
 
 public:

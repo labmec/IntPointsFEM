@@ -1,17 +1,9 @@
 #include "TPZIntPointsFEM.h"
-#include "TPZTensor.h"
-#include "pzmatrix.h"
-#include <stdlib.h>
-#include "TPZTensor.h"
-#include "TPZVTKGeoMesh.h"
 #include "pzintel.h"
 #include "pzskylstrmatrix.h"
-#include <omp.h>
-
 
 #ifdef USING_MKL
 #include <mkl.h>
-#include <algorithm>
 #endif
 
 

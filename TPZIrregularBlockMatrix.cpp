@@ -2,9 +2,11 @@
 // Created by natalia on 14/05/19.
 //
 #include "pzintel.h"
-#include "mkl.h"
-
 #include "TPZIrregularBlockMatrix.h"
+
+#ifdef USING_MKL
+#include <mkl.h>
+#endif
 
 TPZIrregularBlockMatrix::TPZIrregularBlockMatrix() : fDim(-1), fCmesh(), fMaterial(), fNumBlocks(-1), fStorage(0), fRowSizes(0), fColSizes(0),
                                                      fMatrixPosition(0), fRowFirstIndex(0), fColFirstIndex(0),

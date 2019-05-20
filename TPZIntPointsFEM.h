@@ -5,15 +5,6 @@
 
 #ifndef TPZIntPointsFEM_h
 #define TPZIntPointsFEM_h
-#include "pzmatrix.h"
-#include "pzfmatrix.h"
-#include "pzinterpolationspace.h"
-#include "pzcmesh.h"
-#include "Timer.h"
-
-#ifdef USING_MKL
-#include "mkl.h"
-#endif
 #include "TPZIrregularBlockMatrix.h"
 
 #ifdef __CUDACC__

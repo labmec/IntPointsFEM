@@ -1,37 +1,12 @@
 
 #include "path.h"
-#include <iostream>
-#include <string.h>
-#include <ctime>
-#include <algorithm>
-#include <iterator>
+#include "omp.h"
 
-// Neopz
-#include "pzgmesh.h"
-#include "pzcmesh.h"
-#include "pzgeoelbc.h"
-#include "pzbndcond.h"
-#include "pzanalysis.h"
-#include "pzskylstrmatrix.h"
-#include "pzstepsolver.h"
-#include "pzinterpolationspace.h"
 #include "TPZVTKGeoMesh.h"
-#include "pzintel.h"
-#include "tpzintpoints.h"
-#include "TPZMatElasticity2D.h"
 #include "TPZSSpStructMatrix.h"
 #include "TPZGmshReader.h"
 #include "pzpostprocanalysis.h"
 #include "pzfstrmatrix.h"
-
-#include "omp.h"
-
-#include "TPZMatElastoPlastic2D.h"
-#include "TPZMatElastoPlastic.h"
-#include "TPZElastoPlasticMem.h"
-#include "TPZElasticCriterion.h"
-#include "TPZPlasticStepPV.h"
-#include "TPZYCMohrCoulombPV.h"
 #include "TPZBndCondWithMem.h"
 
 #include "TPZMyLambdaExpression.h"
@@ -514,6 +489,8 @@ void SolutionIntPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
     TPZFMatrix<REAL> sigma;
     TPZFMatrix<REAL> nodal_forces;
 
+    std::cout  << "Solving a NLS with DOF = " << neq << std::endl;
+
     analysis->Solution().Zero();
     analysis->Assemble();
     for (int i = 0; i < n_iterations; i++) {
@@ -521,12 +498,13 @@ void SolutionIntPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
         delta_du = analysis->Solution();
         du += delta_du;
         analysis->LoadSolution(du);
+
         IntPoints->GatherSolution(du, gather_solution);
         BMatrix->Multiply(gather_solution, grad_u, 1., 0, false);
         Lambda->ComputeSigma(grad_u, sigma);
         BMatrix->Multiply(sigma, nodal_forces, -1, 0, true);
         IntPoints->ColoredAssemble(nodal_forces);
-//        solveintpoints.AssembleResidual();
+
         norm_delta_du = Norm(delta_du);
         norm_res = Norm(IntPoints->Rhs());
         stop_criterion_Q = norm_res < tolerance;
