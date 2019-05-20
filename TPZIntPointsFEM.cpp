@@ -169,7 +169,7 @@ void TPZIntPointsFEM::ColoringElements()  {
     {
         int it = 0;
         needstocontinue = false;
-        for (int64_t iel = 0; iel < nelem_c; iel++) {
+        for (auto iel : fBMatrix->ElemIndexes()) {
             TPZCompEl *cel = fBMatrix->CompMesh()->Element(iel);
             if (!cel || cel->Dimension() != fBMatrix->CompMesh()->Dimension()) continue;
 
