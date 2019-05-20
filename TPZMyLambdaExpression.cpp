@@ -47,13 +47,13 @@ void TPZMyLambdaExpression::ElasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMa
     elastic_strain = delta_strain - fPlasticStrain;
 }
 
-void TPZMyLambdaExpression::PlasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &plastic_strain) {
+void TPZMyLambdaExpression::PlasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain) {
     int dim = fIntPoints->BMatrix()->Dimension();
     int rows = fIntPoints->BMatrix()->Rows();
 
-    plastic_strain.Resize(dim * rows, 1);
+    fPlasticStrain.Resize(dim * rows, 1);
 
-    plastic_strain = delta_strain - elastic_strain;
+    fPlasticStrain = delta_strain - elastic_strain;
 }
 
 void TPZMyLambdaExpression::ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &sigma) {
@@ -186,13 +186,14 @@ void TPZMyLambdaExpression::ComputeSigma(TPZFMatrix<REAL> &delta_strain, TPZFMat
     fAlpha.Resize(rows / dim, 1);
     fAlpha.Zero();
 
+    // Compute sigma
     ElasticStrain(delta_strain, elastic_strain);
     ComputeStress(elastic_strain, sigma_trial);
     SpectralDecomposition(sigma_trial, eigenvalues, eigenvectors); //check open mp usage in this method
     ProjectSigma(eigenvalues, sigma_projected);
     StressCompleteTensor(sigma_projected, eigenvectors, sigma);
 
-//    update strain
+    // Update plastic strain
     ComputeStrain(sigma, elastic_strain);
-    PlasticStrain(delta_strain, elastic_strain, fPlasticStrain);
+    PlasticStrain(delta_strain, elastic_strain);
 }
