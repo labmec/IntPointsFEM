@@ -24,8 +24,6 @@
 #include "pzpostprocanalysis.h"
 #include "pzfstrmatrix.h"
 
-#include "omp.h"
-
 #include "TPZMatElastoPlastic2D.h"
 #include "TPZMatElastoPlastic.h"
 #include "TPZElastoPlasticMem.h"
@@ -38,6 +36,10 @@
 
 #include "TElastoPlasticData.h"
 #include "TRKSolution.h"
+
+#ifdef _OPENMP
+#include "omp.h"
+#endif
 
 /// Gmsh mesh
 TPZGeoMesh * ReadGeometry(std::string geometry_file);
@@ -74,9 +76,11 @@ void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData material, int n_threads,
 void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_material, int npoints, std::ostream &out, bool euler = false);
 
 int main(int argc, char *argv[]) {
-int nt = omp_get_max_threads();
-std::cout << "USING " << nt << " THREADS" << std::endl;
-    int pOrder = atoi(argv[1]); // Computational mesh order
+#ifdef _OPENMP
+    int nt = omp_get_max_threads();
+    std::cout << "USING " << nt << " THREADS" << std::endl;
+#endif
+    int pOrder = 2; // Computational mesh order
     bool render_vtk_Q = false;
     
 // Generates the geometry

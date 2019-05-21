@@ -6,8 +6,11 @@
 #include "TPZVTKGeoMesh.h"
 #include "pzintel.h"
 #include "pzskylstrmatrix.h"
-#include <omp.h>
 #include "Timer.h"
+
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 REAL timeGatherSolution = 0;
 REAL timeDeltaStrain = 0;
@@ -154,7 +157,9 @@ void TPZIntPointsFEM::DeltaStrain(TPZFMatrix<REAL> &gather_solution, TPZFMatrix<
     timeDeltaStrain+= fTimer.ElapsedTime();
 #else
     fTimer.Start();
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif
     for (int64_t iel = 0; iel < nelem; iel++) {
         for (int i = 0; i < fRowSizes[iel]; i++) {
             for (int k = 0; k < fColSizes[iel]; k++) {
@@ -195,7 +200,9 @@ void TPZIntPointsFEM::ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZFMatrix
     sigma.Resize(fDim*fNpts,1);
 
     fTimer.Start();
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif
     for (int64_t ipts=0; ipts < fNpts/fDim; ipts++) {
         //plane strain
         sigma(4 * ipts, 0) = elastic_strain(2 * ipts, 0) * (lambda + 2. * mu) + elastic_strain(2 * ipts + fNpts + 1, 0) * lambda; // Sigma xx
@@ -212,7 +219,9 @@ void TPZIntPointsFEM::ComputeStrain(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &e
     REAL nu = fMaterial->GetPlasticModel().fER.Poisson();
 
     fTimer.Start();
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif
     for (int ipts = 0; ipts < fNpts / fDim; ipts++) {
         elastic_strain(2 * ipts + 0, 0) = 1 / fWeight[ipts] * (1. / E * (sigma(2 * ipts, 0) * (1. - nu * nu) - sigma(2 * ipts + fNpts + 1, 0) * (nu + nu * nu))); //exx
         elastic_strain(2 * ipts + 1, 0) = 1 / fWeight[ipts] * ((1. + nu) / E * sigma(2 * ipts + 1, 0)); //exy
@@ -230,7 +239,9 @@ void TPZIntPointsFEM::SpectralDecomposition(TPZFMatrix<REAL> &sigma_trial, TPZFM
     eigenvectors.Resize(9*fNpts/fDim,1);
     fTimer.Start();
 
+#ifdef _OPENMP
 #pragma omp parallel for private(maxel)
+#endif
     for (int64_t ipts = 0; ipts < fNpts/fDim; ipts++) {
         Normalize(&sigma_trial(4*ipts, 0), maxel);
         Interval(&sigma_trial(4*ipts, 0), &interval[2*ipts]);
@@ -256,7 +267,9 @@ void TPZIntPointsFEM::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REA
     TPZFMatrix<REAL> alpha(fNpts/fDim, 1, 0.);
     bool check = false;
     fTimer.Start();
-    #pragma omp parallel for
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
     for (int ipts = 0; ipts < fNpts/fDim; ipts++) {
         m_type(ipts,0) = 0;
         check = PhiPlane(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), mc_phi, mc_cohesion); //elastic domain
@@ -284,7 +297,9 @@ void TPZIntPointsFEM::StressCompleteTensor(TPZFMatrix<REAL> &sigma_projected, TP
     sigma.Resize(fDim*fNpts,1);
 
     fTimer.Start();
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif
     for (int ipts = 0; ipts < fNpts/fDim; ipts++) {
         sigma(2*ipts + 0,0) = fWeight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 0,0)*eigenvectors(9*ipts + 0,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 3,0)*eigenvectors(9*ipts + 3,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 6,0)*eigenvectors(9*ipts + 6,0));
         sigma(2*ipts + 1,0) = fWeight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 0,0)*eigenvectors(9*ipts + 1,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 3,0)*eigenvectors(9*ipts + 4,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 6,0)*eigenvectors(9*ipts + 7,0));
@@ -320,7 +335,9 @@ void TPZIntPointsFEM::NodalForces(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &nod
     timeNodalForces+= fTimer.ElapsedTime();
 #else
     fTimer.Start();
+#ifdef _OPENMP
 #pragma omp parallel for
+#endif
     for (int iel = 0; iel < nelem; iel++) {
         for (int i = 0; i < fColSizes[iel]; i++) {
             for (int k = 0; k < fRowSizes[iel]; k++) {
