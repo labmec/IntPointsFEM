@@ -10,7 +10,7 @@
 #include "TPZBndCondWithMem.h"
 
 #include "TPZMyLambdaExpression.h"
-#include "TPZIntPointsFEM.h"
+#include "TPZIntPointsStructMatrix.h"
 #include "TElastoPlasticData.h"
 #include "TRKSolution.h"
 
@@ -476,19 +476,18 @@ void SolutionIntPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
     int neq = analysis->Solution().Rows();
     TPZFMatrix<REAL> du(neq, 1, 0.), delta_du;
 
-    TPZIrregularBlockMatrix *BMatrix = new TPZIrregularBlockMatrix(analysis->Mesh(), wellbore_material.Id());
-    BMatrix->BlocksInfo();
+//    TPZIrregularBlockMatrix *BMatrix = new TPZIrregularBlockMatrix(analysis->Mesh(), wellbore_material.Id());
+//    BMatrix->BlocksInfo();
 
-    TPZIntPointsFEM *IntPoints = new TPZIntPointsFEM(BMatrix);
-    IntPoints->SetIntPointsInfo();
+    TPZIntPointsStructMatrix *intPointsStructMatrix = new TPZIntPointsStructMatrix(analysis->Mesh());
 
-    TPZMyLambdaExpression *Lambda = new TPZMyLambdaExpression(IntPoints);
+    TPZVec<int> matid(1);
+    matid[0] = wellbore_material.Id();
+    intPointsStructMatrix->SetMaterialIds(matid);
+    intPointsStructMatrix->InitializeMatrix();
 
-    TPZFMatrix<REAL> gather_solution;
-    TPZFMatrix<REAL> grad_u;
-    TPZFMatrix<REAL> sigma;
-    TPZFMatrix<REAL> nodal_forces;
 
+//
     std::cout  << "Solving a NLS with DOF = " << neq << std::endl;
 
     analysis->Solution().Zero();
@@ -498,15 +497,9 @@ void SolutionIntPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
         delta_du = analysis->Solution();
         du += delta_du;
         analysis->LoadSolution(du);
-
-        IntPoints->GatherSolution(du, gather_solution);
-        BMatrix->Multiply(gather_solution, grad_u, 1., 0, false);
-        Lambda->ComputeSigma(grad_u, sigma);
-        BMatrix->Multiply(sigma, nodal_forces, -1, 0, true);
-        IntPoints->ColoredAssemble(nodal_forces);
-
+        intPointsStructMatrix->Assemble(du);
         norm_delta_du = Norm(delta_du);
-        norm_res = Norm(IntPoints->Rhs());
+        norm_res = Norm(intPointsStructMatrix->Rhs());
         stop_criterion_Q = norm_res < tolerance;
         std::cout << "Nonlinear process :: delta_du norm = " << norm_delta_du << std::endl;
         std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
@@ -519,7 +512,7 @@ void SolutionIntPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
             break;
         }
 //        analysis->Assemble();
-        analysis->Rhs() = IntPoints->Rhs();
+        analysis->Rhs() = intPointsStructMatrix->Rhs();
 
     }
 
