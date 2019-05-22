@@ -25,7 +25,7 @@ public:
     }
 
     void SetMaterialId(int materialid) {
-        TPZMaterial *material = fIntPoints->CompMesh()->FindMaterial(materialid);
+        TPZMaterial *material = fIntPoints->Mesh()->FindMaterial(materialid);
         fMaterial = dynamic_cast<TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse> , TPZElastoPlasticMem> *>(material);
     }
 

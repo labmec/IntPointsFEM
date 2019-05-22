@@ -29,13 +29,6 @@ public:
     /** @brief operator= */
     TPZIntPointsStructMatrix &operator=(const TPZIntPointsStructMatrix &copy);
 
-    /** @brief Sets the computational mesh
-     * @param cmesh : computational mesh
-     */
-    void SetCompMesh(TPZCompMesh *cmesh) {
-        fCmesh = cmesh;
-    }
-
     void SetMaterialIds(TPZVec<int> materialids) {
         fMaterialIds = materialids;
     }
@@ -60,10 +53,6 @@ public:
 
     void InitializeMatrix();
 
-    TPZCompMesh *CompMesh() {
-        return fCmesh;
-    }
-
     TPZIrregularBlockMatrix BlockMatrix() {
         return fBlockMatrix;
     }
@@ -79,9 +68,6 @@ protected:
     TPZFMatrix<REAL> fRhs;
 
     TPZFMatrix<REAL> fRhsBoundary;
-
-    /** @brief Computational mesh */
-    TPZCompMesh *fCmesh;
 
     /** @brief Vector of material ids */
     TPZVec<int> fMaterialIds;

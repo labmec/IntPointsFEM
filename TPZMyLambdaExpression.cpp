@@ -42,7 +42,7 @@ TPZMyLambdaExpression &TPZMyLambdaExpression::operator=(const TPZMyLambdaExpress
 }
 
 void TPZMyLambdaExpression::ElasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain) {
-    int dim = fIntPoints->CompMesh()->Dimension();
+    int dim = fIntPoints->Mesh()->Dimension();
     int rows = fIntPoints->BlockMatrix().Rows();
 
     elastic_strain.Resize(dim * rows, 1);
@@ -52,7 +52,7 @@ void TPZMyLambdaExpression::ElasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMa
 }
 
 void TPZMyLambdaExpression::PlasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain) {
-    int dim = fIntPoints->CompMesh()->Dimension();
+    int dim = fIntPoints->Mesh()->Dimension();
     int rows = fIntPoints->BlockMatrix().Rows();
 
     fPlasticStrain.Resize(dim * rows, 1);
@@ -61,7 +61,7 @@ void TPZMyLambdaExpression::PlasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMa
 }
 
 void TPZMyLambdaExpression::ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &sigma) {
-    int dim = fIntPoints->CompMesh()->Dimension();
+    int dim = fIntPoints->Mesh()->Dimension();
     int rows = fIntPoints->BlockMatrix().Rows();
 
     REAL lambda = fMaterial->GetPlasticModel().fER.Lambda();
@@ -81,7 +81,7 @@ void TPZMyLambdaExpression::ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZF
 }
 
 void TPZMyLambdaExpression::ComputeStrain(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &elastic_strain) {
-    int dim = fIntPoints->CompMesh()->Dimension();
+    int dim = fIntPoints->Mesh()->Dimension();
     int rows = fIntPoints->BlockMatrix().Rows();
 
     REAL E = fMaterial->GetPlasticModel().fER.E();
@@ -102,7 +102,7 @@ void TPZMyLambdaExpression::ComputeStrain(TPZFMatrix<REAL> &sigma, TPZFMatrix<RE
 }
 
 void TPZMyLambdaExpression::SpectralDecomposition(TPZFMatrix<REAL> &sigma_trial, TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &eigenvectors) {
-    int dim = fIntPoints->CompMesh()->Dimension();
+    int dim = fIntPoints->Mesh()->Dimension();
     int rows = fIntPoints->BlockMatrix().Rows();
 
     REAL maxel;
@@ -122,7 +122,7 @@ void TPZMyLambdaExpression::SpectralDecomposition(TPZFMatrix<REAL> &sigma_trial,
 }
 
 void TPZMyLambdaExpression::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &sigma_projected) {
-    int dim = fIntPoints->CompMesh()->Dimension();
+    int dim = fIntPoints->Mesh()->Dimension();
     int rows = fIntPoints->BlockMatrix().Rows();
 
     REAL mc_psi = fMaterial->GetPlasticModel().fYC.Psi();
@@ -162,7 +162,7 @@ void TPZMyLambdaExpression::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatr
 }
 
 void TPZMyLambdaExpression::StressCompleteTensor(TPZFMatrix<REAL> &sigma_projected, TPZFMatrix<REAL> &eigenvectors, TPZFMatrix<REAL> &sigma){
-    int dim = fIntPoints->CompMesh()->Dimension();
+    int dim = fIntPoints->Mesh()->Dimension();
     int rows = fIntPoints->BlockMatrix().Rows();
 
     TPZVec<REAL> weight;
@@ -188,7 +188,7 @@ void TPZMyLambdaExpression::ComputeSigma(TPZFMatrix<REAL> &delta_strain, TPZFMat
     TPZFMatrix<REAL> eigenvectors;
     TPZFMatrix<REAL> sigma_projected;
 
-    int dim = fIntPoints->CompMesh()->Dimension();
+    int dim = fIntPoints->Mesh()->Dimension();
     int rows = fIntPoints->BlockMatrix().Rows();
 
     fPlasticStrain.Resize(dim * rows, 1);
