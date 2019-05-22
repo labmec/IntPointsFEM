@@ -24,6 +24,7 @@ TPZIntPointsStructMatrix::TPZIntPointsStructMatrix(const TPZIntPointsStructMatri
     fRhsBoundary = copy.fRhsBoundary;
     fMaterialIds = copy.fMaterialIds;
     fBlockMatrix = copy.fBlockMatrix;
+    fIntPointsData = copy.fIntPointsData;
     fElemIndexes = copy.fElemIndexes;
 }
 
@@ -36,6 +37,7 @@ TPZIntPointsStructMatrix &TPZIntPointsStructMatrix::operator=(const TPZIntPoints
     fRhsBoundary = copy.fRhsBoundary;
     fMaterialIds = copy.fMaterialIds;
     fBlockMatrix = copy.fBlockMatrix;
+    fIntPointsData = copy.fIntPointsData;
     fElemIndexes = copy.fElemIndexes;
 
     return *this;
