@@ -68,7 +68,9 @@ void TPZMyLambdaExpression::ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZF
     REAL mu =  fMaterial->GetPlasticModel().fER.Mu();
     sigma.Resize(dim*rows,1);
 
-//#pragma omp parallel for
+#ifdef USING_OMP
+#pragma omp parallel for
+#endif
     for (int64_t ipts=0; ipts < rows/dim; ipts++) {
         //plane strain
         sigma(4 * ipts, 0) = elastic_strain(2 * ipts, 0) * (lambda + 2. * mu) + elastic_strain(2 * ipts + rows + 1, 0) * lambda; // Sigma xx
@@ -88,7 +90,9 @@ void TPZMyLambdaExpression::ComputeStrain(TPZFMatrix<REAL> &sigma, TPZFMatrix<RE
     TPZVec<REAL> weight;
     weight = fIntPoints->Weight();
 
-//#pragma omp parallel for
+#ifdef USING_OMP
+#pragma omp parallel for
+#endif
     for (int ipts = 0; ipts < rows / dim; ipts++) {
         elastic_strain(2 * ipts + 0, 0) = 1 / weight[ipts] * (1. / E * (sigma(2 * ipts, 0) * (1. - nu * nu) - sigma(2 * ipts + rows + 1, 0) * (nu + nu * nu))); //exx
         elastic_strain(2 * ipts + 1, 0) = 1 / weight[ipts] * ((1. + nu) / E * sigma(2 * ipts + 1, 0)); //exy
@@ -106,7 +110,9 @@ void TPZMyLambdaExpression::SpectralDecomposition(TPZFMatrix<REAL> &sigma_trial,
     eigenvalues.Resize(3*rows/dim,1);
     eigenvectors.Resize(9*rows/dim,1);
 
-//#pragma omp parallel for private(maxel)
+#ifdef USING_OMP
+#pragma omp parallel for private(maxel)
+#endif
     for (int64_t ipts = 0; ipts < rows/dim; ipts++) {
         Normalize(&sigma_trial(4*ipts, 0), maxel);
         Interval(&sigma_trial(4*ipts, 0), &interval[2*ipts]);
@@ -131,7 +137,9 @@ void TPZMyLambdaExpression::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatr
 
 
     bool check = false;
-//#pragma omp parallel for
+#ifdef USING_OMP
+#pragma omp parallel for
+#endif
     for (int ipts = 0; ipts < rows/dim; ipts++) {
         fMType(ipts,0) = 0;
         check = PhiPlane(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), mc_phi, mc_cohesion); //elastic domain
@@ -162,7 +170,9 @@ void TPZMyLambdaExpression::StressCompleteTensor(TPZFMatrix<REAL> &sigma_project
 
     sigma.Resize(dim*rows,1);
 
-//#pragma omp parallel for
+#ifdef USING_OMP
+#pragma omp parallel for
+#endif
     for (int ipts = 0; ipts < rows/dim; ipts++) {
         sigma(2*ipts + 0,0) = weight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 0,0)*eigenvectors(9*ipts + 0,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 3,0)*eigenvectors(9*ipts + 3,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 6,0)*eigenvectors(9*ipts + 6,0));
         sigma(2*ipts + 1,0) = weight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 0,0)*eigenvectors(9*ipts + 1,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 3,0)*eigenvectors(9*ipts + 4,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 6,0)*eigenvectors(9*ipts + 7,0));
