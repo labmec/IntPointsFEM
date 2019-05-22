@@ -12,7 +12,7 @@ class TPZMyLambdaExpression {
 public:
     TPZMyLambdaExpression();
 
-    TPZMyLambdaExpression(TPZIntPointsStructMatrix *IntPoints, int materialid);
+    TPZMyLambdaExpression(TPZIntPointsStructMatrix *IntPoints);
 
     ~TPZMyLambdaExpression();
 

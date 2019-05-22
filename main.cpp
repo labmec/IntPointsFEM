@@ -481,17 +481,12 @@ void SolutionIntPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
     int neq = analysis->Solution().Rows();
     TPZFMatrix<REAL> du(neq, 1, 0.), delta_du;
 
-//    TPZIrregularBlockMatrix *BMatrix = new TPZIrregularBlockMatrix(analysis->Mesh(), wellbore_material.Id());
-//    BMatrix->BlocksInfo();
-
     TPZIntPointsStructMatrix *intPointsStructMatrix = new TPZIntPointsStructMatrix(analysis->Mesh());
 
     TPZVec<int> matid(1);
     matid[0] = wellbore_material.Id();
     intPointsStructMatrix->SetMaterialIds(matid);
-    intPointsStructMatrix->InitializeMatrix();
-
-
+    intPointsStructMatrix->Initialize();
 //
     std::cout  << "Solving a NLS with DOF = " << neq << std::endl;
 

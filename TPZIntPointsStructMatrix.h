@@ -6,6 +6,7 @@
 #ifndef TPZIntPointsFEM_h
 #define TPZIntPointsFEM_h
 #include "TPZIrregularBlockMatrix.h"
+#include "TPZIntPointsData.h"
 #include "pzstrmatrix.h"
 
 class TPZIntPointsStructMatrix : public TPZStructMatrix {
@@ -41,24 +42,20 @@ public:
 
     void IntPointsInfo(TPZStack<int64_t> elemindexes);
 
-    void GatherSolution(TPZFMatrix<REAL> &solution, TPZFMatrix<REAL> &gather_solution);
-
-    void ColoredAssemble(TPZFMatrix<REAL>  &nodal_forces);
-
     void Assemble(TPZFMatrix<REAL> &solution);
 
     void ColoringElements(TPZStack<int64_t> elemindexes);
 
     void AssembleRhsBoundary();
 
-    void InitializeMatrix();
+    void Initialize();
 
     TPZIrregularBlockMatrix BlockMatrix() {
         return fBlockMatrix;
     }
 
-    TPZVec<REAL> Weight() {
-        return fWeight;
+    TPZIntPointsData IntPointsData() {
+        return fIntPointsData;
     }
     TPZFMatrix<REAL> Rhs() {
         return fRhs;
@@ -75,22 +72,10 @@ protected:
     /** @brief Irregular blocks matrix */
     TPZIrregularBlockMatrix fBlockMatrix;
 
+    TPZIntPointsData fIntPointsData;
+
     /** @brief Vector of indexes of the domain elements for each material id*/
     TPZVec<TPZStack<int64_t>> fElemIndexes;
-
-    /** @brief Number of colors of colored mesh */
-    int64_t fNColor;
-
-    /** @brief DOF indexes vector ordered by element */
-	TPZVec<int> fIndexes;
-
-    /** @brief Colored DOF indexes vector ordered by element */
-	TPZVec<int> fIndexesColor;
-
-    /** @brief Weight Vector */
-	TPZVec<REAL> fWeight;
-
-
 };
 
 #endif /* TPZIntPointsFEM_h */

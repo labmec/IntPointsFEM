@@ -7,13 +7,11 @@
 #endif
 #include "TPZMyLambdaExpression.h"
 
-TPZIntPointsStructMatrix::TPZIntPointsStructMatrix() : fRhs(0,0), fRhsBoundary(0,0), fMaterialIds(0), fBlockMatrix(), fElemIndexes(0), fNColor(-1),
-                                                      fIndexes(0), fIndexesColor(0), fWeight(0) {
+TPZIntPointsStructMatrix::TPZIntPointsStructMatrix() : fRhs(0,0), fRhsBoundary(0,0), fMaterialIds(0), fBlockMatrix(), fIntPointsData(), fElemIndexes(0){
 
 }
 
-TPZIntPointsStructMatrix::TPZIntPointsStructMatrix(TPZCompMesh *cmesh) : fRhs(0,0), fRhsBoundary(0,0), fMaterialIds(0), fBlockMatrix(), fElemIndexes(0), fNColor(-1),
-                                                                        fIndexes(0), fIndexesColor(0), fWeight(0) {
+TPZIntPointsStructMatrix::TPZIntPointsStructMatrix(TPZCompMesh *cmesh) : fRhs(0,0), fRhsBoundary(0,0), fMaterialIds(0), fBlockMatrix(), fIntPointsData(), fElemIndexes(0) {
     SetMesh(cmesh);
 }
 
@@ -27,11 +25,6 @@ TPZIntPointsStructMatrix::TPZIntPointsStructMatrix(const TPZIntPointsStructMatri
     fMaterialIds = copy.fMaterialIds;
     fBlockMatrix = copy.fBlockMatrix;
     fElemIndexes = copy.fElemIndexes;
-    fNColor = copy.fNColor;
-    fIndexes = copy.fIndexes;
-    fIndexesColor = copy.fIndexesColor;
-    fWeight = copy.fWeight;
-
 }
 
 TPZIntPointsStructMatrix &TPZIntPointsStructMatrix::operator=(const TPZIntPointsStructMatrix &copy) {
@@ -44,10 +37,6 @@ TPZIntPointsStructMatrix &TPZIntPointsStructMatrix::operator=(const TPZIntPoints
     fMaterialIds = copy.fMaterialIds;
     fBlockMatrix = copy.fBlockMatrix;
     fElemIndexes = copy.fElemIndexes;
-    fNColor = copy.fNColor;
-    fIndexes = copy.fIndexes;
-    fIndexesColor = copy.fIndexesColor;
-    fWeight = copy.fWeight;
 
     return *this;
 }
@@ -184,8 +173,8 @@ void TPZIntPointsStructMatrix::FillBlocks(TPZStack<int64_t> elemindexes) {
 }
 
 void TPZIntPointsStructMatrix::IntPointsInfo(TPZStack<int64_t> elemindexes) {
-    fWeight.resize(fBlockMatrix.Rows() / fMesh->Dimension());
-    fIndexes.resize(fMesh->Dimension() * fBlockMatrix.Cols());
+    TPZVec<REAL> weight(fBlockMatrix.Rows() / fMesh->Dimension());
+    TPZVec<int> indexes(fMesh->Dimension() * fBlockMatrix.Cols());
 
     int iel = 0;
     int iw = 0;
@@ -208,7 +197,7 @@ void TPZIntPointsStructMatrix::IntPointsInfo(TPZStack<int64_t> elemindexes) {
             REAL w;
             int_rule->Point(ipts, qsi, w);
             cel_inter->ComputeRequiredData(data, qsi);
-            fWeight[iw] = w * std::abs(data.detjac);
+            weight[iw] = w * std::abs(data.detjac);
             iw++;
         }
 
@@ -223,10 +212,10 @@ void TPZIntPointsStructMatrix::IntPointsInfo(TPZStack<int64_t> elemindexes) {
                 int64_t nsize = fMesh->Block().Size(conid);
                 for (int64_t isize = 0; isize < nsize; isize++) {
                     if (isize % 2 == 0) {
-                        fIndexes[cont1] = pos + isize;
+                        indexes[cont1] = pos + isize;
                         cont1++;
                     } else {
-                        fIndexes[cont2 + fBlockMatrix.Cols()] = pos + isize;
+                        indexes[cont2 + fBlockMatrix.Cols()] = pos + isize;
                         cont2++;
                     }
                 }
@@ -234,43 +223,11 @@ void TPZIntPointsStructMatrix::IntPointsInfo(TPZStack<int64_t> elemindexes) {
         }
         iel++;
     }
+    fIntPointsData.SetIndexes(indexes);
+    fIntPointsData.SetWeight(weight);
 }
 
-void TPZIntPointsStructMatrix::GatherSolution(TPZFMatrix<REAL> &solution, TPZFMatrix<REAL> &gather_solution) {
-    int dim = fMesh->Dimension();
-    int cols = fBlockMatrix.Cols();
-
-    gather_solution.Resize(dim * cols, 1);
-    gather_solution.Zero();
-
-    cblas_dgthr(dim * cols, solution, &gather_solution(0, 0), &fIndexes[0]);
-}
-
-void TPZIntPointsStructMatrix::ColoredAssemble(TPZFMatrix<REAL>  &nodal_forces) {
-    int64_t ncolor = fNColor;
-    int dim = fMesh->Dimension();
-    int cols = fBlockMatrix.Cols();
-    int64_t neq = fMesh->NEquations();
-    fRhs.Resize(neq*ncolor,1);
-    fRhs.Zero();
-
-    cblas_dsctr(dim * cols, nodal_forces, &fIndexesColor[0], &fRhs(0,0));
-
-    int64_t colorassemb = ncolor / 2.;
-    while (colorassemb > 0) {
-
-        int64_t firsteq = (ncolor - colorassemb) * neq;
-        cblas_daxpy(colorassemb * neq, 1., &fRhs(firsteq, 0), 1., &fRhs(0, 0), 1.);
-
-        ncolor -= colorassemb;
-        colorassemb = ncolor/2;
-    }
-    fRhs.Resize(neq, 1);
-
-    fRhs = fRhs + fRhsBoundary;
-}
-
-void TPZIntPointsStructMatrix::InitializeMatrix() {
+void TPZIntPointsStructMatrix::Initialize() {
     ElementsToAssemble();
     int nmat = fMaterialIds.size();
 
@@ -285,29 +242,43 @@ void TPZIntPointsStructMatrix::InitializeMatrix() {
 
 void TPZIntPointsStructMatrix::Assemble(TPZFMatrix<REAL> &solution) {
     int nmat = fMaterialIds.size();
+    int dim = fMesh->Dimension();
+    int neq = fMesh->NEquations();
 
     TPZFMatrix<REAL> gather_solution;
+    TPZFMatrix<REAL> grad_u;
     TPZFMatrix<REAL> sigma;
+    TPZFMatrix<REAL> forces;
+    TPZFMatrix<REAL> residual;
+
+    fRhs.Resize(neq, 1);
+    fRhs.Zero();
 
     for (int imat = 0; imat < nmat; ++imat) {
-        GatherSolution(solution, gather_solution);
-
         int rows = fBlockMatrix.Rows();
         int cols = fBlockMatrix.Cols();
 
-        TPZFMatrix<REAL> grad_u(fMesh->Dimension() * rows, 1);
+        gather_solution.Resize(dim * cols, 1);
+        fIntPointsData.GatherSolution(solution, gather_solution);
+
+        grad_u.Resize(dim * rows, 1);
         fBlockMatrix.Multiply(&gather_solution(0,0), &grad_u(0,0), 0);
         fBlockMatrix.Multiply(&gather_solution(cols,0), &grad_u(rows,0), 0);
 
-        TPZMyLambdaExpression lambdaexp(this, fMaterialIds[imat]);
+        sigma.Resize(dim * rows, 1);
+        TPZMyLambdaExpression lambdaexp(this);
         lambdaexp.ComputeSigma(grad_u, sigma);
 
-        TPZFMatrix<REAL> forces(fMesh->Dimension() * cols, 1);
+        forces.Resize(dim * cols, 1);
         fBlockMatrix.Multiply(&sigma(0,0), &forces(0,0), true);
         fBlockMatrix.Multiply(&sigma(rows,0), &forces(cols,0), true);
 
-        ColoredAssemble(forces);
+        residual.Resize(neq, 1);
+        fIntPointsData.ColoredAssemble(forces, residual);
+
+        fRhs += residual;
     }
+    fRhs += fRhsBoundary;
 }
 
 void TPZIntPointsStructMatrix::ColoringElements(TPZStack<int64_t> elemindexes)  {
@@ -359,8 +330,8 @@ void TPZIntPointsStructMatrix::ColoringElements(TPZStack<int64_t> elemindexes)  
 //    TPZVTKGeoMesh::PrintGMeshVTK(fBMatrix->CompMesh()->Reference(),file);
 
     //Indexes coloring
-    fNColor = contcolor;
-    fIndexesColor.resize(dim * cols);
+    fIntPointsData.SetNColor(contcolor);
+    TPZVec<int> indexescolor(dim * cols);
     int64_t nelem = fBlockMatrix.NumBlocks();
     int64_t neq = fMesh->NEquations();
     for (int64_t iel = 0; iel < nelem; iel++) {
@@ -368,10 +339,11 @@ void TPZIntPointsStructMatrix::ColoringElements(TPZStack<int64_t> elemindexes)  
         int64_t cont_cols = fBlockMatrix.ColFirstIndex()[iel];
 
         for (int64_t icols = 0; icols < elem_col; icols++) {
-            fIndexesColor[cont_cols + icols] = fIndexes[cont_cols + icols] + elemcolor[iel]*neq;
-            fIndexesColor[cont_cols+ cols + icols] = fIndexes[cont_cols + cols + icols] + elemcolor[iel]*neq;
+            indexescolor[cont_cols + icols] = fIntPointsData.Indexes()[cont_cols + icols] + elemcolor[iel]*neq;
+            indexescolor[cont_cols+ cols + icols] = fIntPointsData.Indexes()[cont_cols + cols + icols] + elemcolor[iel]*neq;
         }
     }
+    fIntPointsData.SetIndexesColor(indexescolor);
 }
 
 void TPZIntPointsStructMatrix::AssembleRhsBoundary() {

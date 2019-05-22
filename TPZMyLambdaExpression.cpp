@@ -10,9 +10,9 @@
 TPZMyLambdaExpression::TPZMyLambdaExpression() : fMaterial(), fPlasticStrain(0,0), fMType(0,0), fAlpha(0,0), fIntPoints() {
 }
 
-TPZMyLambdaExpression::TPZMyLambdaExpression(TPZIntPointsStructMatrix *IntPoints, int materialid) : fMaterial(), fPlasticStrain(0,0), fMType(0,0), fAlpha(0,0), fIntPoints() {
+TPZMyLambdaExpression::TPZMyLambdaExpression(TPZIntPointsStructMatrix *IntPoints) : fMaterial(), fPlasticStrain(0,0), fMType(0,0), fAlpha(0,0), fIntPoints() {
     SetIntPoints(IntPoints);
-    SetMaterialId(materialid);
+    SetMaterialId(1);
 }
 
 TPZMyLambdaExpression::~TPZMyLambdaExpression() {
@@ -88,7 +88,7 @@ void TPZMyLambdaExpression::ComputeStrain(TPZFMatrix<REAL> &sigma, TPZFMatrix<RE
     REAL nu = fMaterial->GetPlasticModel().fER.Poisson();
 
     TPZVec<REAL> weight;
-    weight = fIntPoints->Weight();
+    weight = fIntPoints->IntPointsData().Weight();
 
 #ifdef USING_OMP
 #pragma omp parallel for
@@ -166,7 +166,7 @@ void TPZMyLambdaExpression::StressCompleteTensor(TPZFMatrix<REAL> &sigma_project
     int rows = fIntPoints->BlockMatrix().Rows();
 
     TPZVec<REAL> weight;
-    weight = fIntPoints->Weight();
+    weight = fIntPoints->IntPointsData().Weight();
 
     sigma.Resize(dim*rows,1);
 
