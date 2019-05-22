@@ -229,6 +229,7 @@ void TPZIntPointsStructMatrix::IntPointsInfo(TPZStack<int64_t> elemindexes) {
 
 void TPZIntPointsStructMatrix::Initialize() {
     ElementsToAssemble();
+    AssembleRhsBoundary();
     int nmat = fMaterialIds.size();
 
     for (int imat = 0; imat < nmat; ++imat) {
@@ -236,7 +237,6 @@ void TPZIntPointsStructMatrix::Initialize() {
         FillBlocks(fElemIndexes[imat]);
         IntPointsInfo(fElemIndexes[imat]);
         ColoringElements(fElemIndexes[imat]);
-        AssembleRhsBoundary();
     }
 }
 

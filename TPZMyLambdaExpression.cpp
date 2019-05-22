@@ -10,11 +10,11 @@
 #include "SpectralDecomp.h"
 #include "SigmaProjection.h"
 
-TPZMyLambdaExpression::TPZMyLambdaExpression() : fMaterial(), fPlasticStrain(0,0), fMType(0,0), fAlpha(0,0), fIntPoints() {
+TPZMyLambdaExpression::TPZMyLambdaExpression() : fNpts(-1), fMaterial(), fPlasticStrain(0,0), fMType(0,0), fAlpha(0,0), fIntPointsStructMatrix() {
 }
 
-TPZMyLambdaExpression::TPZMyLambdaExpression(TPZIntPointsStructMatrix *IntPoints) : fMaterial(), fPlasticStrain(0,0), fMType(0,0), fAlpha(0,0), fIntPoints() {
-    SetIntPoints(IntPoints);
+TPZMyLambdaExpression::TPZMyLambdaExpression(TPZIntPointsStructMatrix *intPointsStructMatrix) : fNpts(-1), fMaterial(), fPlasticStrain(0,0), fMType(0,0), fAlpha(0,0), fIntPointsStructMatrix() {
+    SetIntPoints(intPointsStructMatrix);
     SetMaterialId(1);
 }
 
@@ -23,11 +23,12 @@ TPZMyLambdaExpression::~TPZMyLambdaExpression() {
 }
 
 TPZMyLambdaExpression::TPZMyLambdaExpression(const TPZMyLambdaExpression &copy) {
+    fNpts = copy.fNpts;
     fMaterial = copy.fMaterial;
     fPlasticStrain = copy.fPlasticStrain;
     fMType = copy.fMType;
     fAlpha = copy.fAlpha;
-    fIntPoints = copy.fIntPoints;
+    fIntPointsStructMatrix = copy.fIntPointsStructMatrix;
 }
 
 TPZMyLambdaExpression &TPZMyLambdaExpression::operator=(const TPZMyLambdaExpression &copy) {
@@ -35,88 +36,70 @@ TPZMyLambdaExpression &TPZMyLambdaExpression::operator=(const TPZMyLambdaExpress
         return *this;
     }
 
+    fNpts = copy.fNpts;
     fMaterial = copy.fMaterial;
     fPlasticStrain = copy.fPlasticStrain;
     fMType = copy.fMType;
     fAlpha = copy.fAlpha;
-    fIntPoints = copy.fIntPoints;
+    fIntPointsStructMatrix = copy.fIntPointsStructMatrix;
 
     return *this;
 }
 
 void TPZMyLambdaExpression::ElasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain) {
-    int dim = fIntPoints->Mesh()->Dimension();
-    int rows = fIntPoints->BlockMatrix().Rows();
-
-    elastic_strain.Resize(dim * rows, 1);
-    elastic_strain.Zero();
-
     elastic_strain = delta_strain - fPlasticStrain;
 }
 
 void TPZMyLambdaExpression::PlasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain) {
-    int dim = fIntPoints->Mesh()->Dimension();
-    int rows = fIntPoints->BlockMatrix().Rows();
-
-    fPlasticStrain.Resize(dim * rows, 1);
-
     fPlasticStrain = delta_strain - elastic_strain;
 }
 
 void TPZMyLambdaExpression::ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &sigma) {
-    int dim = fIntPoints->Mesh()->Dimension();
-    int rows = fIntPoints->BlockMatrix().Rows();
-
     REAL lambda = fMaterial->GetPlasticModel().fER.Lambda();
     REAL mu =  fMaterial->GetPlasticModel().fER.Mu();
-    sigma.Resize(dim*rows,1);
+
+    int dim = fIntPointsStructMatrix->Mesh()->Dimension();
 
 #ifdef USING_OMP
 #pragma omp parallel for
 #endif
-    for (int64_t ipts=0; ipts < rows/dim; ipts++) {
+    for (int64_t ipts=0; ipts < fNpts; ipts++) {
         //plane strain
-        sigma(4 * ipts, 0) = elastic_strain(2 * ipts, 0) * (lambda + 2. * mu) + elastic_strain(2 * ipts + rows + 1, 0) * lambda; // Sigma xx
-        sigma(4 * ipts + 1, 0) = elastic_strain(2 * ipts + rows + 1, 0) * (lambda + 2. * mu) + elastic_strain(2 * ipts, 0) * lambda; // Sigma yy
-        sigma(4 * ipts + 2, 0) = lambda * (elastic_strain(2 * ipts, 0) + elastic_strain(2 * ipts + rows + 1, 0)); // Sigma zz
-        sigma(4 * ipts + 3, 0) = mu * (elastic_strain(2 * ipts + 1, 0) + elastic_strain(2 * ipts + rows, 0)); // Sigma xy
+        sigma(4 * ipts, 0) = elastic_strain(2 * ipts, 0) * (lambda + 2. * mu) + elastic_strain(2 * ipts + dim * fNpts + 1, 0) * lambda; // Sigma xx
+        sigma(4 * ipts + 1, 0) = elastic_strain(2 * ipts + dim * fNpts + 1, 0) * (lambda + 2. * mu) + elastic_strain(2 * ipts, 0) * lambda; // Sigma yy
+        sigma(4 * ipts + 2, 0) = lambda * (elastic_strain(2 * ipts, 0) + elastic_strain(2 * ipts + dim * fNpts + 1, 0)); // Sigma zz
+        sigma(4 * ipts + 3, 0) = mu * (elastic_strain(2 * ipts + 1, 0) + elastic_strain(2 * ipts + dim * fNpts, 0)); // Sigma xy
     }
 }
 
 void TPZMyLambdaExpression::ComputeStrain(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &elastic_strain) {
-    int dim = fIntPoints->Mesh()->Dimension();
-    int rows = fIntPoints->BlockMatrix().Rows();
-
     REAL E = fMaterial->GetPlasticModel().fER.E();
     REAL nu = fMaterial->GetPlasticModel().fER.Poisson();
 
     TPZVec<REAL> weight;
-    weight = fIntPoints->IntPointsData().Weight();
+    weight = fIntPointsStructMatrix->IntPointsData().Weight();
+
+    int dim = fIntPointsStructMatrix->Mesh()->Dimension();
 
 #ifdef USING_OMP
 #pragma omp parallel for
 #endif
-    for (int ipts = 0; ipts < rows / dim; ipts++) {
-        elastic_strain(2 * ipts + 0, 0) = 1 / weight[ipts] * (1. / E * (sigma(2 * ipts, 0) * (1. - nu * nu) - sigma(2 * ipts + rows + 1, 0) * (nu + nu * nu))); //exx
+    for (int ipts = 0; ipts < fNpts; ipts++) {
+        elastic_strain(2 * ipts + 0, 0) = 1 / weight[ipts] * (1. / E * (sigma(2 * ipts, 0) * (1. - nu * nu) - sigma(2 * ipts + dim * fNpts + 1, 0) * (nu + nu * nu))); //exx
         elastic_strain(2 * ipts + 1, 0) = 1 / weight[ipts] * ((1. + nu) / E * sigma(2 * ipts + 1, 0)); //exy
-        elastic_strain(2 * ipts + rows + 0, 0) = elastic_strain(2 * ipts + 1, 0); //exy
-        elastic_strain(2 * ipts + rows + 1, 0) = 1 / weight[ipts] * (1. / E * (sigma(2 * ipts + rows + 1, 0) * (1. - nu * nu) - sigma(2 * ipts, 0) * (nu + nu * nu))); //eyy
+        elastic_strain(2 * ipts + dim * fNpts + 0, 0) = elastic_strain(2 * ipts + 1, 0); //exy
+        elastic_strain(2 * ipts + dim * fNpts + 1, 0) = 1 / weight[ipts] * (1. / E * (sigma(2 * ipts + dim * fNpts + 1, 0) * (1. - nu * nu) - sigma(2 * ipts, 0) * (nu + nu * nu))); //eyy
     }
 }
 
 void TPZMyLambdaExpression::SpectralDecomposition(TPZFMatrix<REAL> &sigma_trial, TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &eigenvectors) {
-    int dim = fIntPoints->Mesh()->Dimension();
-    int rows = fIntPoints->BlockMatrix().Rows();
-
     REAL maxel;
-    TPZVec<REAL> interval(2*rows/dim);
-    eigenvalues.Resize(3*rows/dim,1);
-    eigenvectors.Resize(9*rows/dim,1);
+    TPZVec<REAL> interval(2* fNpts);
 
 #ifdef USING_OMP
 #pragma omp parallel for private(maxel)
 #endif
-    for (int64_t ipts = 0; ipts < rows/dim; ipts++) {
+    for (int64_t ipts = 0; ipts < fNpts; ipts++) {
         Normalize(&sigma_trial(4*ipts, 0), maxel);
         Interval(&sigma_trial(4*ipts, 0), &interval[2*ipts]);
         NewtonIterations(&interval[2*ipts], &sigma_trial(4*ipts, 0), &eigenvalues(3*ipts, 0), maxel);
@@ -125,25 +108,17 @@ void TPZMyLambdaExpression::SpectralDecomposition(TPZFMatrix<REAL> &sigma_trial,
 }
 
 void TPZMyLambdaExpression::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &sigma_projected) {
-    int dim = fIntPoints->Mesh()->Dimension();
-    int rows = fIntPoints->BlockMatrix().Rows();
-
     REAL mc_psi = fMaterial->GetPlasticModel().fYC.Psi();
     REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();
     REAL mc_cohesion = fMaterial->GetPlasticModel().fYC.Cohesion();
     REAL K = fMaterial->GetPlasticModel().fER.K();
     REAL G = fMaterial->GetPlasticModel().fER.G();
 
-    sigma_projected.Resize(3*rows/dim,1);
-    sigma_projected.Zero();
-    TPZFMatrix<REAL> elastic_strain_np1(dim*rows);
-
-
     bool check = false;
 #ifdef USING_OMP
 #pragma omp parallel for
 #endif
-    for (int ipts = 0; ipts < rows/dim; ipts++) {
+    for (int ipts = 0; ipts < fNpts; ipts++) {
         fMType(ipts,0) = 0;
         check = PhiPlane(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), mc_phi, mc_cohesion); //elastic domain
         if (!check) { //plastic domain
@@ -165,43 +140,40 @@ void TPZMyLambdaExpression::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatr
 }
 
 void TPZMyLambdaExpression::StressCompleteTensor(TPZFMatrix<REAL> &sigma_projected, TPZFMatrix<REAL> &eigenvectors, TPZFMatrix<REAL> &sigma){
-    int dim = fIntPoints->Mesh()->Dimension();
-    int rows = fIntPoints->BlockMatrix().Rows();
-
     TPZVec<REAL> weight;
-    weight = fIntPoints->IntPointsData().Weight();
+    weight = fIntPointsStructMatrix->IntPointsData().Weight();
 
-    sigma.Resize(dim*rows,1);
+    int dim = fIntPointsStructMatrix->Mesh()->Dimension();
 
 #ifdef USING_OMP
 #pragma omp parallel for
 #endif
-    for (int ipts = 0; ipts < rows/dim; ipts++) {
+    for (int ipts = 0; ipts < fNpts; ipts++) {
         sigma(2*ipts + 0,0) = weight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 0,0)*eigenvectors(9*ipts + 0,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 3,0)*eigenvectors(9*ipts + 3,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 6,0)*eigenvectors(9*ipts + 6,0));
         sigma(2*ipts + 1,0) = weight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 0,0)*eigenvectors(9*ipts + 1,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 3,0)*eigenvectors(9*ipts + 4,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 6,0)*eigenvectors(9*ipts + 7,0));
-        sigma(2*ipts + rows,0) = sigma(2*ipts + 1,0);
-        sigma(2*ipts + rows + 1,0) = weight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 1,0)*eigenvectors(9*ipts + 1,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 4,0)*eigenvectors(9*ipts + 4,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 7,0)*eigenvectors(9*ipts + 7,0));
+        sigma(2*ipts + dim * fNpts,0) = sigma(2*ipts + 1,0);
+        sigma(2*ipts + dim * fNpts + 1,0) = weight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 1,0)*eigenvectors(9*ipts + 1,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 4,0)*eigenvectors(9*ipts + 4,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 7,0)*eigenvectors(9*ipts + 7,0));
     }
 }
 
 void TPZMyLambdaExpression::ComputeSigma(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &sigma) {
-    TPZFMatrix<REAL> elastic_strain;
-    TPZFMatrix<REAL> sigma_trial;
-    TPZFMatrix<REAL> eigenvalues;
-    TPZFMatrix<REAL> eigenvectors;
-    TPZFMatrix<REAL> sigma_projected;
+    int dim = fIntPointsStructMatrix->Mesh()->Dimension();
+    fNpts = sigma.Rows() / (dim * dim);
 
-    int dim = fIntPoints->Mesh()->Dimension();
-    int rows = fIntPoints->BlockMatrix().Rows();
-
-    fPlasticStrain.Resize(dim * rows, 1);
+    fPlasticStrain.Resize(dim * dim * fNpts, 1);
     fPlasticStrain.Zero();
 
-    fMType.Resize(rows / dim, 1);
+    fMType.Resize(fNpts, 1);
     fMType.Zero();
 
-    fAlpha.Resize(rows / dim, 1);
+    fAlpha.Resize(fNpts, 1);
     fAlpha.Zero();
+
+    TPZFMatrix<REAL> elastic_strain(dim * dim * fNpts, 1, 0.);
+    TPZFMatrix<REAL> sigma_trial(dim * dim * fNpts, 1, 0.);
+    TPZFMatrix<REAL> eigenvalues(3 * fNpts, 1, 0.);
+    TPZFMatrix<REAL> eigenvectors(9 * fNpts, 1, 0.);
+    TPZFMatrix<REAL> sigma_projected(3 * fNpts, 1, 0.);
 
     // Compute sigma
     ElasticStrain(delta_strain, elastic_strain);
