@@ -56,8 +56,8 @@ void TPZIntPointsStructMatrix::ElementsToAssemble() {
     }
 }
 
-void TPZIntPointsStructMatrix::BlocksInfo(TPZStack<int64_t> elemindexes) {
-    int nblocks = elemindexes.size();
+void TPZIntPointsStructMatrix::BlocksInfo(int matid) {
+    int nblocks = fElemIndexes[matid].size();
     fBlockMatrix.SetNumBlocks(nblocks);
 
     TPZVec<int> rowsizes(nblocks);
@@ -74,7 +74,7 @@ void TPZIntPointsStructMatrix::BlocksInfo(TPZStack<int64_t> elemindexes) {
     int64_t cols = 0;
 
     int iel = 0;
-    for (auto elem_index : elemindexes) {
+    for (auto elem_index : fElemIndexes[matid]) {
         TPZCompEl *cel = fMesh->Element(elem_index);
         TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement*>(cel);
         if (!cel_inter) DebugStop();
@@ -121,11 +121,11 @@ void TPZIntPointsStructMatrix::BlocksInfo(TPZStack<int64_t> elemindexes) {
     fBlockMatrix.SetColInd(colind);
 }
 
-void TPZIntPointsStructMatrix::FillBlocks(TPZStack<int64_t> elemindexes) {
+void TPZIntPointsStructMatrix::FillBlocks(int matid) {
     TPZVec<REAL> storage(fBlockMatrix.MatrixPosition()[fBlockMatrix.NumBlocks()]);
 
     int iel = 0;
-    for(auto elem_index : elemindexes) {
+    for(auto elem_index : fElemIndexes[matid]) {
         TPZCompEl *cel = fMesh->Element(elem_index);
         TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement *>(cel);
         if (!cel_inter) DebugStop();
@@ -172,7 +172,7 @@ void TPZIntPointsStructMatrix::FillBlocks(TPZStack<int64_t> elemindexes) {
     fBlockMatrix.SetStorage(storage);
 }
 
-void TPZIntPointsStructMatrix::IntPointsInfo(TPZStack<int64_t> elemindexes) {
+void TPZIntPointsStructMatrix::IntPointsInfo(int matid) {
     TPZVec<REAL> weight(fBlockMatrix.Rows() / fMesh->Dimension());
     TPZVec<int> indexes(fMesh->Dimension() * fBlockMatrix.Cols());
 
@@ -180,7 +180,7 @@ void TPZIntPointsStructMatrix::IntPointsInfo(TPZStack<int64_t> elemindexes) {
     int iw = 0;
     int64_t cont1 = 0;
     int64_t cont2 = 0;
-    for(auto elem_index : elemindexes) {
+    for(auto elem_index : fElemIndexes[matid]) {
         TPZCompEl *cel = fMesh->Element(elem_index);
         TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement*>(cel);
         if (!cel_inter) DebugStop();
@@ -233,14 +233,14 @@ void TPZIntPointsStructMatrix::Initialize() {
     int nmat = fMaterialIds.size();
 
     for (int imat = 0; imat < nmat; ++imat) {
-        BlocksInfo(fElemIndexes[imat]);
-        FillBlocks(fElemIndexes[imat]);
-        IntPointsInfo(fElemIndexes[imat]);
-        ColoringElements(fElemIndexes[imat]);
+        BlocksInfo(imat);
+        FillBlocks(imat);
+        IntPointsInfo(imat);
+        ColoringElements(imat);
     }
 }
 
-void TPZIntPointsStructMatrix::Assemble(TPZFMatrix<REAL> &solution) {
+void TPZIntPointsStructMatrix::Assemble() {
     int nmat = fMaterialIds.size();
     int dim = fMesh->Dimension();
     int neq = fMesh->NEquations();
@@ -259,7 +259,7 @@ void TPZIntPointsStructMatrix::Assemble(TPZFMatrix<REAL> &solution) {
         int cols = fBlockMatrix.Cols();
 
         gather_solution.Resize(dim * cols, 1);
-        fIntPointsData.GatherSolution(solution, gather_solution);
+        fIntPointsData.GatherSolution(fMesh->Solution(), gather_solution);
 
         grad_u.Resize(dim * rows, 1);
         fBlockMatrix.Multiply(&gather_solution(0,0), &grad_u(0,0), 0);
@@ -281,7 +281,7 @@ void TPZIntPointsStructMatrix::Assemble(TPZFMatrix<REAL> &solution) {
     fRhs += fRhsBoundary;
 }
 
-void TPZIntPointsStructMatrix::ColoringElements(TPZStack<int64_t> elemindexes)  {
+void TPZIntPointsStructMatrix::ColoringElements(int matid)  {
     int dim = fMesh->Dimension();
     int cols = fBlockMatrix.Cols();
 
@@ -297,7 +297,7 @@ void TPZIntPointsStructMatrix::ColoringElements(TPZStack<int64_t> elemindexes)  
     {
         int it = 0;
         needstocontinue = false;
-        for (auto iel : elemindexes) {
+        for (auto iel : fElemIndexes[matid]) {
             TPZCompEl *cel = fMesh->Element(iel);
             if (!cel || cel->Dimension() != fMesh->Dimension()) continue;
 

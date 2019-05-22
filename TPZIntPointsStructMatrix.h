@@ -36,15 +36,15 @@ public:
 
     void ElementsToAssemble();
 
-    void BlocksInfo(TPZStack<int64_t> elemindexes);
+    void BlocksInfo(int matid);
 
-    void FillBlocks(TPZStack<int64_t> elemindexes);
+    void FillBlocks(int matid);
 
-    void IntPointsInfo(TPZStack<int64_t> elemindexes);
+    void IntPointsInfo(int matid);
 
-    void Assemble(TPZFMatrix<REAL> &solution);
+    void Assemble();
 
-    void ColoringElements(TPZStack<int64_t> elemindexes);
+    void ColoringElements(int matid);
 
     void AssembleRhsBoundary();
 
