@@ -70,7 +70,6 @@ if(USING_CUDA)
 else()
     file(GLOB sources *.cpp)
     file(GLOB headers *.h)
-    file(GLOB cuda *.cu)
     set(main_SRCS ${sources} ${headers})
 endif(USING_CUDA)
 
