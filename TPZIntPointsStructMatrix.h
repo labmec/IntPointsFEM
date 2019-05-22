@@ -36,22 +36,22 @@ public:
 
     void ElementsToAssemble();
 
-    void BlocksInfo(int matid);
+    void BlocksInfo(int imat);
 
-    void FillBlocks(int matid);
+    void FillBlocks(int imat);
 
-    void IntPointsInfo(int matid);
+    void IntPointsInfo(int imat);
 
     void Assemble();
 
-    void ColoringElements(int matid);
+    void ColoringElements(int imat);
 
     void AssembleRhsBoundary();
 
     void Initialize();
 
-    TPZIrregularBlockMatrix BlockMatrix() {
-        return fBlockMatrix;
+    TPZIrregularBlockMatrix BlockMatrix(int imat) {
+        return fBlockMatrix[imat];
     }
 
     TPZIntPointsData IntPointsData() {
@@ -70,7 +70,7 @@ protected:
     TPZVec<int> fMaterialIds;
 
     /** @brief Irregular blocks matrix */
-    TPZIrregularBlockMatrix fBlockMatrix;
+    TPZVec<TPZIrregularBlockMatrix> fBlockMatrix;
 
     TPZIntPointsData fIntPointsData;
 
