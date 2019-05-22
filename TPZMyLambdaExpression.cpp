@@ -1,7 +1,10 @@
 //
 // Created by natalia on 17/05/19.
 //
-#include <omp.h>
+
+#ifdef USING_OMP
+#include "omp.h"
+#endif
 
 #include "TPZMyLambdaExpression.h"
 #include "SpectralDecomp.h"
