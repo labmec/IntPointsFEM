@@ -480,6 +480,7 @@ void SolutionIntPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
     REAL norm_res, norm_delta_du;
     int neq = analysis->Solution().Rows();
     TPZFMatrix<REAL> du(neq, 1, 0.), delta_du;
+    TPZFMatrix<REAL> rhs(neq, 1, 0.);
 
     TPZIntPointsStructMatrix *intPointsStructMatrix = new TPZIntPointsStructMatrix(analysis->Mesh());
     intPointsStructMatrix->Initialize();
@@ -493,9 +494,9 @@ void SolutionIntPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
         delta_du = analysis->Solution();
         du += delta_du;
         analysis->LoadSolution(du);
-        intPointsStructMatrix->AssembleResidual();
+        intPointsStructMatrix->Assemble(rhs);
         norm_delta_du = Norm(delta_du);
-        norm_res = Norm(intPointsStructMatrix->Rhs());
+        norm_res = Norm(rhs);
         stop_criterion_Q = norm_res < tolerance;
         std::cout << "Nonlinear process :: delta_du norm = " << norm_delta_du << std::endl;
         std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
@@ -508,7 +509,7 @@ void SolutionIntPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
             break;
         }
 //        analysis->Assemble();
-        analysis->Rhs() = intPointsStructMatrix->Rhs();
+        analysis->Rhs() = rhs;
 
     }
 

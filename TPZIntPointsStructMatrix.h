@@ -19,6 +19,8 @@ public:
      */
     TPZIntPointsStructMatrix(TPZCompMesh *cmesh);
 
+    TPZIntPointsStructMatrix(TPZAutoPointer<TPZCompMesh> cmesh);
+
     /** @brief Default destructor */
     ~TPZIntPointsStructMatrix();
 
@@ -46,7 +48,7 @@ public:
     void IntPointsInfo(int imat);
 
     /** @brief Assemble the load vector */
-    void AssembleResidual();
+    void Assemble(TPZFMatrix<REAL> & rhs);
 
     /** @brief Performs elements coloring */
     void ColoringElements(int imat);
@@ -65,14 +67,8 @@ public:
     TPZIntPointsData IntPointsData(int imat) {
         return fIntPointsData[imat];
     }
-    TPZFMatrix<REAL> Rhs() {
-        return fRhs;
-    }
 
 protected:
-    /** @brief Load vector */
-    TPZFMatrix<REAL> fRhs;
-
     /** @brief Load vector for boundary elements */
     TPZFMatrix<REAL> fRhsBoundary;
 
