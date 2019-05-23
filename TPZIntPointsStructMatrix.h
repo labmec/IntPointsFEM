@@ -54,8 +54,8 @@ public:
         return fBlockMatrix[imat];
     }
 
-    TPZIntPointsData IntPointsData() {
-        return fIntPointsData;
+    TPZIntPointsData IntPointsData(int imat) {
+        return fIntPointsData[imat];
     }
     TPZFMatrix<REAL> Rhs() {
         return fRhs;
@@ -72,7 +72,7 @@ protected:
     /** @brief Irregular blocks matrix */
     TPZVec<TPZIrregularBlockMatrix> fBlockMatrix;
 
-    TPZIntPointsData fIntPointsData;
+    TPZVec<TPZIntPointsData> fIntPointsData;
 
     /** @brief Vector of indexes of the domain elements for each material id*/
     TPZVec<TPZStack<int64_t>> fElemIndexes;

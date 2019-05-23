@@ -12,7 +12,7 @@ class TPZMyLambdaExpression {
 public:
     TPZMyLambdaExpression();
 
-    TPZMyLambdaExpression(TPZIntPointsStructMatrix *intPointsStructMatrix);
+    TPZMyLambdaExpression(TPZIntPointsStructMatrix *intPointsStructMatrix, int imat);
 
     ~TPZMyLambdaExpression();
 
@@ -24,8 +24,9 @@ public:
         fIntPointsStructMatrix = IntPoints;
     }
 
-    void SetMaterialId(int materialid) {
-        TPZMaterial *material = fIntPointsStructMatrix->Mesh()->FindMaterial(materialid);
+    void SetMaterialId(int imat) {
+        fIMat = imat;
+        TPZMaterial *material = fIntPointsStructMatrix->Mesh()->FindMaterial(imat + 1);
         fMaterial = dynamic_cast<TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse> , TPZElastoPlasticMem> *>(material);
     }
 
@@ -46,6 +47,8 @@ public:
     void ComputeSigma(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &sigma);
 
 protected:
+    int fIMat;
+
     int fNpts;
 
     TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse>, TPZElastoPlasticMem> *fMaterial;
