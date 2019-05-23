@@ -482,10 +482,6 @@ void SolutionIntPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
     TPZFMatrix<REAL> du(neq, 1, 0.), delta_du;
 
     TPZIntPointsStructMatrix *intPointsStructMatrix = new TPZIntPointsStructMatrix(analysis->Mesh());
-
-    TPZVec<int> matid(1);
-    matid[0] = wellbore_material.Id();
-    intPointsStructMatrix->SetMaterialIds(matid);
     intPointsStructMatrix->Initialize();
 //
     std::cout  << "Solving a NLS with DOF = " << neq << std::endl;
@@ -497,7 +493,7 @@ void SolutionIntPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
         delta_du = analysis->Solution();
         du += delta_du;
         analysis->LoadSolution(du);
-        intPointsStructMatrix->Assemble();
+        intPointsStructMatrix->AssembleResidual();
         norm_delta_du = Norm(delta_du);
         norm_res = Norm(intPointsStructMatrix->Rhs());
         stop_criterion_Q = norm_res < tolerance;

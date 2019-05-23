@@ -7,11 +7,11 @@
 #endif
 #include "TPZMyLambdaExpression.h"
 
-TPZIntPointsStructMatrix::TPZIntPointsStructMatrix() : fRhs(0,0), fRhsBoundary(0,0), fMaterialIds(0), fBlockMatrix(0), fIntPointsData(0), fElemIndexes(0){
+TPZIntPointsStructMatrix::TPZIntPointsStructMatrix() : fRhs(0,0), fRhsBoundary(0,0), fBlockMatrix(0), fIntPointsData(0), fElemIndexes(0){
 
 }
 
-TPZIntPointsStructMatrix::TPZIntPointsStructMatrix(TPZCompMesh *cmesh) : fRhs(0,0), fRhsBoundary(0,0), fMaterialIds(0), fBlockMatrix(0), fIntPointsData(0), fElemIndexes(0) {
+TPZIntPointsStructMatrix::TPZIntPointsStructMatrix(TPZCompMesh *cmesh) : fRhs(0,0), fRhsBoundary(0,0), fBlockMatrix(0), fIntPointsData(0), fElemIndexes(0) {
     SetMesh(cmesh);
 }
 
@@ -19,10 +19,13 @@ TPZIntPointsStructMatrix::~TPZIntPointsStructMatrix() {
 
 }
 
+TPZStructMatrix * TPZIntPointsStructMatrix::Clone(){
+    return new TPZIntPointsStructMatrix(*this);
+}
+
 TPZIntPointsStructMatrix::TPZIntPointsStructMatrix(const TPZIntPointsStructMatrix &copy) {
     fRhs = copy.fRhs;
     fRhsBoundary = copy.fRhsBoundary;
-    fMaterialIds = copy.fMaterialIds;
     fBlockMatrix = copy.fBlockMatrix;
     fIntPointsData = copy.fIntPointsData;
     fElemIndexes = copy.fElemIndexes;
@@ -35,7 +38,6 @@ TPZIntPointsStructMatrix &TPZIntPointsStructMatrix::operator=(const TPZIntPoints
 
     fRhs = copy.fRhs;
     fRhsBoundary = copy.fRhsBoundary;
-    fMaterialIds = copy.fMaterialIds;
     fBlockMatrix = copy.fBlockMatrix;
     fIntPointsData = copy.fIntPointsData;
     fElemIndexes = copy.fElemIndexes;
@@ -44,18 +46,28 @@ TPZIntPointsStructMatrix &TPZIntPointsStructMatrix::operator=(const TPZIntPoints
 }
 
 void TPZIntPointsStructMatrix::ElementsToAssemble() {
-    int nmaterials = fMaterialIds.size();
-    fElemIndexes.resize(nmaterials);
+    std::map<int, TPZMaterial*> & matvec = fMesh->MaterialVec();
+    std::map<int, TPZMaterial* >::iterator mit;
 
-    for (int imat = 0; imat < nmaterials; ++imat) {
+    int imat = 0;
+    fElemIndexes.resize(fMesh->NMaterials());
+    bool assemble = false;
+    for(mit=matvec.begin(); mit!= matvec.end(); mit++)
+    {
         for (int64_t i = 0; i < fMesh->NElements(); i++) {
             TPZCompEl *cel = fMesh->Element(i);
             if (!cel) continue;
             TPZGeoEl *gel = fMesh->Element(i)->Reference();
             if (!gel) continue;
-            if(cel->Material()->Id() == fMaterialIds[imat]) fElemIndexes[imat].Push(cel->Index());
+            if(cel->Material()->Id() == mit->second->Id() && cel->Dimension() == fMesh->Dimension()){
+                fElemIndexes[imat].Push(cel->Index());
+                assemble = true;
+            }
         }
+        imat += assemble;
+        assemble = false;
     }
+    fElemIndexes.resize(imat);
 }
 
 void TPZIntPointsStructMatrix::BlocksInfo(int imat) {
@@ -232,7 +244,8 @@ void TPZIntPointsStructMatrix::IntPointsInfo(int imat) {
 void TPZIntPointsStructMatrix::Initialize() {
     ElementsToAssemble();
     AssembleRhsBoundary();
-    int nmat = fMaterialIds.size();
+
+    int nmat = fElemIndexes.size();
     fBlockMatrix.resize(nmat);
     fIntPointsData.resize(nmat);
 
@@ -244,8 +257,8 @@ void TPZIntPointsStructMatrix::Initialize() {
     }
 }
 
-void TPZIntPointsStructMatrix::Assemble() {
-    int nmat = fMaterialIds.size();
+void TPZIntPointsStructMatrix::AssembleResidual() {
+    int nmat = fElemIndexes.size();
     int dim = fMesh->Dimension();
     int neq = fMesh->NEquations();
 
