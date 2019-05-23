@@ -15,8 +15,7 @@ public:
     TPZIntPointsStructMatrix();
 
     /** @brief Creates the object based on a Compmesh
-     * @param Compmesh : Computational mesh
-     */
+     * @param Compmesh : Computational mesh */
     TPZIntPointsStructMatrix(TPZCompMesh *cmesh);
 
     TPZIntPointsStructMatrix(TPZAutoPointer<TPZCompMesh> cmesh);
@@ -28,52 +27,39 @@ public:
     TPZStructMatrix *Clone();
 
     /** @brief Creates a TPZIntPointsStructMatrix object with copy constructor
-     * @param copy : original TPZIntPointsStructMatrix object
-     */
+     * @param copy : original TPZIntPointsStructMatrix object */
     TPZIntPointsStructMatrix(const TPZIntPointsStructMatrix &copy);
 
     /** @brief operator= */
     TPZIntPointsStructMatrix &operator=(const TPZIntPointsStructMatrix &copy);
 
-    /** @brief Defines with elements must be assembled */
+    /** @brief Defines which elements must be assembled */
     void ElementsToAssemble();
 
-    /** @brief Defines matrices rows and columns sizes, first row and column indexes and CSR parameters */
-    void BlocksInfo();
-
-    /** @brief Fill matrices values */
-    void FillBlocks();
-
     /** @brief Defines integration points information */
-    void IntPointsInfo();
+    void IntPointsInfo(TPZIrregularBlockMatrix &blockMatrix);
 
-    /** @brief Assemble the load vector */
+    /** @brief Assemble the load vector for domain elements*/
     void Assemble(TPZFMatrix<REAL> & rhs);
 
     /** @brief Performs elements coloring */
-    void ColoringElements();
+    void ColoringElements(TPZIrregularBlockMatrix &blockMatrix);
 
     /** @brief Assemble the load vector for boundary elements */
     void AssembleRhsBoundary();
 
-    /** @brief Initialize fBlockMatrix and fIntPointsData */
-    void Initialize();
-
-    /** @brief Access methods */
-    TPZIrregularBlockMatrix BlockMatrix() {
-        return fBlockMatrix;
-    }
+    /** @brief Creates a TPZIrregularBlockMatrix */
+    TPZMatrix<REAL> * Create();
 
     TPZIntPointsData IntPointsData() {
         return fIntPointsData;
     }
 
 protected:
+    TPZIrregularBlockMatrix *fBlockMatrix;
+
     /** @brief Load vector for boundary elements */
     TPZFMatrix<REAL> fRhsBoundary;
-
-    /** @brief Vector of irregular blocks matrix (each position of the vector represents one material) */
-    TPZIrregularBlockMatrix fBlockMatrix;
 
     /** @brief Vector of integration points info (each position of the vector represents one material) */
     TPZIntPointsData fIntPointsData;

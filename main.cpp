@@ -483,7 +483,6 @@ void SolutionIntPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
     TPZFMatrix<REAL> rhs(neq, 1, 0.);
 
     TPZIntPointsStructMatrix *intPointsStructMatrix = new TPZIntPointsStructMatrix(analysis->Mesh());
-    intPointsStructMatrix->Initialize();
 //
     std::cout  << "Solving a NLS with DOF = " << neq << std::endl;
 

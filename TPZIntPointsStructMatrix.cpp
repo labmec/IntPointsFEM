@@ -7,23 +7,23 @@
 #endif
 #include "TPZMyLambdaExpression.h"
 
-TPZIntPointsStructMatrix::TPZIntPointsStructMatrix() : TPZStructMatrix(), fBlockMatrix(), fIntPointsData() {
-    fRhsBoundary.Resize(0,0);
-    fElemIndexes.resize(0);
+TPZIntPointsStructMatrix::TPZIntPointsStructMatrix() : TPZStructMatrix(), fIntPointsData(), fBlockMatrix(), fRhsBoundary(0,0), fElemIndexes() {
 }
 
-TPZIntPointsStructMatrix::TPZIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZStructMatrix(cmesh), fBlockMatrix(), fIntPointsData() {
-    fRhsBoundary.Resize(0,0);
-    fElemIndexes.resize(0);
+TPZIntPointsStructMatrix::TPZIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZStructMatrix(cmesh), fIntPointsData(), fBlockMatrix(), fRhsBoundary(0,0), fElemIndexes() {
+    ElementsToAssemble();
+    AssembleRhsBoundary();
+    TPZMatrix<STATE> *blockMatrix = Create();
+    fBlockMatrix = dynamic_cast<TPZIrregularBlockMatrix *> (blockMatrix);
+
+    IntPointsInfo(*fBlockMatrix);
+    ColoringElements(*fBlockMatrix);
 }
 
-TPZIntPointsStructMatrix::TPZIntPointsStructMatrix(TPZAutoPointer<TPZCompMesh> cmesh) : TPZStructMatrix(cmesh), fBlockMatrix(), fIntPointsData()  {
-    fRhsBoundary.Resize(0,0);
-    fElemIndexes.resize(0);
+TPZIntPointsStructMatrix::TPZIntPointsStructMatrix(TPZAutoPointer<TPZCompMesh> cmesh) : TPZStructMatrix(cmesh), fIntPointsData(), fBlockMatrix(), fRhsBoundary(0,0), fElemIndexes() {
 }
 
 TPZIntPointsStructMatrix::~TPZIntPointsStructMatrix() {
-
 }
 
 TPZStructMatrix * TPZIntPointsStructMatrix::Clone(){
@@ -31,9 +31,9 @@ TPZStructMatrix * TPZIntPointsStructMatrix::Clone(){
 }
 
 TPZIntPointsStructMatrix::TPZIntPointsStructMatrix(const TPZIntPointsStructMatrix &copy) {
-    fRhsBoundary = copy.fRhsBoundary;
-    fBlockMatrix = copy.fBlockMatrix;
     fIntPointsData = copy.fIntPointsData;
+    fBlockMatrix = copy.fBlockMatrix;
+    fRhsBoundary = copy.fRhsBoundary;
     fElemIndexes = copy.fElemIndexes;
 }
 
@@ -42,9 +42,9 @@ TPZIntPointsStructMatrix &TPZIntPointsStructMatrix::operator=(const TPZIntPoints
         return *this;
     }
 
-    fRhsBoundary = copy.fRhsBoundary;
-    fBlockMatrix = copy.fBlockMatrix;
     fIntPointsData = copy.fIntPointsData;
+    fBlockMatrix = copy.fBlockMatrix;
+    fRhsBoundary = copy.fRhsBoundary;
     fElemIndexes = copy.fElemIndexes;
 
     return *this;
@@ -68,73 +68,27 @@ void TPZIntPointsStructMatrix::ElementsToAssemble() {
     }
 }
 
-void TPZIntPointsStructMatrix::BlocksInfo() {
+TPZMatrix<REAL> * TPZIntPointsStructMatrix::Create() {
     int nblocks = fElemIndexes.size();
-    fBlockMatrix.SetNumBlocks(nblocks);
 
-    TPZVec<int> rowsizes(nblocks);
-    TPZVec<int> colsizes(nblocks);
-    TPZVec<int> matrixpos(nblocks+1);
-    TPZVec<int> rowfirstindex(nblocks+1);
-    TPZVec<int> colfirstindex(nblocks+1);
+    TPZIrregularBlockMatrix *blockMatrix = new TPZIrregularBlockMatrix();
 
-    matrixpos[0] = 0;
-    rowfirstindex[0] = 0;
-    colfirstindex[0] = 0;
+    TPZIrregularBlockMatrix::IrregularBlocks blocksData;
+
+    blocksData.fNumBlocks = nblocks;
+
+    blocksData.fRowSizes.resize(nblocks);
+    blocksData.fColSizes.resize(nblocks);
+    blocksData.fMatrixPosition.resize(nblocks + 1);
+    blocksData.fRowFirstIndex.resize(nblocks + 1);
+    blocksData.fColFirstIndex.resize(nblocks + 1);
+
+    blocksData.fMatrixPosition[0] = 0;
+    blocksData.fRowFirstIndex[0] = 0;
+    blocksData.fColFirstIndex[0] = 0;
 
     int64_t rows = 0;
     int64_t cols = 0;
-
-    int iel = 0;
-    for (auto elem_index : fElemIndexes) {
-        TPZCompEl *cel = fMesh->Element(elem_index);
-        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement*>(cel);
-        if (!cel_inter) DebugStop();
-        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
-
-        int64_t npts = int_rule->NPoints(); // number of integration points of the element
-        int64_t dim = cel_inter->Dimension(); //dimension of the element
-        int64_t nf = cel_inter->NShapeF(); // number of shape functions of the element
-
-        rowsizes[iel] = dim * npts;
-        colsizes[iel] = nf;
-        matrixpos[iel + 1] = matrixpos[iel] + rowsizes[iel] * colsizes[iel];
-        rowfirstindex[iel + 1] = rowfirstindex[iel] + rowsizes[iel];
-        colfirstindex[iel + 1] = colfirstindex[iel] + colsizes[iel];
-
-        rows += rowsizes[iel];
-        cols += colsizes[iel];
-        iel++;
-    }
-
-    fBlockMatrix.SetRowSizes(rowsizes);
-    fBlockMatrix.SetColSizes(colsizes);
-    fBlockMatrix.SetMatrixPosition(matrixpos);
-    fBlockMatrix.SetRowFirstIndex(rowfirstindex);
-    fBlockMatrix.SetColFirstIndex(colfirstindex);
-    fBlockMatrix.SetRows(rows);
-    fBlockMatrix.SetCols(cols);
-
-    TPZVec<int> rowptr(rows + 1);
-    TPZVec<int> colind(matrixpos[nblocks]);
-
-    for (int iel = 0; iel < nblocks; ++iel) {
-        for (int irow = 0; irow < rowsizes[iel]; ++irow) {
-            rowptr[irow + rowfirstindex[iel]] = matrixpos[iel] + irow*colsizes[iel];
-
-            for (int icol = 0; icol < colsizes[iel]; ++icol) {
-                colind[icol + matrixpos[iel] + irow*colsizes[iel]] = icol + colfirstindex[iel];
-            }
-        }
-    }
-    rowptr[rows] = matrixpos[nblocks];
-
-    fBlockMatrix.SetRowPtr(rowptr);
-    fBlockMatrix.SetColInd(colind);
-}
-
-void TPZIntPointsStructMatrix::FillBlocks() {
-    TPZVec<REAL> storage(fBlockMatrix.MatrixPosition()[fBlockMatrix.NumBlocks()]);
 
     int iel = 0;
     for(auto elem_index : fElemIndexes) {
@@ -147,10 +101,48 @@ void TPZIntPointsStructMatrix::FillBlocks() {
         int64_t dim = cel_inter->Dimension(); //dimension of the element
         int64_t nf = cel_inter->NShapeF(); // number of shape functions of the element
 
+        blocksData.fRowSizes[iel] = dim * npts;
+        blocksData.fColSizes[iel] = nf;
+        blocksData.fMatrixPosition[iel + 1] = blocksData.fMatrixPosition[iel] + blocksData.fRowSizes[iel] * blocksData.fColSizes[iel];
+        blocksData.fRowFirstIndex[iel + 1] =  blocksData.fRowFirstIndex[iel] + blocksData.fRowSizes[iel];
+        blocksData.fColFirstIndex[iel + 1] = blocksData.fColFirstIndex[iel] + blocksData.fColSizes[iel];
+
+        rows += blocksData.fRowSizes[iel];
+        cols += blocksData.fColSizes[iel];
+        iel++;
+    }
+
+    blocksData.fRowPtr.resize(rows + 1);
+    blocksData.fColInd.resize(blocksData.fMatrixPosition[nblocks]);
+
+    for (int iel = 0; iel < nblocks; ++iel) {
+        for (int irow = 0; irow < blocksData.fRowSizes[iel]; ++irow) {
+            blocksData.fRowPtr[irow + blocksData.fRowFirstIndex[iel]] = blocksData.fMatrixPosition[iel] + irow*blocksData.fColSizes[iel];
+
+            for (int icol = 0; icol < blocksData.fColSizes[iel]; ++icol) {
+                blocksData.fColInd[icol + blocksData.fMatrixPosition[iel] + irow*blocksData.fColSizes[iel]] = icol + blocksData.fColFirstIndex[iel];
+            }
+        }
+    }
+    blocksData.fRowPtr[rows] = blocksData.fMatrixPosition[nblocks];
+
+    blocksData.fStorage.resize(blocksData.fMatrixPosition[nblocks]);
+
+    iel = 0;
+    for(auto elem_index : fElemIndexes) {
+        TPZCompEl *cel = fMesh->Element(elem_index);
+        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement *>(cel);
+        if (!cel_inter) DebugStop();
+        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
+
+        int64_t npts = int_rule->NPoints(); // number of integration points of the element
+        int64_t dim = cel_inter->Dimension(); //dimension of the element
+        int64_t nf = cel_inter->NShapeF(); // number of shape functions of the element
+
         TPZFMatrix<REAL> elmatrix;
-        int rows = fBlockMatrix.RowSizes()[iel];
-        int cols = fBlockMatrix.ColSizes()[iel];
-        int pos = fBlockMatrix.MatrixPosition()[iel];
+        int rows = blocksData.fRowSizes[iel];
+        int cols = blocksData.fColSizes[iel];
+        int pos = blocksData.fMatrixPosition[iel];
         elmatrix.Resize(rows, cols);
 
         TPZMaterialData data;
@@ -176,82 +168,18 @@ void TPZIntPointsStructMatrix::FillBlocks() {
         }
         elmatrix.Transpose(); // Using CSR format
 
-        TPZFMatrix<REAL> elmatloc(rows, cols, &storage[pos], rows * cols);
+        TPZFMatrix<REAL> elmatloc(rows, cols, &blocksData.fStorage[pos], rows * cols);
         elmatloc = elmatrix;
         iel++;
     }
 
-    fBlockMatrix.SetStorage(storage);
-}
+    blockMatrix->Resize(rows, cols);
+    blockMatrix->SetBlocks(blocksData);
 
-void TPZIntPointsStructMatrix::IntPointsInfo() {
-    TPZVec<REAL> weight(fBlockMatrix.Rows() / fMesh->Dimension());
-    TPZVec<int> indexes(fMesh->Dimension() * fBlockMatrix.Cols());
-
-    int iel = 0;
-    int iw = 0;
-    int64_t cont1 = 0;
-    int64_t cont2 = 0;
-    for(auto elem_index : fElemIndexes) {
-        TPZCompEl *cel = fMesh->Element(elem_index);
-        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement*>(cel);
-        if (!cel_inter) DebugStop();
-        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
-
-        int64_t npts = int_rule->NPoints(); // number of integration points of the element
-        int64_t dim = cel_inter->Dimension(); //dimension of the element
-
-        TPZMaterialData data;
-        cel_inter->InitMaterialData(data);
-
-        for (int64_t ipts = 0; ipts < npts; ipts++) {
-            TPZVec<REAL> qsi(dim);
-            REAL w;
-            int_rule->Point(ipts, qsi, w);
-            cel_inter->ComputeRequiredData(data, qsi);
-            weight[iw] = w * std::abs(data.detjac);
-            iw++;
-        }
-
-        int64_t ncon = cel->NConnects();
-        for (int64_t icon = 0; icon < ncon; icon++) {
-            int64_t id = cel->ConnectIndex(icon);
-            TPZConnect &df = fMesh->ConnectVec()[id];
-            int64_t conid = df.SequenceNumber();
-            if (df.NElConnected() == 0 || conid < 0 || fMesh->Block().Size(conid) == 0) continue;
-            else {
-                int64_t pos = fMesh->Block().Position(conid);
-                int64_t nsize = fMesh->Block().Size(conid);
-                for (int64_t isize = 0; isize < nsize; isize++) {
-                    if (isize % 2 == 0) {
-                        indexes[cont1] = pos + isize;
-                        cont1++;
-                    } else {
-                        indexes[cont2 + fBlockMatrix.Cols()] = pos + isize;
-                        cont2++;
-                    }
-                }
-            }
-        }
-        iel++;
-    }
-    fIntPointsData.SetIndexes(indexes);
-    fIntPointsData.SetWeight(weight);
-}
-
-void TPZIntPointsStructMatrix::Initialize() {
-    ElementsToAssemble();
-    AssembleRhsBoundary();
-
-    BlocksInfo();
-    FillBlocks();
-    IntPointsInfo();
-    ColoringElements();
+    return blockMatrix;
 }
 
 void TPZIntPointsStructMatrix::Assemble(TPZFMatrix<REAL> & rhs) {
-//void TPZIntPointsStructMatrix::Assemble(TPZFMatrix<REAL> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface);
-//void TPZIntPointsStructMatrix::AssembleResidual() {
     int dim = fMesh->Dimension();
     int neq = fMesh->NEquations();
 
@@ -263,36 +191,36 @@ void TPZIntPointsStructMatrix::Assemble(TPZFMatrix<REAL> & rhs) {
     rhs.Resize(neq, 1);
     rhs.Zero();
 
-        int rows = fBlockMatrix.Rows();
-        int cols = fBlockMatrix.Cols();
+    int rows = fBlockMatrix->Rows();
+    int cols = fBlockMatrix->Cols();
 
-        gather_solution.Resize(dim * cols, 1);
-        fIntPointsData.GatherSolution(fMesh->Solution(), gather_solution);
+    gather_solution.Resize(dim * cols, 1);
+    fIntPointsData.GatherSolution(fMesh->Solution(), gather_solution);
 
-        grad_u.Resize(dim * rows, 1);
-        fBlockMatrix.Multiply(&gather_solution(0,0), &grad_u(0,0), 0);
-        fBlockMatrix.Multiply(&gather_solution(cols,0), &grad_u(rows,0), 0);
+    grad_u.Resize(dim * rows, 1);
+    fBlockMatrix->Multiply(&gather_solution(0, 0), &grad_u(0, 0), 0);
+    fBlockMatrix->Multiply(&gather_solution(cols, 0), &grad_u(rows, 0), 0);
 
-        sigma.Resize(dim * rows, 1);
-        TPZMyLambdaExpression lambdaexp(this);
-        lambdaexp.ComputeSigma(grad_u, sigma);
+    sigma.Resize(dim * rows, 1);
+    TPZMyLambdaExpression lambdaexp(this);
+    lambdaexp.ComputeSigma(grad_u, sigma);
 
-        forces.Resize(dim * cols, 1);
-        fBlockMatrix.Multiply(&sigma(0,0), &forces(0,0), true);
-        fBlockMatrix.Multiply(&sigma(rows,0), &forces(cols,0), true);
+    forces.Resize(dim * cols, 1);
+    fBlockMatrix->Multiply(&sigma(0, 0), &forces(0, 0), true);
+    fBlockMatrix->Multiply(&sigma(rows, 0), &forces(cols, 0), true);
 
-        fIntPointsData.ColoredAssemble(forces, rhs);
+    fIntPointsData.ColoredAssemble(forces, rhs);
 
     rhs += fRhsBoundary;
 }
 
-void TPZIntPointsStructMatrix::ColoringElements()  {
+void TPZIntPointsStructMatrix::ColoringElements(TPZIrregularBlockMatrix &blockMatrix)  {
     int dim = fMesh->Dimension();
-    int cols = fBlockMatrix.Cols();
+    int cols = blockMatrix.Cols();
 
     int64_t nconnects = fMesh->NConnects();
     TPZVec<int64_t> connects_vec(nconnects,0);
-    TPZVec<int64_t> elemcolor(fBlockMatrix.NumBlocks(),-1);
+    TPZVec<int64_t> elemcolor(blockMatrix.Blocks().fNumBlocks,-1);
 
     int64_t contcolor = 0;
     bool needstocontinue = true;
@@ -337,11 +265,11 @@ void TPZIntPointsStructMatrix::ColoringElements()  {
     //Indexes coloring
     fIntPointsData.SetNColor(contcolor);
     TPZVec<int> indexescolor(dim * cols);
-    int64_t nelem = fBlockMatrix.NumBlocks();
+    int64_t nelem = blockMatrix.Blocks().fNumBlocks;
     int64_t neq = fMesh->NEquations();
     for (int64_t iel = 0; iel < nelem; iel++) {
-        int64_t elem_col = fBlockMatrix.ColSizes()[iel];
-        int64_t cont_cols = fBlockMatrix.ColFirstIndex()[iel];
+        int64_t elem_col = blockMatrix.Blocks().fColSizes[iel];
+        int64_t cont_cols = blockMatrix.Blocks().fColFirstIndex[iel];
 
         for (int64_t icols = 0; icols < elem_col; icols++) {
             indexescolor[cont_cols + icols] = fIntPointsData.Indexes()[cont_cols + icols] + elemcolor[iel]*neq;
@@ -349,6 +277,61 @@ void TPZIntPointsStructMatrix::ColoringElements()  {
         }
     }
     fIntPointsData.SetIndexesColor(indexescolor);
+}
+
+void TPZIntPointsStructMatrix::IntPointsInfo(TPZIrregularBlockMatrix &blockMatrix) {
+    TPZVec<REAL> weight(blockMatrix.Rows() / fMesh->Dimension());
+    TPZVec<int> indexes(fMesh->Dimension() * blockMatrix.Cols());
+
+    int iel = 0;
+    int iw = 0;
+    int64_t cont1 = 0;
+    int64_t cont2 = 0;
+    for(auto elem_index : fElemIndexes) {
+        TPZCompEl *cel = fMesh->Element(elem_index);
+        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement*>(cel);
+        if (!cel_inter) DebugStop();
+        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
+
+        int64_t npts = int_rule->NPoints(); // number of integration points of the element
+        int64_t dim = cel_inter->Dimension(); //dimension of the element
+
+        TPZMaterialData data;
+        cel_inter->InitMaterialData(data);
+
+        for (int64_t ipts = 0; ipts < npts; ipts++) {
+            TPZVec<REAL> qsi(dim);
+            REAL w;
+            int_rule->Point(ipts, qsi, w);
+            cel_inter->ComputeRequiredData(data, qsi);
+            weight[iw] = w * std::abs(data.detjac);
+            iw++;
+        }
+
+        int64_t ncon = cel->NConnects();
+        for (int64_t icon = 0; icon < ncon; icon++) {
+            int64_t id = cel->ConnectIndex(icon);
+            TPZConnect &df = fMesh->ConnectVec()[id];
+            int64_t conid = df.SequenceNumber();
+            if (df.NElConnected() == 0 || conid < 0 || fMesh->Block().Size(conid) == 0) continue;
+            else {
+                int64_t pos = fMesh->Block().Position(conid);
+                int64_t nsize = fMesh->Block().Size(conid);
+                for (int64_t isize = 0; isize < nsize; isize++) {
+                    if (isize % 2 == 0) {
+                        indexes[cont1] = pos + isize;
+                        cont1++;
+                    } else {
+                        indexes[cont2 + blockMatrix.Cols()] = pos + isize;
+                        cont2++;
+                    }
+                }
+            }
+        }
+        iel++;
+    }
+    fIntPointsData.SetIndexes(indexes);
+    fIntPointsData.SetWeight(weight);
 }
 
 void TPZIntPointsStructMatrix::AssembleRhsBoundary() {

@@ -9,16 +9,33 @@
 
 #ifndef INTPOINTSFEM_TPZIRREGULARBLOCKMATRIX_H
 #define INTPOINTSFEM_TPZIRREGULARBLOCKMATRIX_H
+#include "pzmatrix.h"
 
-
-class TPZIrregularBlockMatrix {
+class TPZIrregularBlockMatrix : public TPZMatrix<REAL> {
 public:
+    struct IrregularBlocks {
+        int64_t fNumBlocks;
+        TPZVec<REAL> fStorage;
+        TPZVec<int> fRowSizes;
+        TPZVec<int> fColSizes;
+        TPZVec<int> fMatrixPosition;
+        TPZVec<int> fRowFirstIndex;
+        TPZVec<int> fColFirstIndex;
+        TPZVec<int> fRowPtr;
+        TPZVec<int> fColInd;
+    };
+
     /** @brief Default constructor */
     TPZIrregularBlockMatrix();
+
+    TPZIrregularBlockMatrix(const int64_t rows,const int64_t cols);
 
     /** @brief Default destructor */
     ~TPZIrregularBlockMatrix();
 
+    virtual TPZMatrix<REAL> * Clone() const {
+        return new TPZIrregularBlockMatrix(*this);
+    }
     /** @brief Creates a irregular block matrix with copy constructor
      * @param copy : original irregular block matrix
      */
@@ -37,127 +54,16 @@ public:
     void Multiply(REAL *A, REAL *res, int opt);
 
     /** @brief Access methods */
-    int64_t NumBlocks() {
-        return fNumBlocks;
+    void SetBlocks(struct IrregularBlocks blocks) {
+        fBlocksInfo = blocks;
     }
 
-    void SetNumBlocks(int64_t nb) {
-        fNumBlocks = nb;
-    }
-
-    TPZVec<REAL> Storage() {
-        return fStorage;
-    }
-
-    void SetStorage(TPZVec<REAL> storage) {
-        fStorage = storage;
-    }
-
-    TPZVec<int> RowSizes() {
-        return fRowSizes;
-    }
-
-    void SetRowSizes(TPZVec<int> rowsizes) {
-        fRowSizes = rowsizes;
-    }
-
-    TPZVec<int> ColSizes() {
-        return fColSizes;
-    }
-
-    void SetColSizes(TPZVec<int> colsizes) {
-        fColSizes = colsizes;
-    }
-
-    TPZVec<int> MatrixPosition() {
-        return fMatrixPosition;
-    }
-
-    void SetMatrixPosition(TPZVec<int> matrixpos) {
-        fMatrixPosition = matrixpos;
-    }
-
-    TPZVec<int> RowFirstIndex() {
-        return fRowFirstIndex;
-    }
-
-    void SetRowFirstIndex(TPZVec<int> rowfirstindex) {
-        fRowFirstIndex = rowfirstindex;
-    }
-
-    TPZVec<int> ColFirstIndex() {
-        return fColFirstIndex;
-    }
-
-    void SetColFirstIndex(TPZVec<int> colfirstindex) {
-        fColFirstIndex = colfirstindex;
-    }
-
-    int64_t Rows() {
-        return fRow;
-    }
-
-    void SetRows(int64_t rows) {
-        fRow = rows;
-    }
-
-    int64_t Cols() {
-        return fCol;
-    }
-
-    void SetCols(int64_t cols) {
-        fCol = cols;
-    }
-
-    TPZVec<int> RowPtr() {
-        return fRowPtr;
-    }
-
-    void SetRowPtr(TPZVec<int> rowptr) {
-        fRowPtr = rowptr;
-    }
-
-    TPZVec<int> ColInd() {
-        return fColInd;
-    }
-    void SetColInd(TPZVec<int> colind) {
-        fColInd = colind;
+    struct IrregularBlocks Blocks() {
+        return fBlocksInfo;
     }
 
 protected:
-    /** @brief Number of blocks */
-    int64_t fNumBlocks;
-
-    /** @brief Vector of all matrices values */
-    TPZVec<REAL> fStorage;
-
-    /** @brief Vector of number of rows of each matrix */
-    TPZVec<int> fRowSizes;
-
-    /** @brief Vector of number of columns of each matrix */
-    TPZVec<int> fColSizes;
-
-    /** @brief Vector of matrix position in fStorage */
-    TPZVec<int> fMatrixPosition;
-
-    /** @brief Vector of first row index of each matrix */
-    TPZVec<int> fRowFirstIndex;
-
-    /** @brief Vector of first column index of each matrix */
-    TPZVec<int> fColFirstIndex;
-
-    /** @brief Number of rows of the irregular block matrix */
-    int64_t fRow;
-
-    /** @brief Number of columns of the irregular block matrix */
-    int64_t fCol;
-
-    /** @brief Vector of the start of every row and the end of the last row plus one (this is for CSR format) */
-    TPZVec<int> fRowPtr;
-
-    /** @brief Vector of column indices for each non-zero element of the matrix (this is for CSR format)*/
-    TPZVec<int> fColInd;
-
+    struct IrregularBlocks fBlocksInfo;
 };
 
 
