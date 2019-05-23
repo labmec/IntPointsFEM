@@ -10,12 +10,12 @@
 #include "SpectralDecomp.h"
 #include "SigmaProjection.h"
 
-TPZMyLambdaExpression::TPZMyLambdaExpression() : fIMat(-1), fNpts(-1), fMaterial(), fPlasticStrain(0,0), fMType(0,0), fAlpha(0,0), fIntPointsStructMatrix() {
+TPZMyLambdaExpression::TPZMyLambdaExpression() : fNpts(-1), fMaterial(), fPlasticStrain(0,0), fMType(0,0), fAlpha(0,0), fIntPointsStructMatrix() {
 }
 
-TPZMyLambdaExpression::TPZMyLambdaExpression(TPZIntPointsStructMatrix *intPointsStructMatrix, int imat) : fIMat(-1), fNpts(-1), fMaterial(), fPlasticStrain(0,0), fMType(0,0), fAlpha(0,0), fIntPointsStructMatrix() {
+TPZMyLambdaExpression::TPZMyLambdaExpression(TPZIntPointsStructMatrix *intPointsStructMatrix) : fNpts(-1), fMaterial(), fPlasticStrain(0,0), fMType(0,0), fAlpha(0,0), fIntPointsStructMatrix() {
     SetIntPoints(intPointsStructMatrix);
-    SetMaterialId(imat);
+    SetMaterialId(1);
 }
 
 TPZMyLambdaExpression::~TPZMyLambdaExpression() {
@@ -23,7 +23,6 @@ TPZMyLambdaExpression::~TPZMyLambdaExpression() {
 }
 
 TPZMyLambdaExpression::TPZMyLambdaExpression(const TPZMyLambdaExpression &copy) {
-    fIMat = copy.fIMat;
     fNpts = copy.fNpts;
     fMaterial = copy.fMaterial;
     fPlasticStrain = copy.fPlasticStrain;
@@ -37,7 +36,6 @@ TPZMyLambdaExpression &TPZMyLambdaExpression::operator=(const TPZMyLambdaExpress
         return *this;
     }
 
-    fIMat = copy.fIMat;
     fNpts = copy.fNpts;
     fMaterial = copy.fMaterial;
     fPlasticStrain = copy.fPlasticStrain;
@@ -79,7 +77,7 @@ void TPZMyLambdaExpression::ComputeStrain(TPZFMatrix<REAL> &sigma, TPZFMatrix<RE
     REAL nu = fMaterial->GetPlasticModel().fER.Poisson();
 
     TPZVec<REAL> weight;
-    weight = fIntPointsStructMatrix->IntPointsData(fIMat).Weight();
+    weight = fIntPointsStructMatrix->IntPointsData().Weight();
 
     int dim = fIntPointsStructMatrix->Mesh()->Dimension();
 
@@ -143,7 +141,7 @@ void TPZMyLambdaExpression::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatr
 
 void TPZMyLambdaExpression::StressCompleteTensor(TPZFMatrix<REAL> &sigma_projected, TPZFMatrix<REAL> &eigenvectors, TPZFMatrix<REAL> &sigma){
     TPZVec<REAL> weight;
-    weight = fIntPointsStructMatrix->IntPointsData(fIMat).Weight();
+    weight = fIntPointsStructMatrix->IntPointsData().Weight();
 
     int dim = fIntPointsStructMatrix->Mesh()->Dimension();
 

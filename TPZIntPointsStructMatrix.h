@@ -39,19 +39,19 @@ public:
     void ElementsToAssemble();
 
     /** @brief Defines matrices rows and columns sizes, first row and column indexes and CSR parameters */
-    void BlocksInfo(int imat);
+    void BlocksInfo();
 
     /** @brief Fill matrices values */
-    void FillBlocks(int imat);
+    void FillBlocks();
 
     /** @brief Defines integration points information */
-    void IntPointsInfo(int imat);
+    void IntPointsInfo();
 
     /** @brief Assemble the load vector */
     void Assemble(TPZFMatrix<REAL> & rhs);
 
     /** @brief Performs elements coloring */
-    void ColoringElements(int imat);
+    void ColoringElements();
 
     /** @brief Assemble the load vector for boundary elements */
     void AssembleRhsBoundary();
@@ -60,12 +60,12 @@ public:
     void Initialize();
 
     /** @brief Access methods */
-    TPZIrregularBlockMatrix BlockMatrix(int imat) {
-        return fBlockMatrix[imat];
+    TPZIrregularBlockMatrix BlockMatrix() {
+        return fBlockMatrix;
     }
 
-    TPZIntPointsData IntPointsData(int imat) {
-        return fIntPointsData[imat];
+    TPZIntPointsData IntPointsData() {
+        return fIntPointsData;
     }
 
 protected:
@@ -73,13 +73,13 @@ protected:
     TPZFMatrix<REAL> fRhsBoundary;
 
     /** @brief Vector of irregular blocks matrix (each position of the vector represents one material) */
-    TPZVec<TPZIrregularBlockMatrix> fBlockMatrix;
+    TPZIrregularBlockMatrix fBlockMatrix;
 
     /** @brief Vector of integration points info (each position of the vector represents one material) */
-    TPZVec<TPZIntPointsData> fIntPointsData;
+    TPZIntPointsData fIntPointsData;
 
     /** @brief Vector of indexes of the domain elements (each position of the vector represents one material) */
-    TPZVec<TPZStack<int64_t>> fElemIndexes;
+    TPZStack<int64_t> fElemIndexes;
 };
 
 #endif /* TPZIntPointsFEM_h */
