@@ -1,6 +1,10 @@
 //
 // Created by natalia on 17/05/19.
 //
+#include "TPZPlasticStepPV.h"
+#include "TPZYCMohrCoulombPV.h"
+#include "TPZElastoPlasticMem.h"
+#include "TPZMatElastoPlastic2D.h"
 
 #ifndef INTPOINTSFEM_TPZMYLAMBDAEXPRESSION_H
 #define INTPOINTSFEM_TPZMYLAMBDAEXPRESSION_H

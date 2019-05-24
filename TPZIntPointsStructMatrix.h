@@ -5,7 +5,7 @@
 
 #ifndef TPZIntPointsFEM_h
 #define TPZIntPointsFEM_h
-#include "TPZIrregularBlockMatrix.h"
+#include "TPZIrregularBlocksMatrix.h"
 #include "TPZIntPointsData.h"
 #include "pzstrmatrix.h"
 
@@ -37,13 +37,13 @@ public:
     void ElementsToAssemble();
 
     /** @brief Defines integration points information */
-    void IntPointsInfo(TPZIrregularBlockMatrix &blockMatrix);
+    void IntPointsInfo(TPZIrregularBlocksMatrix &blockMatrix);
 
     /** @brief Assemble the load vector for domain elements*/
     void Assemble(TPZFMatrix<REAL> & rhs);
 
     /** @brief Performs elements coloring */
-    void ColoringElements(TPZIrregularBlockMatrix &blockMatrix);
+    void ColoringElements(TPZIrregularBlocksMatrix &blockMatrix);
 
     /** @brief Assemble the load vector for boundary elements */
     void AssembleRhsBoundary();
@@ -56,7 +56,7 @@ public:
     }
 
 protected:
-    TPZIrregularBlockMatrix *fBlockMatrix;
+    TPZIrregularBlocksMatrix *fBlockMatrix;
 
     /** @brief Load vector for boundary elements */
     TPZFMatrix<REAL> fRhsBoundary;

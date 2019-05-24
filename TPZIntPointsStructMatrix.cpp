@@ -14,7 +14,7 @@ TPZIntPointsStructMatrix::TPZIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZStru
     ElementsToAssemble();
     AssembleRhsBoundary();
     TPZMatrix<STATE> *blockMatrix = Create();
-    fBlockMatrix = dynamic_cast<TPZIrregularBlockMatrix *> (blockMatrix);
+    fBlockMatrix = dynamic_cast<TPZIrregularBlocksMatrix *> (blockMatrix);
 
     IntPointsInfo(*fBlockMatrix);
     ColoringElements(*fBlockMatrix);
@@ -71,9 +71,9 @@ void TPZIntPointsStructMatrix::ElementsToAssemble() {
 TPZMatrix<REAL> * TPZIntPointsStructMatrix::Create() {
     int nblocks = fElemIndexes.size();
 
-    TPZIrregularBlockMatrix *blockMatrix = new TPZIrregularBlockMatrix();
+    TPZIrregularBlocksMatrix *blockMatrix = new TPZIrregularBlocksMatrix();
 
-    TPZIrregularBlockMatrix::IrregularBlocks blocksData;
+    TPZIrregularBlocksMatrix::IrregularBlocks blocksData;
 
     blocksData.fNumBlocks = nblocks;
 
@@ -197,24 +197,36 @@ void TPZIntPointsStructMatrix::Assemble(TPZFMatrix<REAL> & rhs) {
     gather_solution.Resize(dim * cols, 1);
     fIntPointsData.GatherSolution(fMesh->Solution(), gather_solution);
 
+    TPZFMatrix<REAL> gather_x(cols, 1, &gather_solution(0, 0), cols);
+    TPZFMatrix<REAL> gather_y(cols, 1, &gather_solution(cols, 0), cols);
+
     grad_u.Resize(dim * rows, 1);
-    fBlockMatrix->Multiply(&gather_solution(0, 0), &grad_u(0, 0), 0);
-    fBlockMatrix->Multiply(&gather_solution(cols, 0), &grad_u(rows, 0), 0);
+    TPZFMatrix<REAL> grad_u_x(rows, 1, &grad_u(0, 0), rows);
+    TPZFMatrix<REAL> grad_u_y(rows, 1, &grad_u(rows, 0), rows);
+
+    fBlockMatrix->Multiply(gather_x, grad_u_x, 0);
+    fBlockMatrix->Multiply(gather_y, grad_u_y, 0);
 
     sigma.Resize(dim * rows, 1);
     TPZMyLambdaExpression lambdaexp(this);
     lambdaexp.ComputeSigma(grad_u, sigma);
 
+    TPZFMatrix<REAL> sigma_x(rows, 1, &sigma(0, 0), rows);
+    TPZFMatrix<REAL> sigma_y(rows, 1, &sigma(rows, 0), rows);
+
     forces.Resize(dim * cols, 1);
-    fBlockMatrix->Multiply(&sigma(0, 0), &forces(0, 0), true);
-    fBlockMatrix->Multiply(&sigma(rows, 0), &forces(cols, 0), true);
+    TPZFMatrix<REAL> forces_x(cols, 1, &forces(0, 0), cols);
+    TPZFMatrix<REAL> forces_y(cols, 1, &forces(cols, 0), cols);
+
+    fBlockMatrix->Multiply(sigma_x, forces_x, true);
+    fBlockMatrix->Multiply(sigma_y, forces_y, true);
 
     fIntPointsData.ColoredAssemble(forces, rhs);
 
     rhs += fRhsBoundary;
 }
 
-void TPZIntPointsStructMatrix::ColoringElements(TPZIrregularBlockMatrix &blockMatrix)  {
+void TPZIntPointsStructMatrix::ColoringElements(TPZIrregularBlocksMatrix &blockMatrix)  {
     int dim = fMesh->Dimension();
     int cols = blockMatrix.Cols();
 
@@ -279,7 +291,7 @@ void TPZIntPointsStructMatrix::ColoringElements(TPZIrregularBlockMatrix &blockMa
     fIntPointsData.SetIndexesColor(indexescolor);
 }
 
-void TPZIntPointsStructMatrix::IntPointsInfo(TPZIrregularBlockMatrix &blockMatrix) {
+void TPZIntPointsStructMatrix::IntPointsInfo(TPZIrregularBlocksMatrix &blockMatrix) {
     TPZVec<REAL> weight(blockMatrix.Rows() / fMesh->Dimension());
     TPZVec<int> indexes(fMesh->Dimension() * blockMatrix.Cols());
 
