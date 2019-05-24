@@ -9,29 +9,16 @@
 #ifndef INTPOINTSFEM_TPZMYLAMBDAEXPRESSION_H
 #define INTPOINTSFEM_TPZMYLAMBDAEXPRESSION_H
 
-#include "TPZIntPointsStructMatrix.h"
-
 class TPZMyLambdaExpression {
 
 public:
     TPZMyLambdaExpression();
-
-    TPZMyLambdaExpression(TPZIntPointsStructMatrix *intPointsStructMatrix);
 
     ~TPZMyLambdaExpression();
 
     TPZMyLambdaExpression(const TPZMyLambdaExpression &copy);
 
     TPZMyLambdaExpression &operator=(const TPZMyLambdaExpression &copy);
-
-    void SetIntPoints(TPZIntPointsStructMatrix *IntPoints) {
-        fIntPointsStructMatrix = IntPoints;
-    }
-
-    void SetMaterialId(int imat) {
-        TPZMaterial *material = fIntPointsStructMatrix->Mesh()->FindMaterial(1);
-        fMaterial = dynamic_cast<TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse> , TPZElastoPlasticMem> *>(material);
-    }
 
     void ElasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain);
 
@@ -59,8 +46,6 @@ protected:
     TPZFMatrix<REAL> fMType;
 
     TPZFMatrix<REAL> fAlpha;
-
-    TPZIntPointsStructMatrix *fIntPointsStructMatrix;
 
 };
 

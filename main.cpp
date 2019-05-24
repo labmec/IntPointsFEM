@@ -9,7 +9,7 @@
 #include "TPZBndCondWithMem.h"
 
 #include "TPZMyLambdaExpression.h"
-#include "TPZIntPointsStructMatrix.h"
+#include "TPZElastoPlasticIntPointsStructMatrix.h"
 #include "TElastoPlasticData.h"
 #include "TRKSolution.h"
 
@@ -482,7 +482,7 @@ void SolutionIntPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
     TPZFMatrix<REAL> du(neq, 1, 0.), delta_du;
     TPZFMatrix<REAL> rhs(neq, 1, 0.);
 
-    TPZIntPointsStructMatrix *intPointsStructMatrix = new TPZIntPointsStructMatrix(analysis->Mesh());
+    TPZElastoPlasticIntPointsStructMatrix *intPointsStructMatrix = new TPZElastoPlasticIntPointsStructMatrix(analysis->Mesh());
 //
     std::cout  << "Solving a NLS with DOF = " << neq << std::endl;
 
@@ -493,7 +493,7 @@ void SolutionIntPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
         delta_du = analysis->Solution();
         du += delta_du;
         analysis->LoadSolution(du);
-        intPointsStructMatrix->Assemble(rhs);
+//        intPointsStructMatrix->Assemble(rhs);
         norm_delta_du = Norm(delta_du);
         norm_res = Norm(rhs);
         stop_criterion_Q = norm_res < tolerance;
