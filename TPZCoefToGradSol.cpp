@@ -5,11 +5,10 @@
 #include "TPZCoefToGradSol.h"
 #include "pzcmesh.h"
 
-TPZCoefToGradSol::TPZCoefToGradSol() {
-
+TPZCoefToGradSol::TPZCoefToGradSol() : fBlockMatrix(0,0), fNColor(-1), fIndexes(0), fIndexesColor(0) {
 }
 
-TPZCoefToGradSol::TPZCoefToGradSol(TPZIrregularBlocksMatrix irregularBlocksMatrix) {
+TPZCoefToGradSol::TPZCoefToGradSol(TPZIrregularBlocksMatrix irregularBlocksMatrix) : fBlockMatrix(0,0), fNColor(-1), fIndexes(0), fIndexesColor(0) {
     SetIrregularBlocksMatrix(irregularBlocksMatrix);
 }
 
@@ -59,7 +58,6 @@ void TPZCoefToGradSol::SigmaToRes(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &res
     // Multiply: transpose(BMatrix) * sigma = forces
     TPZFMatrix<REAL> sigma_x(rows, 1, &sigma(0, 0), rows);
     TPZFMatrix<REAL> sigma_y(rows, 1, &sigma(rows, 0), rows);
-
 
     TPZFMatrix<REAL> forces_x(cols, 1, &forces(0, 0), cols);
     TPZFMatrix<REAL> forces_y(cols, 1, &forces(cols, 0), cols);

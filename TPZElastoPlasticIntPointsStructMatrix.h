@@ -37,14 +37,12 @@ public:
     void CalcResidual(TPZFMatrix<REAL> &rhs);
 
     bool isBuilt() {
-        if(fBlockMatrix.Rows() != 0) return true;
+        if(fCoefToGradSol.IrregularBlocksMatrix().Rows() != 0) return true;
         else return false;
     }
 
 private:
-    TPZIrregularBlocksMatrix fBlockMatrix;
-
-    TPZCoefToGradSol fCoefdoGradSol;
+    TPZCoefToGradSol fCoefToGradSol;
 
     TPZMyLambdaExpression fLambdaExp;
 

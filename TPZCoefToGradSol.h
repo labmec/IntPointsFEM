@@ -39,15 +39,19 @@ public:
         fNColor = ncolor;
     }
 
+    TPZIrregularBlocksMatrix IrregularBlocksMatrix() {
+        return fBlockMatrix;
+    }
+
 
 private:
     TPZIrregularBlocksMatrix fBlockMatrix;
 
-    int64_t fNColor;
+    int64_t fNColor; //needed to do the assembly
 
-    TPZVec<int> fIndexes;
+    TPZVec<int> fIndexes; //needed to do the gather operation
 
-    TPZVec<int> fIndexesColor;
+    TPZVec<int> fIndexesColor; //nedeed to scatter operation
 
 };
 

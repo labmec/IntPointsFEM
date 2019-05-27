@@ -7,7 +7,7 @@
 #endif
 #include "TPZMyLambdaExpression.h"
 
-TPZElastoPlasticIntPointsStructMatrix::TPZElastoPlasticIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZSymetricSpStructMatrix(cmesh), fBlockMatrix(0,0), fLambdaExp(), fStructMatrix(), fCoefdoGradSol() {
+TPZElastoPlasticIntPointsStructMatrix::TPZElastoPlasticIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZSymetricSpStructMatrix(cmesh), fLambdaExp(), fStructMatrix(), fCoefToGradSol() {
 
 }
 
@@ -19,8 +19,10 @@ TPZStructMatrix * TPZElastoPlasticIntPointsStructMatrix::Clone(){
 }
 
 TPZMatrix<STATE> *TPZElastoPlasticIntPointsStructMatrix::CreateAssemble(TPZFMatrix<STATE> &rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
-    TPZMatrix<STATE> *matrix = fStructMatrix.CreateAssemble(rhs, guiInterface);
-    return matrix;
+//    fStructMatrix.SetMesh(this->Mesh());
+//    TPZMatrix<STATE> *matrix = fStructMatrix.Create();
+//    TPZMatrix<STATE> *matrix2 = fStructMatrix.CreateAssemble(rhs, guiInterface);
+//    return matrix;
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
@@ -222,13 +224,13 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     fLambdaExp.SetIntPoints(rows / fMesh->Dimension());
     fLambdaExp.SetWeightVector(weight);
 
-    fBlockMatrix.Resize(rows, cols);
-    fBlockMatrix.SetBlocks(blocksData);
+    TPZIrregularBlocksMatrix blocksMatrix(rows, cols);
+    blocksMatrix.SetBlocks(blocksData);
 
-    fCoefdoGradSol.SetIrregularBlocksMatrix(fBlockMatrix);
-    fCoefdoGradSol.SetNColors(contcolor);
-    fCoefdoGradSol.SetIndexes(indexes);
-    fCoefdoGradSol.SetIndexesColor(indexescolor);
+    fCoefToGradSol.SetIrregularBlocksMatrix(blocksMatrix);
+    fCoefToGradSol.SetNColors(contcolor);
+    fCoefToGradSol.SetIndexes(indexes);
+    fCoefToGradSol.SetIndexesColor(indexescolor);
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::CalcResidual(TPZFMatrix<REAL> & rhs) {
@@ -243,10 +245,9 @@ void TPZElastoPlasticIntPointsStructMatrix::CalcResidual(TPZFMatrix<REAL> & rhs)
     rhs.Resize(neq, 1);
     rhs.Zero();
 
-    fCoefdoGradSol.CoefToGradU(fMesh->Solution(), grad_u);
+    fCoefToGradSol.CoefToGradU(fMesh->Solution(), grad_u);
     fLambdaExp.ComputeSigma(grad_u, sigma);
-    fCoefdoGradSol.SigmaToRes(sigma, rhs);
-
+    fCoefToGradSol.SigmaToRes(sigma, rhs);
 
     TPZFMatrix<REAL> rhsboundary;
     AssembleRhsBoundary(rhsboundary);
