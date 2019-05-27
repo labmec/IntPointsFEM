@@ -41,10 +41,10 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
         }
     }
 
+    // RowSizes, ColSizes, MatrixPosition, RowFirstIndex and ColFirstIndex
     int nblocks = elindex_domain.size();
     TPZIrregularBlocksMatrix::IrregularBlocks blocksData;
 
-    // RowSizes, ColSizes, MatrixPosition, RowFirstIndex and ColFirstIndes
     blocksData.fNumBlocks = nblocks;
     blocksData.fRowSizes.resize(nblocks);
     blocksData.fColSizes.resize(nblocks);
@@ -78,7 +78,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
         cols += blocksData.fColSizes[iel];
     }
 
-    // RowPtr, ColInd and Storage
+    // RowPtr, ColInd, Storage, Indexes and weight
     blocksData.fRowPtr.resize(rows + 1);
     blocksData.fColInd.resize(blocksData.fMatrixPosition[nblocks]);
     blocksData.fStorage.resize(blocksData.fMatrixPosition[nblocks]);
@@ -101,7 +101,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
             }
         }
 
-        // Storage
+        // Storage and weight
         TPZCompEl *cel = fMesh->Element(elindex_domain[iel]);
         TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement *>(cel);
         if (!cel_inter) DebugStop();
@@ -165,8 +165,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
         }
     }
 
-    int64_t nconnects = fMesh->NConnects();
-    TPZVec<int64_t> connects_vec(nconnects,0);
+    TPZVec<int64_t> connects_vec(fMesh->NConnects(),0);
     TPZVec<int64_t> elemcolor(nblocks,-1);
 
     int64_t contcolor = 0;
@@ -175,11 +174,14 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     //Elements coloring
     while (needstocontinue)
     {
+        int it = 0;
         needstocontinue = false;
-        for(int iel = 0; iel < nblocks; iel++) {
-            TPZCompEl *cel = fMesh->Element(elindex_domain[iel]);
+        for (auto iel : elindex_domain) {
+            TPZCompEl *cel = fMesh->Element(iel);
             if (!cel || cel->Dimension() != fMesh->Dimension()) continue;
-            if (elemcolor[iel] != -1) continue;
+
+            it++;
+            if (elemcolor[it-1] != -1) continue;
 
             TPZStack<int64_t> connectlist;
             fMesh->Element(iel)->BuildConnectList(connectlist);
@@ -193,7 +195,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
                 needstocontinue = true;
                 continue;
             }
-            elemcolor[iel] = contcolor;
+            elemcolor[it-1] = contcolor;
             for (icon = 0; icon < ncon; icon++) {
                 connects_vec[connectlist[icon]] = 1;
             }
@@ -242,12 +244,9 @@ void TPZElastoPlasticIntPointsStructMatrix::CalcResidual(TPZFMatrix<REAL> & rhs)
     rhs.Zero();
 
     fCoefdoGradSol.CoefToGradU(fMesh->Solution(), grad_u);
-
-    grad_u.Print(std::cout);
-        fLambdaExp.ComputeSigma(grad_u, sigma);
-    sigma.Print(std::cout);
+    fLambdaExp.ComputeSigma(grad_u, sigma);
     fCoefdoGradSol.SigmaToRes(sigma, rhs);
-    rhs.Print(std::cout);
+
 
     TPZFMatrix<REAL> rhsboundary;
     AssembleRhsBoundary(rhsboundary);
