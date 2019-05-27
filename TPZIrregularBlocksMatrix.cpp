@@ -8,6 +8,7 @@
 #endif
 
 TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix() : TPZMatrix<REAL>(), fBlocksInfo() {
+    this->Resize(0,0);
     fBlocksInfo.fNumBlocks = -1;
     fBlocksInfo.fStorage.resize(0);
     fBlocksInfo.fRowSizes.resize(0);
@@ -20,6 +21,7 @@ TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix() : TPZMatrix<REAL>(), fBlock
 }
 
 TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix(const int64_t rows,const int64_t cols) : TPZMatrix<REAL>(rows,cols), fBlocksInfo() {
+    this->Resize(0,0);
     fBlocksInfo.fNumBlocks = -1;
     fBlocksInfo.fStorage.resize(0);
     fBlocksInfo.fRowSizes.resize(0);

@@ -493,7 +493,7 @@ void SolutionIntPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
         delta_du = analysis->Solution();
         du += delta_du;
         analysis->LoadSolution(du);
-//        intPointsStructMatrix->Assemble(rhs);
+        intPointsStructMatrix->CalcResidual(rhs);
         norm_delta_du = Norm(delta_du);
         norm_res = Norm(rhs);
         stop_criterion_Q = norm_res < tolerance;

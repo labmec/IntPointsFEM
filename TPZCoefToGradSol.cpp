@@ -9,18 +9,31 @@ TPZCoefToGradSol::TPZCoefToGradSol() {
 
 }
 
+TPZCoefToGradSol::TPZCoefToGradSol(TPZIrregularBlocksMatrix irregularBlocksMatrix) {
+    SetIrregularBlocksMatrix(irregularBlocksMatrix);
+}
+
 TPZCoefToGradSol::~TPZCoefToGradSol() {
 
 }
 
+void TPZCoefToGradSol::SetIrregularBlocksMatrix(TPZIrregularBlocksMatrix irregularBlocksMatrix) {
+    fBlockMatrix = irregularBlocksMatrix;
+}
+
+
 void TPZCoefToGradSol::CoefToGradU(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &grad_u) {
     int dim = 2;
-    int64_t rows = grad_u.Rows() / dim;
-    int64_t cols = fIndexes.size() / dim;
+    int64_t rows = fBlockMatrix.Rows();
+    int64_t cols = fBlockMatrix.Cols();
 
     TPZFMatrix<REAL> gather_solution(dim * cols, 1);
+    grad_u.Resize(dim * rows, 1);
+
+    // Gather operation
     cblas_dgthr(dim * cols, coef, &gather_solution(0, 0), &fIndexes[0]);
 
+    // Multiply: BMatrix * gather = grad_u
     TPZFMatrix<REAL> gather_x(cols, 1, &gather_solution(0, 0), cols);
     TPZFMatrix<REAL> gather_y(cols, 1, &gather_solution(cols, 0), cols);
 
@@ -33,24 +46,28 @@ void TPZCoefToGradSol::CoefToGradU(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &gra
 
 void TPZCoefToGradSol::SigmaToRes(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &res) {
     int dim = 2;
-    int64_t rows = sigma.Rows() / dim;
-    int64_t cols = fIndexes.size() / dim;
+    int64_t rows = fBlockMatrix.Rows();
+    int64_t cols = fBlockMatrix.Cols();
 
+    int64_t ncolor = fNColor;
+    int64_t neq = res.Rows();
+
+    TPZFMatrix<REAL> forces(dim * cols, 1);
+    res.Resize(ncolor * neq, 1);
+    res.Zero();
+
+    // Multiply: transpose(BMatrix) * sigma = forces
     TPZFMatrix<REAL> sigma_x(rows, 1, &sigma(0, 0), rows);
     TPZFMatrix<REAL> sigma_y(rows, 1, &sigma(rows, 0), rows);
 
-    TPZFMatrix<REAL> forces(dim * cols, 1);
+
     TPZFMatrix<REAL> forces_x(cols, 1, &forces(0, 0), cols);
     TPZFMatrix<REAL> forces_y(cols, 1, &forces(cols, 0), cols);
 
     fBlockMatrix.Multiply(sigma_x, forces_x, true);
     fBlockMatrix.Multiply(sigma_y, forces_y, true);
 
-    int64_t ncolor = fNColor;
-    int64_t neq = res.Rows();
-
-    res.Resize(ncolor * neq, 1);
-    res.Zero();
+    // Assemble forces
     cblas_dsctr(dim * cols, forces, &fIndexesColor[0], &res(0,0));
 
     int64_t colorassemb = ncolor / 2.;

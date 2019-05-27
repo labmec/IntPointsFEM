@@ -28,19 +28,21 @@ public:
     TPZStructMatrix *Clone();
 
     // need help
-    void CreateAssemble();
+    TPZMatrix<STATE> *CreateAssemble(TPZFMatrix<STATE> &rhs, TPZAutoPointer<TPZGuiInterface> guiInterface);
+
+    void AssembleRhsBoundary(TPZFMatrix<REAL> &rhsboundary);
 
     void SetUpDataStructure();
 
     void CalcResidual(TPZFMatrix<REAL> &rhs);
 
     bool isBuilt() {
-        if(fBlockMatrix) return true;
+        if(fBlockMatrix.Rows() != 0) return true;
         else return false;
     }
 
 private:
-    TPZIrregularBlocksMatrix *fBlockMatrix;
+    TPZIrregularBlocksMatrix fBlockMatrix;
 
     TPZCoefToGradSol fCoefdoGradSol;
 

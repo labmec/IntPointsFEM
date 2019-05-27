@@ -7,7 +7,8 @@
 #endif
 #include "TPZMyLambdaExpression.h"
 
-TPZElastoPlasticIntPointsStructMatrix::TPZElastoPlasticIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZSymetricSpStructMatrix(cmesh), fBlockMatrix(), fLambdaExp(), fStructMatrix(), fCoefdoGradSol() {
+TPZElastoPlasticIntPointsStructMatrix::TPZElastoPlasticIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZSymetricSpStructMatrix(cmesh), fBlockMatrix(0,0), fLambdaExp(), fStructMatrix(), fCoefdoGradSol() {
+
 }
 
 TPZElastoPlasticIntPointsStructMatrix::~TPZElastoPlasticIntPointsStructMatrix() {
@@ -17,8 +18,9 @@ TPZStructMatrix * TPZElastoPlasticIntPointsStructMatrix::Clone(){
     return new TPZElastoPlasticIntPointsStructMatrix(*this);
 }
 
-void TPZElastoPlasticIntPointsStructMatrix::CreateAssemble() {
-
+TPZMatrix<STATE> *TPZElastoPlasticIntPointsStructMatrix::CreateAssemble(TPZFMatrix<STATE> &rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
+    TPZMatrix<STATE> *matrix = fStructMatrix.CreateAssemble(rhs, guiInterface);
+    return matrix;
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
@@ -84,9 +86,11 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     blocksData.fRowPtr[rows] = blocksData.fMatrixPosition[nblocks];
 
     TPZVec<int> indexes(fMesh->Dimension() * cols);
+    TPZVec<REAL> weight(rows / fMesh->Dimension());
 
     int64_t cont1 = 0;
     int64_t cont2 = 0;
+    int64_t wit = 0;
     for (int iel = 0; iel < nblocks; ++iel) {
         // RowPtr and ColInd
         for (int irow = 0; irow < blocksData.fRowSizes[iel]; ++irow) {
@@ -118,6 +122,8 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
             REAL w;
             int_rule->Point(ipts, qsi, w);
             cel_inter->ComputeRequiredData(data, qsi);
+            weight[wit] = w * std::abs(data.detjac);
+            wit++;
 
             TPZFMatrix<REAL> axes = data.axes;
             TPZFMatrix<REAL> dphix = data.dphix;
@@ -158,10 +164,6 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
             }
         }
     }
-    fBlockMatrix->Resize(rows, cols);
-    fBlockMatrix->SetBlocks(blocksData);
-
-    fCoefdoGradSol.SetIndexes(indexes);
 
     int64_t nconnects = fMesh->NConnects();
     TPZVec<int64_t> connects_vec(nconnects,0);
@@ -173,14 +175,11 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     //Elements coloring
     while (needstocontinue)
     {
-        int it = 0;
         needstocontinue = false;
-        for (auto iel : elindex_domain) {
-            TPZCompEl *cel = fMesh->Element(iel);
+        for(int iel = 0; iel < nblocks; iel++) {
+            TPZCompEl *cel = fMesh->Element(elindex_domain[iel]);
             if (!cel || cel->Dimension() != fMesh->Dimension()) continue;
-
-            it++;
-            if (elemcolor[it-1] != -1) continue;
+            if (elemcolor[iel] != -1) continue;
 
             TPZStack<int64_t> connectlist;
             fMesh->Element(iel)->BuildConnectList(connectlist);
@@ -194,9 +193,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
                 needstocontinue = true;
                 continue;
             }
-            elemcolor[it-1] = contcolor;
-//            cel->Reference()->SetMaterialId(contcolor);
-
+            elemcolor[iel] = contcolor;
             for (icon = 0; icon < ncon; icon++) {
                 connects_vec[connectlist[icon]] = 1;
             }
@@ -204,22 +201,31 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
         contcolor++;
         connects_vec.Fill(0);
     }
-//    ofstream file("colored.vtk");
-//    TPZVTKGeoMesh::PrintGMeshVTK(fBMatrix->CompMesh()->Reference(),file);
 
     //Indexes coloring
-    fCoefdoGradSol.SetNColors(contcolor);
     TPZVec<int> indexescolor(fMesh->Dimension() * cols);
     int64_t neq = fMesh->NEquations();
     for (int64_t iel = 0; iel < nblocks; iel++) {
-        int64_t elem_col = fBlockMatrix->Blocks().fColSizes[iel];
-        int64_t cont_cols = fBlockMatrix->Blocks().fColFirstIndex[iel];
+        int64_t elem_col = blocksData.fColSizes[iel];
+        int64_t cont_cols = blocksData.fColFirstIndex[iel];
 
         for (int64_t icols = 0; icols < elem_col; icols++) {
             indexescolor[cont_cols + icols] = indexes[cont_cols + icols] + elemcolor[iel]*neq;
-            indexescolor[cont_cols+ cols + icols] = indexes[cont_cols + cols + icols] + elemcolor[iel]*neq;
+            indexescolor[cont_cols + cols + icols] = indexes[cont_cols + cols + icols] + elemcolor[iel]*neq;
         }
     }
+
+    TPZMaterial *material = fMesh->FindMaterial(1);
+    fLambdaExp.SetMaterial(material);
+    fLambdaExp.SetIntPoints(rows / fMesh->Dimension());
+    fLambdaExp.SetWeightVector(weight);
+
+    fBlockMatrix.Resize(rows, cols);
+    fBlockMatrix.SetBlocks(blocksData);
+
+    fCoefdoGradSol.SetIrregularBlocksMatrix(fBlockMatrix);
+    fCoefdoGradSol.SetNColors(contcolor);
+    fCoefdoGradSol.SetIndexes(indexes);
     fCoefdoGradSol.SetIndexesColor(indexescolor);
 }
 
@@ -228,22 +234,40 @@ void TPZElastoPlasticIntPointsStructMatrix::CalcResidual(TPZFMatrix<REAL> & rhs)
         this->SetUpDataStructure();
     }
 
-    int dim = fMesh->Dimension();
     int neq = fMesh->NEquations();
-    int rows = fBlockMatrix->Rows();
-    int cols = fBlockMatrix->Cols();
 
-    TPZFMatrix<REAL> grad_u(dim * rows, 1);
-    TPZFMatrix<REAL> sigma(dim * rows, 1);
-
+    TPZFMatrix<REAL> grad_u;
+    TPZFMatrix<REAL> sigma;
     rhs.Resize(neq, 1);
     rhs.Zero();
 
     fCoefdoGradSol.CoefToGradU(fMesh->Solution(), grad_u);
 
-//    sigma.Resize(dim * rows, 1);
-//    TPZMyLambdaExpression lambdaexp(this);
-//    lambdaexp.ComputeSigma(grad_u, sigma);
-
+    grad_u.Print(std::cout);
+        fLambdaExp.ComputeSigma(grad_u, sigma);
+    sigma.Print(std::cout);
     fCoefdoGradSol.SigmaToRes(sigma, rhs);
+    rhs.Print(std::cout);
+
+    TPZFMatrix<REAL> rhsboundary;
+    AssembleRhsBoundary(rhsboundary);
+
+    rhs += rhsboundary;
+}
+
+void TPZElastoPlasticIntPointsStructMatrix::AssembleRhsBoundary(TPZFMatrix<REAL> &rhsboundary) {
+    int64_t neq = fMesh->NEquations();
+    rhsboundary.Resize(neq, 1);
+    rhsboundary.Zero();
+
+    for (int iel = 0; iel < fMesh->NElements(); iel++) {
+        TPZCompEl *cel = fMesh->Element(iel);
+        if (!cel) continue;
+        if(cel->Dimension() < fMesh->Dimension()) {
+            TPZElementMatrix ef(fMesh, TPZElementMatrix::EF);
+            cel->CalcResidual(ef);
+            ef.ComputeDestinationIndices();
+            rhsboundary.AddFel(ef.fMat, ef.fSourceIndex, ef.fDestinationIndex);
+        }
+    }
 }

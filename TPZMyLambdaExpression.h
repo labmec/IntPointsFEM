@@ -14,11 +14,19 @@ class TPZMyLambdaExpression {
 public:
     TPZMyLambdaExpression();
 
+    TPZMyLambdaExpression(int npts, TPZVec<REAL> weight, TPZMaterial *material);
+
     ~TPZMyLambdaExpression();
 
     TPZMyLambdaExpression(const TPZMyLambdaExpression &copy);
 
     TPZMyLambdaExpression &operator=(const TPZMyLambdaExpression &copy);
+
+    void SetIntPoints(int64_t npts);
+
+    void SetWeightVector(TPZVec<REAL> weight);
+
+    void SetMaterial(TPZMaterial *material);
 
     void ElasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain);
 
@@ -37,7 +45,9 @@ public:
     void ComputeSigma(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &sigma);
 
 protected:
-    int fNpts;
+    int64_t fNpts;
+
+    TPZVec<REAL> fWeight;
 
     TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse>, TPZElastoPlasticMem> *fMaterial;
 

@@ -17,7 +17,11 @@ class TPZCoefToGradSol {
 public:
     TPZCoefToGradSol();
 
+    TPZCoefToGradSol(TPZIrregularBlocksMatrix irregularBlocksMatrix);
+
     ~TPZCoefToGradSol();
+
+    void SetIrregularBlocksMatrix(TPZIrregularBlocksMatrix irregularBlocksMatrix);
 
     void CoefToGradU(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &grad_u);
 
