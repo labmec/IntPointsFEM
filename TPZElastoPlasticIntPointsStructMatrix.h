@@ -6,7 +6,8 @@
 #ifndef TPZIntPointsFEM_h
 #define TPZIntPointsFEM_h
 
-#include <StrMatrix/TPZSSpStructMatrix.h>
+//#include <StrMatrix/TPZSSpStructMatrix.h>
+#include <TPZSSpStructMatrix.h>
 #include "TPZIrregularBlocksMatrix.h"
 #include "TPZMyLambdaExpression.h"
 #include "TPZCoefToGradSol.h"
@@ -26,6 +27,8 @@ public:
 
     /** @brief Clone */
     TPZStructMatrix *Clone();
+    
+    TPZMatrix<STATE> * Create();
 
     // need help
     TPZMatrix<STATE> *CreateAssemble(TPZFMatrix<STATE> &rhs, TPZAutoPointer<TPZGuiInterface> guiInterface);
@@ -42,21 +45,22 @@ public:
     }
 
 private:
-    void GetDomainElements(TPZStack<REAL> &elindex_domain);
+    void GetDomainElements(TPZStack<int> &elindex_domain);
 
-    void SetUpIrregularBlocksData(TPZStack<REAL> &elindex_domain, TPZIrregularBlocksMatrix::IrregularBlocks &blocksData);
+    void SetUpIrregularBlocksData(TPZStack<int> &elindex_domain, TPZIrregularBlocksMatrix::IrregularBlocks &blocksData);
 
     void CSRVectors(TPZIrregularBlocksMatrix::IrregularBlocks &blocksData);
 
-    void SetUpIndexes(TPZStack<REAL> &elindex_domain, TPZVec<int> &indexes);
+    void SetUpIndexes(TPZStack<int> &elindex_domain, TPZVec<int> & dof_indexes);
 
-    void ColoredIndexes(TPZStack<REAL> &elindex_domain, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor);
+    void ColoredIndexes(TPZStack<int> &elindex_domain, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor);
 
     TPZCoefToGradSol fCoefToGradSol;
 
     TPZMyLambdaExpression fLambdaExp;
 
     TPZSYsmpMatrix<STATE> *fSparseMatrix;
+    
 };
 
 #endif /* TPZIntPointsFEM_h */

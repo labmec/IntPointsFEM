@@ -16,7 +16,7 @@ TPZCoefToGradSol::~TPZCoefToGradSol() {
 
 }
 
-void TPZCoefToGradSol::SetIrregularBlocksMatrix(TPZIrregularBlocksMatrix irregularBlocksMatrix) {
+void TPZCoefToGradSol::SetIrregularBlocksMatrix(TPZIrregularBlocksMatrix & irregularBlocksMatrix) {
     fBlockMatrix = irregularBlocksMatrix;
 }
 

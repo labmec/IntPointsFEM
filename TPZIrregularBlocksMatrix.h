@@ -57,12 +57,12 @@ public:
     void Multiply(TPZFMatrix<REAL> &A, TPZFMatrix<REAL> &res, int opt);
 
     /** @brief Set method */
-    void SetBlocks(struct IrregularBlocks blocks) {
+    void SetBlocks(struct IrregularBlocks & blocks) {
         fBlocksInfo = blocks;
     }
 
     /** @brief Access method */
-    struct IrregularBlocks Blocks() {
+    struct IrregularBlocks & Blocks() {
         return fBlocksInfo;
     }
 

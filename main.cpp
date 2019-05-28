@@ -36,6 +36,9 @@ void SolutionIntPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
 ///Set Analysis
 TPZAnalysis * Analysis(TPZCompMesh * cmesh, int n_threads);
 
+///Set Analysis
+TPZAnalysis * Analysis_IPFEM(TPZCompMesh * cmesh, int n_threads);
+
 ///Solve using Newton method
 void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance);
 
@@ -56,7 +59,7 @@ int main(int argc, char *argv[]) {
     int nt = omp_get_max_threads();
     std::cout << "Using " << nt << " threads.\n" << std::endl;
 #endif
-    int pOrder = 2; // Computational mesh order
+    int pOrder = 1; // Computational mesh order
     bool render_vtk_Q = false;
     
 // Generates the geometry
@@ -71,8 +74,9 @@ int main(int argc, char *argv[]) {
     TPZCompMesh *cmesh = CmeshElastoplasticity(gmesh, pOrder, wellbore_material);
 
 // Defines the analysis
-    int n_threads = 16;
-    TPZAnalysis *analysis = Analysis(cmesh,n_threads);
+    int n_threads = 0;
+//    TPZAnalysis *analysis = Analysis(cmesh,n_threads);
+    TPZAnalysis *analysis = Analysis_IPFEM(cmesh,n_threads);
     
 // Calculates the solution using Newton method
     int n_iterations = 80;
@@ -116,6 +120,7 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
     TPZFMatrix<REAL> du(analysis->Solution()), delta_du;
     analysis->Assemble();
 
+//    analysis->Solver().Matrix()->Print("k = ",std::cout, EMathematicaInput);
     for (int i = 0; i < n_iterations; i++) {
         analysis->Solve();
         delta_du = analysis->Solution();
@@ -148,6 +153,20 @@ TPZAnalysis *Analysis(TPZCompMesh *cmesh, int n_threads) {
     TPZSymetricSpStructMatrix strskyl(cmesh);
     strskyl.SetNumThreads(n_threads);
     analysis->SetStructuralMatrix(strskyl);
+    TPZStepSolver<STATE> step;
+    step.SetDirect(ELDLt);
+    analysis->SetSolver(step);
+    return analysis;
+}
+
+///Set Analysis
+TPZAnalysis * Analysis_IPFEM(TPZCompMesh * cmesh, int n_threads){
+    bool optimizeBandwidth = true;
+    TPZAnalysis *analysis = new TPZAnalysis(cmesh, optimizeBandwidth);
+    TPZElastoPlasticIntPointsStructMatrix struc_mat(cmesh);
+    struc_mat.SetUpDataStructure();
+    struc_mat.SetNumThreads(n_threads);
+    analysis->SetStructuralMatrix(struc_mat);
     TPZStepSolver<STATE> step;
     step.SetDirect(ELDLt);
     analysis->SetSolver(step);

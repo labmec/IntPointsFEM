@@ -21,7 +21,7 @@ public:
 
     ~TPZCoefToGradSol();
 
-    void SetIrregularBlocksMatrix(TPZIrregularBlocksMatrix irregularBlocksMatrix);
+    void SetIrregularBlocksMatrix(TPZIrregularBlocksMatrix & irregularBlocksMatrix);
 
     void Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &grad_u);
 
@@ -39,7 +39,7 @@ public:
         fNColor = ncolor;
     }
 
-    TPZIrregularBlocksMatrix IrregularBlocksMatrix() {
+    TPZIrregularBlocksMatrix & IrregularBlocksMatrix() {
         return fBlockMatrix;
     }
 

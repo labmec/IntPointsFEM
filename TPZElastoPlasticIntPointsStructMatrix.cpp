@@ -1,6 +1,8 @@
 #include "TPZElastoPlasticIntPointsStructMatrix.h"
 #include "pzintel.h"
 #include "pzskylstrmatrix.h"
+#include "pzsysmp.h"
+#include "pzmetis.h"
 
 #ifdef USING_MKL
 #include <mkl.h>
@@ -18,16 +20,38 @@ TPZStructMatrix * TPZElastoPlasticIntPointsStructMatrix::Clone(){
     return new TPZElastoPlasticIntPointsStructMatrix(*this);
 }
 
+TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
+    
+    TPZStack<int64_t> elgraph;
+    TPZVec<int64_t> elgraphindex;
+    //    int nnodes = 0;
+//    fMesh->ComputeElGraph(elgraph,elgraphindex,fMaterialIds);
+    fMesh->ComputeElGraph(elgraph,elgraphindex);
+    TPZMatrix<STATE> * mat = SetupMatrixData(elgraph, elgraphindex);
+    return mat;
+}
+
 TPZMatrix<STATE> *TPZElastoPlasticIntPointsStructMatrix::CreateAssemble(TPZFMatrix<STATE> &rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
-//    fStructMatrix.SetMesh(this->Mesh());
-//    TPZMatrix<STATE> *matrix = fStructMatrix.Create();
-//    TPZMatrix<STATE> *matrix2 = fStructMatrix.CreateAssemble(rhs, guiInterface);
-//    return matrix;
+    
+    int64_t neq = fMesh->NEquations();
+    if(fMesh->FatherMesh()) {
+        cout << "TPZSymetricSpStructMatrix should not be called with CreateAssemble for a substructure mesh\n";
+        DebugStop();
+        return new TPZSYsmpMatrix<STATE>(0,0);
+    }
+    
+    TPZMatrix<STATE> *matrix = Create();
+    TPZSYsmpMatrix<STATE> *mat = dynamic_cast<TPZSYsmpMatrix<STATE> *> (matrix);
+    rhs.Redim(neq,1);
+    Assemble(*matrix,rhs,guiInterface);
+//    mat->ComputeDiagonal();
+    
+    return mat;
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
-    TPZStack<REAL> elindex_domain;
-    this->GetDomainElements(elindex_domain);
+    TPZStack<int> elindex_domain;
+    this->GetDomainElements(elindex_domain); // Candidate to tbb or openmp
 
     TPZIrregularBlocksMatrix::IrregularBlocks blocksData;
     this->SetUpIrregularBlocksData(elindex_domain, blocksData);
@@ -47,6 +71,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     this->ColoredIndexes(elindex_domain, indexes, coloredindexes, ncolor);
     fCoefToGradSol.SetIndexesColor(coloredindexes);
     fCoefToGradSol.SetNColors(ncolor);
+
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::CalcResidual(TPZFMatrix<REAL> & rhs) {
@@ -88,25 +113,23 @@ void TPZElastoPlasticIntPointsStructMatrix::AssembleRhsBoundary(TPZFMatrix<REAL>
     }
 }
 
-void TPZElastoPlasticIntPointsStructMatrix::GetDomainElements(TPZStack<REAL> &elindex_domain) {
-    // Store the domain elements of a same material in elem_domain
-    std::map<int, TPZMaterial*> & matvec = fMesh->MaterialVec();
-    std::map<int, TPZMaterial* >::iterator mit;
-    for(mit=matvec.begin(); mit!= matvec.end(); mit++)
-    {
-        for (int64_t i = 0; i < fMesh->NElements(); i++) {
-            TPZCompEl *cel = fMesh->Element(i);
-            if (!cel) continue;
-            TPZGeoEl *gel = fMesh->Element(i)->Reference();
-            if (!gel) continue;
-            if(cel->Material()->Id() == mit->second->Id() && cel->Dimension() == fMesh->Dimension()){
-                elindex_domain.Push(cel->Index());
-            }
+void TPZElastoPlasticIntPointsStructMatrix::GetDomainElements(TPZStack<int> &elindex_domain) {
+//    fMaterialIds.clear();
+    int dim = fMesh->Dimension();
+    for (int64_t i = 0; i < fMesh->NElements(); i++) {
+        TPZCompEl *cel = fMesh->Element(i);
+        if (!cel) continue;
+        TPZGeoEl *gel = cel->Reference();
+        if (!gel) continue;
+        if(gel->Dimension() == dim){
+//            int mat_id = gel->MaterialId();
+//            fMaterialIds.insert(mat_id);
+            elindex_domain.Push(cel->Index());
         }
     }
 }
 
-void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZStack<REAL> &elindex_domain, TPZIrregularBlocksMatrix::IrregularBlocks &blocksData) {
+void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZStack<int> &elindex_domain, TPZIrregularBlocksMatrix::IrregularBlocks &blocksData) {
     int nblocks = elindex_domain.size();
 
     blocksData.fNumBlocks = nblocks;
@@ -203,12 +226,12 @@ void TPZElastoPlasticIntPointsStructMatrix::CSRVectors(TPZIrregularBlocksMatrix:
     blocksData.fRowPtr[rows] = blocksData.fMatrixPosition[nblocks];
 }
 
-void TPZElastoPlasticIntPointsStructMatrix::SetUpIndexes(TPZStack<REAL> &elindex_domain, TPZVec<int> &indexes) {
+void TPZElastoPlasticIntPointsStructMatrix::SetUpIndexes(TPZStack<int> &elindex_domain, TPZVec<int> & dof_indexes) {
     int64_t nblocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
     int64_t rows = fCoefToGradSol.IrregularBlocksMatrix().Rows();
     int64_t cols = fCoefToGradSol.IrregularBlocksMatrix().Cols();
 
-    indexes.resize(fMesh->Dimension() * cols);
+    dof_indexes.resize(fMesh->Dimension() * cols);
     TPZVec<REAL> weight(rows / fMesh->Dimension());
 
     int64_t cont1 = 0;
@@ -246,10 +269,10 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIndexes(TPZStack<REAL> &elindex
                 int64_t nsize = fMesh->Block().Size(conid);
                 for (int64_t isize = 0; isize < nsize; isize++) {
                     if (isize % 2 == 0) {
-                        indexes[cont1] = pos + isize;
+                        dof_indexes[cont1] = pos + isize;
                         cont1++;
                     } else {
-                        indexes[cont2 + cols] = pos + isize;
+                        dof_indexes[cont2 + cols] = pos + isize;
                         cont2++;
                     }
                 }
@@ -263,7 +286,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIndexes(TPZStack<REAL> &elindex
     fLambdaExp.SetWeightVector(weight);
 }
 
-void TPZElastoPlasticIntPointsStructMatrix::ColoredIndexes(TPZStack<REAL> &elindex_domain, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor) {
+void TPZElastoPlasticIntPointsStructMatrix::ColoredIndexes(TPZStack<int> &elindex_domain, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor) {
     int64_t nblocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
     int64_t cols = fCoefToGradSol.IrregularBlocksMatrix().Cols();
 
