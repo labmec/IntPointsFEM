@@ -7,7 +7,7 @@
 #endif
 #include "TPZMyLambdaExpression.h"
 
-TPZElastoPlasticIntPointsStructMatrix::TPZElastoPlasticIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZSymetricSpStructMatrix(cmesh), fLambdaExp(), fStructMatrix(), fCoefToGradSol() {
+TPZElastoPlasticIntPointsStructMatrix::TPZElastoPlasticIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZSymetricSpStructMatrix(cmesh), fLambdaExp(), fSparseMatrix(), fCoefToGradSol() {
 
 }
 
@@ -61,9 +61,9 @@ void TPZElastoPlasticIntPointsStructMatrix::CalcResidual(TPZFMatrix<REAL> & rhs)
     rhs.Resize(neq, 1);
     rhs.Zero();
 
-    fCoefToGradSol.CoefToGradU(fMesh->Solution(), grad_u);
+    fCoefToGradSol.Multiply(fMesh->Solution(), grad_u);
     fLambdaExp.ComputeSigma(grad_u, sigma);
-    fCoefToGradSol.SigmaToRes(sigma, rhs);
+    fCoefToGradSol.MultiplyTranspose(sigma, rhs);
 
     TPZFMatrix<REAL> rhsboundary;
     AssembleRhsBoundary(rhsboundary);

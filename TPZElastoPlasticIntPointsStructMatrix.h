@@ -56,7 +56,7 @@ private:
 
     TPZMyLambdaExpression fLambdaExp;
 
-    TPZStructMatrix fStructMatrix;
+    TPZSYsmpMatrix<STATE> *fSparseMatrix;
 };
 
 #endif /* TPZIntPointsFEM_h */

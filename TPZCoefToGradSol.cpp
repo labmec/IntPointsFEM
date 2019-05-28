@@ -21,7 +21,7 @@ void TPZCoefToGradSol::SetIrregularBlocksMatrix(TPZIrregularBlocksMatrix irregul
 }
 
 
-void TPZCoefToGradSol::CoefToGradU(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &grad_u) {
+void TPZCoefToGradSol::Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &grad_u) {
     int dim = 2;
     int64_t rows = fBlockMatrix.Rows();
     int64_t cols = fBlockMatrix.Cols();
@@ -43,7 +43,7 @@ void TPZCoefToGradSol::CoefToGradU(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &gra
     fBlockMatrix.Multiply(gather_y, grad_u_y, false);
 }
 
-void TPZCoefToGradSol::SigmaToRes(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &res) {
+void TPZCoefToGradSol::MultiplyTranspose(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &res) {
     int dim = 2;
     int64_t rows = fBlockMatrix.Rows();
     int64_t cols = fBlockMatrix.Cols();

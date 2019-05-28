@@ -23,9 +23,9 @@ public:
 
     void SetIrregularBlocksMatrix(TPZIrregularBlocksMatrix irregularBlocksMatrix);
 
-    void CoefToGradU(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &grad_u);
+    void Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &grad_u);
 
-    void SigmaToRes(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &res);
+    void MultiplyTranspose(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &res);
 
     void SetIndexes(TPZVec<int> indexes) {
         fIndexes = indexes;
