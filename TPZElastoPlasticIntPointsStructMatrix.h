@@ -42,6 +42,16 @@ public:
     }
 
 private:
+    void GetDomainElements(TPZStack<REAL> &elindex_domain);
+
+    void SetUpIrregularBlocksData(TPZStack<REAL> &elindex_domain, TPZIrregularBlocksMatrix::IrregularBlocks &blocksData);
+
+    void CSRVectors(TPZIrregularBlocksMatrix::IrregularBlocks &blocksData);
+
+    void SetUpIndexes(TPZStack<REAL> &elindex_domain, TPZVec<int> &indexes);
+
+    void ColoredIndexes(TPZStack<REAL> &elindex_domain, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor);
+
     TPZCoefToGradSol fCoefToGradSol;
 
     TPZMyLambdaExpression fLambdaExp;
