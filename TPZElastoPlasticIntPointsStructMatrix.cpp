@@ -1,7 +1,6 @@
 #include "TPZElastoPlasticIntPointsStructMatrix.h"
 #include "pzintel.h"
 #include "pzskylstrmatrix.h"
-#include "pzsysmp.h"
 #include "pzmetis.h"
 
 #ifdef USING_MKL
@@ -9,7 +8,7 @@
 #endif
 #include "TPZMyLambdaExpression.h"
 
-TPZElastoPlasticIntPointsStructMatrix::TPZElastoPlasticIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZSymetricSpStructMatrix(cmesh), fLambdaExp(), fSparseMatrix(), fCoefToGradSol() {
+TPZElastoPlasticIntPointsStructMatrix::TPZElastoPlasticIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZSymetricSpStructMatrix(cmesh), fLambdaExp(), fSparseMatrixLinear(), fRhsLinear(), fCoefToGradSol() {
 
 }
 
@@ -22,34 +21,39 @@ TPZStructMatrix * TPZElastoPlasticIntPointsStructMatrix::Clone(){
 
 TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
     
+    if(!isBuilt()) {
+        this->SetUpDataStructure();
+    }
+    
     TPZStack<int64_t> elgraph;
     TPZVec<int64_t> elgraphindex;
     //    int nnodes = 0;
-//    fMesh->ComputeElGraph(elgraph,elgraphindex,fMaterialIds);
-    fMesh->ComputeElGraph(elgraph,elgraphindex);
+    fMesh->ComputeElGraph(elgraph,elgraphindex,fMaterialIds);
+//    fMesh->ComputeElGraph(elgraph,elgraphindex);
     TPZMatrix<STATE> * mat = SetupMatrixData(elgraph, elgraphindex);
+//    this->SetUpDataStructure();
     return mat;
 }
 
 TPZMatrix<STATE> *TPZElastoPlasticIntPointsStructMatrix::CreateAssemble(TPZFMatrix<STATE> &rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
     
     int64_t neq = fMesh->NEquations();
-    if(fMesh->FatherMesh()) {
-        cout << "TPZSymetricSpStructMatrix should not be called with CreateAssemble for a substructure mesh\n";
-        DebugStop();
-        return new TPZSYsmpMatrix<STATE>(0,0);
-    }
-    
-    TPZMatrix<STATE> *matrix = Create();
-    TPZSYsmpMatrix<STATE> *mat = dynamic_cast<TPZSYsmpMatrix<STATE> *> (matrix);
+    TPZMatrix<STATE> *stiff = Create();
+    TPZSYsmpMatrix<STATE> *mat = dynamic_cast<TPZSYsmpMatrix<STATE> *> (stiff);
     rhs.Redim(neq,1);
-    Assemble(*matrix,rhs,guiInterface);
-//    mat->ComputeDiagonal();
     
-    return mat;
+    Assemble(*stiff,rhs,guiInterface);
+    mat->ComputeDiagonal();
+    return stiff;
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
+    
+    if(isBuilt()) {
+        std::cout << __PRETTY_FUNCTION__ << " Data structure has been setup." << std::endl;
+        return;
+    }
+    
     TPZStack<int> elindex_domain;
     this->GetDomainElements(elindex_domain); // Candidate to tbb or openmp
 
@@ -72,9 +76,30 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     fCoefToGradSol.SetIndexesColor(coloredindexes);
     fCoefToGradSol.SetNColors(ncolor);
 
+    AssembleBoundaryData();
+    
 }
 
-void TPZElastoPlasticIntPointsStructMatrix::CalcResidual(TPZFMatrix<REAL> & rhs) {
+
+void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface){
+    TPZSymetricSpStructMatrix::Assemble(mat,rhs, guiInterface);
+    
+    TPZSYsmpMatrix<STATE> &mat_vol = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
+    int64_t n_data = mat_vol.A().size();
+    int64_t n_data_bc = fSparseMatrixLinear.A().size();
+    if (n_data!=n_data_bc) {
+        DebugStop();
+    }
+        
+    for (int64_t i = 0; i < n_data; i++) {
+        mat_vol.A()[i] += fSparseMatrixLinear.A()[i];
+    }
+    
+    rhs+=fRhsLinear;
+}
+
+void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface){
+
     if(!isBuilt()) {
         this->SetUpDataStructure();
     }
@@ -89,32 +114,39 @@ void TPZElastoPlasticIntPointsStructMatrix::CalcResidual(TPZFMatrix<REAL> & rhs)
     fCoefToGradSol.Multiply(fMesh->Solution(), grad_u);
     fLambdaExp.ComputeSigma(grad_u, sigma);
     fCoefToGradSol.MultiplyTranspose(sigma, rhs);
-
-    TPZFMatrix<REAL> rhsboundary;
-    AssembleRhsBoundary(rhsboundary);
-
-    rhs += rhsboundary;
+    rhs += fRhsLinear;
 }
 
-void TPZElastoPlasticIntPointsStructMatrix::AssembleRhsBoundary(TPZFMatrix<REAL> &rhsboundary) {
+void TPZElastoPlasticIntPointsStructMatrix::AssembleBoundaryData() {
     int64_t neq = fMesh->NEquations();
-    rhsboundary.Resize(neq, 1);
-    rhsboundary.Zero();
-
+    
+    fRhsLinear.Resize(neq, 1);
+    fRhsLinear.Zero();
+    
+    TPZMatrix<STATE> * bc_mat = TPZSymetricSpStructMatrix::Create();
+    TPZSYsmpMatrix<STATE> *mat = dynamic_cast<TPZSYsmpMatrix<STATE> *> (bc_mat);
+    fSparseMatrixLinear = *mat;
+    
+    int dim = fMesh->Dimension();
     for (int iel = 0; iel < fMesh->NElements(); iel++) {
         TPZCompEl *cel = fMesh->Element(iel);
         if (!cel) continue;
-        if(cel->Dimension() < fMesh->Dimension()) {
+        TPZGeoEl *gel = cel->Reference();
+        if (!gel) continue;
+        if(gel->Dimension() < dim) {
             TPZElementMatrix ef(fMesh, TPZElementMatrix::EF);
-            cel->CalcResidual(ef);
+            TPZElementMatrix ek(fMesh, TPZElementMatrix::EK);
+            cel->CalcStiff(ek, ef);
             ef.ComputeDestinationIndices();
-            rhsboundary.AddFel(ef.fMat, ef.fSourceIndex, ef.fDestinationIndex);
+            ek.ComputeDestinationIndices();
+            fRhsLinear.AddFel(ef.fMat, ef.fSourceIndex, ef.fDestinationIndex);
+            fSparseMatrixLinear.AddKel(ek.fMat, ek.fDestinationIndex);
         }
     }
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::GetDomainElements(TPZStack<int> &elindex_domain) {
-//    fMaterialIds.clear();
+    fMaterialIds.clear();
     int dim = fMesh->Dimension();
     for (int64_t i = 0; i < fMesh->NElements(); i++) {
         TPZCompEl *cel = fMesh->Element(i);
@@ -122,8 +154,8 @@ void TPZElastoPlasticIntPointsStructMatrix::GetDomainElements(TPZStack<int> &eli
         TPZGeoEl *gel = cel->Reference();
         if (!gel) continue;
         if(gel->Dimension() == dim){
-//            int mat_id = gel->MaterialId();
-//            fMaterialIds.insert(mat_id);
+            int mat_id = gel->MaterialId();
+            fMaterialIds.insert(mat_id);
             elindex_domain.Push(cel->Index());
         }
     }

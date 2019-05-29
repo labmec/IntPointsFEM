@@ -120,7 +120,7 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
     TPZFMatrix<REAL> du(analysis->Solution()), delta_du;
     analysis->Assemble();
 
-//    analysis->Solver().Matrix()->Print("k = ",std::cout, EMathematicaInput);
+//    analysis->Solver().Matrix()->Print("kip = ",std::cout, EMathematicaInput);
     for (int i = 0; i < n_iterations; i++) {
         analysis->Solve();
         delta_du = analysis->Solution();
@@ -134,6 +134,7 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
         std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
         if (stop_criterion_Q) {
             AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
+            norm_res = Norm(analysis->Rhs());
             std::cout << "Nonlinear process converged with residue norm = " << norm_res << std::endl;
             std::cout << "Number of iterations = " << i + 1 << std::endl;
             break;
@@ -512,7 +513,8 @@ void SolutionIntPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance,
         delta_du = analysis->Solution();
         du += delta_du;
         analysis->LoadSolution(du);
-        intPointsStructMatrix->CalcResidual(rhs);
+        DebugStop();
+//        intPointsStructMatrix->CalcResidual(rhs);
         norm_delta_du = Norm(delta_du);
         norm_res = Norm(rhs);
         stop_criterion_Q = norm_res < tolerance;

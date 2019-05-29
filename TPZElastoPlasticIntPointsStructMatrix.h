@@ -8,6 +8,7 @@
 
 //#include <StrMatrix/TPZSSpStructMatrix.h>
 #include <TPZSSpStructMatrix.h>
+#include "pzsysmp.h"
 #include "TPZIrregularBlocksMatrix.h"
 #include "TPZMyLambdaExpression.h"
 #include "TPZCoefToGradSol.h"
@@ -33,12 +34,16 @@ public:
     // need help
     TPZMatrix<STATE> *CreateAssemble(TPZFMatrix<STATE> &rhs, TPZAutoPointer<TPZGuiInterface> guiInterface);
 
-    void AssembleRhsBoundary(TPZFMatrix<REAL> &rhsboundary);
+    void AssembleBoundaryData();
 
     void SetUpDataStructure();
 
-    void CalcResidual(TPZFMatrix<REAL> &rhs);
-
+//    void CalcResidual(TPZFMatrix<REAL> &rhs);
+    
+    void Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface);
+    
+    void Assemble(TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface);
+    
     bool isBuilt() {
         if(fCoefToGradSol.IrregularBlocksMatrix().Rows() != 0) return true;
         else return false;
@@ -59,7 +64,8 @@ private:
 
     TPZMyLambdaExpression fLambdaExp;
 
-    TPZSYsmpMatrix<STATE> *fSparseMatrix;
+    TPZSYsmpMatrix<STATE> fSparseMatrixLinear; //-> BC data
+    TPZFMatrix<STATE> fRhsLinear; //-> BC data
     
 };
 
