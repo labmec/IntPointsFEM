@@ -84,16 +84,28 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface){
     TPZSymetricSpStructMatrix::Assemble(mat,rhs, guiInterface);
     
-    TPZSYsmpMatrix<STATE> &mat_vol = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
-    int64_t n_data = mat_vol.A().size();
-    int64_t n_data_bc = fSparseMatrixLinear.A().size();
-    if (n_data!=n_data_bc) {
-        DebugStop();
+    auto it_end = fSparseMatrixLinear.MapEnd();
+    
+    for (auto it = fSparseMatrixLinear.MapBegin(); it!=it_end; it++) {
+        int64_t row = it->first.first;
+        int64_t col = it->first.second;
+        STATE val = it->second;
+        STATE vol_val = mat.GetVal(row, col);
+        vol_val += val; /// TODO:: Add val
+        mat.PutVal(row, col, vol_val);
     }
-        
-    for (int64_t i = 0; i < n_data; i++) {
-        mat_vol.A()[i] += fSparseMatrixLinear.A()[i];
-    }
+    
+    
+//    TPZSYsmpMatrix<STATE> &mat_vol = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
+//    int64_t n_data = mat_vol.A().size();
+//    int64_t n_data_bc = fSparseMatrixLinear.A().size();
+//    if (n_data!=n_data_bc) {
+//        DebugStop();
+//    }
+//
+//    for (int64_t i = 0; i < n_data; i++) {
+//        mat_vol.A()[i] += fSparseMatrixLinear.A()[i];
+//    }
     
     rhs+=fRhsLinear;
 }
@@ -120,29 +132,38 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TP
 void TPZElastoPlasticIntPointsStructMatrix::AssembleBoundaryData() {
     int64_t neq = fMesh->NEquations();
     
+    std::set<int> materialids;
+    materialids.insert(2);
+    materialids.insert(3);
+    materialids.insert(4);
+    materialids.insert(5);
+    TPZStructMatrix str(fMesh);
+    str.SetMaterialIds(materialids);
+    TPZAutoPointer<TPZGuiInterface> guiInterface;
     fRhsLinear.Resize(neq, 1);
     fRhsLinear.Zero();
+    fSparseMatrixLinear.Resize(neq, neq);
+    str.Assemble(fSparseMatrixLinear, fRhsLinear, guiInterface);
     
-    TPZMatrix<STATE> * bc_mat = TPZSymetricSpStructMatrix::Create();
-    TPZSYsmpMatrix<STATE> *mat = dynamic_cast<TPZSYsmpMatrix<STATE> *> (bc_mat);
-    fSparseMatrixLinear = *mat;
-    
-    int dim = fMesh->Dimension();
-    for (int iel = 0; iel < fMesh->NElements(); iel++) {
-        TPZCompEl *cel = fMesh->Element(iel);
-        if (!cel) continue;
-        TPZGeoEl *gel = cel->Reference();
-        if (!gel) continue;
-        if(gel->Dimension() < dim) {
-            TPZElementMatrix ef(fMesh, TPZElementMatrix::EF);
-            TPZElementMatrix ek(fMesh, TPZElementMatrix::EK);
-            cel->CalcStiff(ek, ef);
-            ef.ComputeDestinationIndices();
-            ek.ComputeDestinationIndices();
-            fRhsLinear.AddFel(ef.fMat, ef.fSourceIndex, ef.fDestinationIndex);
-            fSparseMatrixLinear.AddKel(ek.fMat, ek.fDestinationIndex);
-        }
-    }
+
+//
+//
+//    int dim = fMesh->Dimension();
+//    for (int iel = 0; iel < fMesh->NElements(); iel++) {
+//        TPZCompEl *cel = fMesh->Element(iel);
+//        if (!cel) continue;
+//        TPZGeoEl *gel = cel->Reference();
+//        if (!gel) continue;
+//        if(gel->Dimension() < dim) {
+//            TPZElementMatrix ef(fMesh, TPZElementMatrix::EF);
+//            TPZElementMatrix ek(fMesh, TPZElementMatrix::EK);
+//            cel->CalcStiff(ek, ef);
+//            ef.ComputeDestinationIndices();
+//            ek.ComputeDestinationIndices();
+//            fRhsLinear.AddFel(ef.fMat, ef.fSourceIndex, ef.fDestinationIndex);
+//            fSparseMatrixLinear.AddKel(ek.fMat, ek.fDestinationIndex);
+//        }
+//    }
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::GetDomainElements(TPZStack<int> &elindex_domain) {

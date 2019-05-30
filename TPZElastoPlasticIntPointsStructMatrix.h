@@ -9,6 +9,7 @@
 //#include <StrMatrix/TPZSSpStructMatrix.h>
 #include <TPZSSpStructMatrix.h>
 #include "pzsysmp.h"
+#include "tpzverysparsematrix.h"
 #include "TPZIrregularBlocksMatrix.h"
 #include "TPZMyLambdaExpression.h"
 #include "TPZCoefToGradSol.h"
@@ -64,7 +65,7 @@ private:
 
     TPZMyLambdaExpression fLambdaExp;
 
-    TPZSYsmpMatrix<STATE> fSparseMatrixLinear; //-> BC data
+    TPZVerySparseMatrix<STATE> fSparseMatrixLinear; //-> BC data
     TPZFMatrix<STATE> fRhsLinear; //-> BC data
     
 };
