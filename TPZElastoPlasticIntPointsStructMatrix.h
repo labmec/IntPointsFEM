@@ -35,7 +35,7 @@ public:
     // need help
     TPZMatrix<STATE> *CreateAssemble(TPZFMatrix<STATE> &rhs, TPZAutoPointer<TPZGuiInterface> guiInterface);
 
-    void AssembleBoundaryData();
+    void AssembleBoundaryData(std::set<int> &boundary_matids);
 
     void SetUpDataStructure();
 
@@ -51,7 +51,7 @@ public:
     }
 
 private:
-    void GetDomainElements(TPZStack<int> &elindex_domain);
+    void GetDomainElements(TPZStack<int> &elindex_domain, std::set<int> &boundary_matids);
 
     void SetUpIrregularBlocksData(TPZStack<int> &elindex_domain, TPZIrregularBlocksMatrix::IrregularBlocks &blocksData);
 

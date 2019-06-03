@@ -165,7 +165,7 @@ TPZAnalysis * Analysis_IPFEM(TPZCompMesh * cmesh, int n_threads){
     bool optimizeBandwidth = true;
     TPZAnalysis *analysis = new TPZAnalysis(cmesh, optimizeBandwidth);
     TPZElastoPlasticIntPointsStructMatrix struc_mat(cmesh);
-    struc_mat.SetUpDataStructure();
+//    struc_mat.SetUpDataStructure();
     struc_mat.SetNumThreads(n_threads);
     analysis->SetStructuralMatrix(struc_mat);
     TPZStepSolver<STATE> step;

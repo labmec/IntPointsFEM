@@ -27,11 +27,8 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
     
     TPZStack<int64_t> elgraph;
     TPZVec<int64_t> elgraphindex;
-    //    int nnodes = 0;
     fMesh->ComputeElGraph(elgraph,elgraphindex,fMaterialIds);
-//    fMesh->ComputeElGraph(elgraph,elgraphindex);
     TPZMatrix<STATE> * mat = SetupMatrixData(elgraph, elgraphindex);
-//    this->SetUpDataStructure();
     return mat;
 }
 
@@ -55,7 +52,8 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     }
     
     TPZStack<int> elindex_domain;
-    this->GetDomainElements(elindex_domain); // Candidate to tbb or openmp
+    std::set<int> boundary_matids;
+    this->GetDomainElements(elindex_domain, boundary_matids); // Candidate to tbb or openmp
 
     TPZIrregularBlocksMatrix::IrregularBlocks blocksData;
     this->SetUpIrregularBlocksData(elindex_domain, blocksData);
@@ -76,8 +74,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     fCoefToGradSol.SetIndexesColor(coloredindexes);
     fCoefToGradSol.SetNColors(ncolor);
 
-    AssembleBoundaryData();
-    
+    AssembleBoundaryData(boundary_matids);
 }
 
 
@@ -129,16 +126,16 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TP
     rhs += fRhsLinear;
 }
 
-void TPZElastoPlasticIntPointsStructMatrix::AssembleBoundaryData() {
+void TPZElastoPlasticIntPointsStructMatrix::AssembleBoundaryData(std::set<int> &boundary_matids) {
     int64_t neq = fMesh->NEquations();
     
-    std::set<int> materialids;
-    materialids.insert(2);
-    materialids.insert(3);
-    materialids.insert(4);
-    materialids.insert(5);
+//    std::set<int> materialids;
+//    materialids.insert(2);
+//    materialids.insert(3);
+//    materialids.insert(4);
+//    materialids.insert(5);
     TPZStructMatrix str(fMesh);
-    str.SetMaterialIds(materialids);
+    str.SetMaterialIds(boundary_matids);
     TPZAutoPointer<TPZGuiInterface> guiInterface;
     fRhsLinear.Resize(neq, 1);
     fRhsLinear.Zero();
@@ -166,18 +163,20 @@ void TPZElastoPlasticIntPointsStructMatrix::AssembleBoundaryData() {
 //    }
 }
 
-void TPZElastoPlasticIntPointsStructMatrix::GetDomainElements(TPZStack<int> &elindex_domain) {
-    fMaterialIds.clear();
+void TPZElastoPlasticIntPointsStructMatrix::GetDomainElements(TPZStack<int> &elindex_domain, std::set<int> &boundary_matids) {
+    boundary_matids.clear();
     int dim = fMesh->Dimension();
     for (int64_t i = 0; i < fMesh->NElements(); i++) {
         TPZCompEl *cel = fMesh->Element(i);
         if (!cel) continue;
         TPZGeoEl *gel = cel->Reference();
         if (!gel) continue;
+        int mat_id = gel->MaterialId();
         if(gel->Dimension() == dim){
-            int mat_id = gel->MaterialId();
             fMaterialIds.insert(mat_id);
             elindex_domain.Push(cel->Index());
+        } else {
+            boundary_matids.insert(mat_id);
         }
     }
 }
