@@ -94,7 +94,7 @@ int main(int argc, char *argv[]) {
     TPZAnalysis *analysis_npts = Analysis(cmesh_npts,n_threads);
     
 // Calculates the solution using all intg points at once
-    SolutionIntPoints(analysis_npts, n_iterations, tolerance, wellbore_material);
+//    SolutionIntPoints(analysis_npts, n_iterations, tolerance, wellbore_material);
     if (render_vtk_Q) { //Post process
 #ifdef USING_CUDA
         std::string vtk_file = "Approximation_IntPointFEM-GPU.vtk";

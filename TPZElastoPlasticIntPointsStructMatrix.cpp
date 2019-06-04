@@ -80,6 +80,10 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 
 void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface){
     TPZSymetricSpStructMatrix::Assemble(mat,rhs, guiInterface);
+
+    KMatrixBip();
+    KMatrixBel();
+
     
     auto it_end = fSparseMatrixLinear.MapEnd();
     
@@ -391,5 +395,216 @@ void TPZElastoPlasticIntPointsStructMatrix::ColoredIndexes(TPZStack<int> &elinde
             coloredindexes[cont_cols + icols] = indexes[cont_cols + icols] + elemcolor[iel]*neq;
             coloredindexes[cont_cols + cols + icols] = indexes[cont_cols + cols + icols] + elemcolor[iel]*neq;
         }
+    }
+}
+
+void TPZElastoPlasticIntPointsStructMatrix::KMatrixBip() {
+    TPZTensor<REAL> deltastrain;
+    TPZTensor<REAL> stress;
+    TPZFMatrix<REAL> dep(6,6);
+
+    int dim = fMesh->Dimension();
+    int npts_tot = fCoefToGradSol.IrregularBlocksMatrix().Rows() / fMesh->Dimension();
+    TPZVec<REAL> depxx(npts_tot * dim * dim);
+    TPZVec<REAL> depyy(npts_tot * dim * dim);
+    TPZVec<REAL> depxy(npts_tot * dim * dim);
+
+    int ip = 0;
+    for (int iel = 0; iel < fMesh->NElements(); ++iel) {
+        TPZCompEl *cel = fMesh->Element(iel);
+        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement *>(cel);
+        if (!cel_inter) DebugStop();
+        if (cel->Reference()->Dimension() != fMesh->Dimension()) continue;
+        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
+        TPZMaterialData data;
+        cel_inter->InitMaterialData(data);
+
+        TPZMaterial *cel_mat = cel->Material();
+        TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem> *mat = dynamic_cast<TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem> *>(cel_mat);
+
+        int64_t npts = int_rule->NPoints(); // number of integration points of the element
+        int64_t dim = cel_inter->Dimension(); //dimension of the element
+
+        for (int64_t ipts = 0; ipts < npts; ipts++) {
+            TPZVec<REAL> qsi(dim);
+            REAL w;
+            int_rule->Point(ipts, qsi, w);
+            cel_inter->ComputeRequiredData(data, qsi);
+            REAL weight = w * fabs(data.detjac);
+
+            mat->GetPlasticModel().ApplyStrainComputeSigma(deltastrain,stress,&dep);
+
+            depxx[4 * ip] = weight * dep.GetVal(_XX_, _XX_);
+            depxx[4 * ip + 1] = dep.GetVal(_XX_, _XY_) * 0.5;
+            depxx[4 * ip + 2] = dep.GetVal(_XY_, _XX_);
+            depxx[4 * ip + 3] = weight * dep.GetVal(_XY_, _XY_) * 0.5;
+
+            depyy[4 * ip] = weight * dep.GetVal(_XY_, _XY_) * 0.5;
+            depyy[4 * ip + 1] = dep.GetVal(_XY_, _YY_);
+            depyy[4 * ip + 2] = dep.GetVal(_YY_, _XY_) * 0.5;
+            depyy[4 * ip + 3] = weight * dep.GetVal(_YY_, _YY_);
+
+            depxy[4 * ip] = weight * dep.GetVal(_XX_, _XY_) * 0.5;
+            depxy[4 * ip + 1] = dep.GetVal(_XX_, _YY_);
+            depxy[4 * ip + 2] = dep.GetVal(_XY_, _XY_) * 0.5;
+            depxy[4 * ip + 3] = weight * dep.GetVal(_XY_, _YY_);
+
+            ip++;
+        }
+    }
+
+    int nblocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
+
+    int size = 0;
+    for (int i = 0; i < nblocks; ++i) {
+        int cols = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColSizes[i];
+        size += cols * cols;
+    }
+
+    TPZVec<REAL> Kxx(size, 0.);
+    TPZVec<REAL> Kyy(size, 0.);
+    TPZVec<REAL> Kxy(size, 0.);
+
+    ip = 0;
+    int kpos = 0;
+    for (int iblock = 0; iblock < nblocks; iblock++) {
+        int npts = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fRowSizes[iblock] / dim;
+        int cols = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColSizes[iblock];
+        int pos = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fMatrixPosition[iblock];
+
+        TPZVec<REAL> aux(dim * cols);
+
+        for (int ipts = 0; ipts < npts; ipts++) {
+            //Kxx = B^T * depxx * B
+            aux.Fill(0.);
+            cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, dim, cols, dim, 1, &depxx[dim * dim * ip], dim,
+                        &fCoefToGradSol.IrregularBlocksMatrix().Blocks().fStorage[pos + dim * ipts * cols], cols, 0,
+                        &aux[0], cols);
+            cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans, cols, cols, dim, 1,
+                        &fCoefToGradSol.IrregularBlocksMatrix().Blocks().fStorage[pos + dim * ipts * cols], cols,
+                        &aux[0], cols, 1, &Kxx[kpos], cols);
+
+            //Kyy = B^T * depyy * B
+            aux.Fill(0.);
+            cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, dim, cols, dim, 1, &depyy[dim * dim * ip], dim,
+                        &fCoefToGradSol.IrregularBlocksMatrix().Blocks().fStorage[pos + dim * ipts * cols], cols, 0,
+                        &aux[0], cols);
+            cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans, cols, cols, dim, 1,
+                        &fCoefToGradSol.IrregularBlocksMatrix().Blocks().fStorage[pos + dim * ipts * cols], cols,
+                        &aux[0], cols, 1, &Kyy[kpos], cols);
+
+            //Kxy = B^T * depxy * B
+            aux.Fill(0.);
+            cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, dim, cols, dim, 1, &depxy[dim * dim * ip], dim,
+                        &fCoefToGradSol.IrregularBlocksMatrix().Blocks().fStorage[pos + dim * ipts * cols], cols, 0,
+                        &aux[0], cols);
+            cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans, cols, cols, dim, 1,
+                        &fCoefToGradSol.IrregularBlocksMatrix().Blocks().fStorage[pos + dim * ipts * cols], cols,
+                        &aux[0], cols, 1, &Kxy[kpos], cols);
+
+            ip++;
+        }
+        kpos = cols * cols;
+    }
+}
+
+void TPZElastoPlasticIntPointsStructMatrix::KMatrixBel() {
+    TPZTensor<REAL> deltastrain;
+    TPZTensor<REAL> stress;
+    TPZFMatrix<REAL> dep(6,6);
+
+    int nblocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
+    int sizek = 0;
+    int sizedep = 0;
+    for (int i = 0; i < nblocks; ++i) {
+        int cols = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColSizes[i];
+        int rows = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fRowSizes[i];
+        sizek += cols * cols;
+        sizedep += rows * rows;
+    }
+
+    TPZVec<REAL> depxx(sizedep, 0.);
+    TPZVec<REAL> depyy(sizedep, 0.);
+    TPZVec<REAL> depxy(sizedep, 0.);
+
+    int depel_pos = 0;
+    for (int iel = 0; iel < fMesh->NElements(); ++iel) {
+        TPZCompEl *cel = fMesh->Element(iel);
+        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement *>(cel);
+        if (!cel_inter) DebugStop();
+        if (cel->Reference()->Dimension() != fMesh->Dimension()) continue;
+        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
+        TPZMaterialData data;
+        cel_inter->InitMaterialData(data);
+
+        TPZMaterial *cel_mat = cel->Material();
+        TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem> *mat = dynamic_cast<TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem> *>(cel_mat);
+
+        int64_t npts = int_rule->NPoints(); // number of integration points of the element
+        int64_t dim = cel_inter->Dimension(); //dimension of the element
+
+        for (int64_t ipts = 0; ipts < npts; ipts++) {
+            TPZVec<REAL> qsi(dim);
+            REAL w;
+            int_rule->Point(ipts, qsi, w);
+            cel_inter->ComputeRequiredData(data, qsi);
+            REAL weight = w * fabs(data.detjac);
+
+            mat->GetPlasticModel().ApplyStrainComputeSigma(deltastrain,stress,&dep);
+
+            int pos1 = depel_pos + ipts * (dim * dim * npts + dim);
+            int pos2 = depel_pos + ipts * (dim * dim * npts + dim) + 1;
+            int pos3 = depel_pos + ipts * (dim * dim * npts + dim) + dim * npts;
+            int pos4 = depel_pos + ipts * (dim * dim * npts + dim) + dim * npts + 1;
+
+            depxx[pos1] = weight * dep.GetVal(_XX_, _XX_);
+            depxx[pos2] = dep.GetVal(_XX_, _XY_) * 0.5;
+            depxx[pos3] = dep.GetVal(_XY_, _XX_);
+            depxx[pos4] = weight * dep.GetVal(_XY_, _XY_) * 0.5;
+
+            depyy[pos1] = weight * dep.GetVal(_XY_, _XY_) * 0.5;
+            depyy[pos2] = dep.GetVal(_XY_, _YY_);
+            depyy[pos3] = dep.GetVal(_YY_, _XY_) * 0.5;
+            depyy[pos4] = weight * dep.GetVal(_YY_, _YY_);
+
+            depxy[pos1] = weight * dep.GetVal(_XX_, _XY_) * 0.5;
+            depxy[pos2] = dep.GetVal(_XX_, _YY_);
+            depxy[pos3] = dep.GetVal(_XY_, _XY_) * 0.5;
+            depxy[pos4] = weight * dep.GetVal(_XY_, _YY_);
+        }
+        depel_pos = depel_pos + (npts * dim) * (npts * dim);
+    }
+
+    TPZVec<REAL> Kxx(sizek, 0.);
+    TPZVec<REAL> Kyy(sizek, 0.);
+    TPZVec<REAL> Kxy(sizek, 0.);
+
+    int kpos = 0;
+    int deppos = 0;
+
+    for (int iblock = 0; iblock < nblocks; iblock++) {
+        int rows = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fRowSizes[iblock];
+        int cols = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColSizes[iblock];
+        int pos = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fMatrixPosition[iblock];
+
+        TPZVec<REAL> aux(rows * cols);
+
+        //Kxx = B^T * depxx * B
+        aux.Fill(0.);
+        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, rows, cols, rows, 1, &depxx[deppos], rows, &fCoefToGradSol.IrregularBlocksMatrix().Blocks().fStorage[pos], cols, 0, &aux[0], cols);
+        cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans, cols, cols, rows, 1, &fCoefToGradSol.IrregularBlocksMatrix().Blocks().fStorage[pos], cols, &aux[0], cols, 1, &Kxx[kpos], cols);
+
+        //Kyy = B^T * depyy * B
+        aux.Fill(0.);
+        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, rows, cols, rows, 1, &depyy[deppos], rows, &fCoefToGradSol.IrregularBlocksMatrix().Blocks().fStorage[pos], cols, 0, &aux[0], cols);
+        cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans, cols, cols, rows, 1, &fCoefToGradSol.IrregularBlocksMatrix().Blocks().fStorage[pos], cols, &aux[0], cols, 1, &Kyy[kpos], cols);
+
+        //Kxy = B^T * depxy * B
+        aux.Fill(0.);
+        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, rows, cols, rows, 1, &depxy[deppos], rows, &fCoefToGradSol.IrregularBlocksMatrix().Blocks().fStorage[pos], cols, 0, &aux[0], cols);
+        cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans, cols, cols, rows, 1, &fCoefToGradSol.IrregularBlocksMatrix().Blocks().fStorage[pos], cols, &aux[0], cols, 1, &Kxy[kpos], cols);
+
+        kpos = cols * cols;
+        deppos = rows * rows;
     }
 }

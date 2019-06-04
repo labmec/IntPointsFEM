@@ -50,6 +50,9 @@ public:
         else return false;
     }
 
+    void KMatrixBip();
+     void KMatrixBel();
+
 private:
     void GetDomainElements(TPZStack<int> &elindex_domain, std::set<int> &boundary_matids);
 
