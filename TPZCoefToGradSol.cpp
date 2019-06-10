@@ -5,8 +5,9 @@
 #include "TPZCoefToGradSol.h"
 #include "pzcmesh.h"
 
-TPZCoefToGradSol::TPZCoefToGradSol() : fBlockMatrix(0,0), fNColor(-1), fIndexes(0), fIndexesColor(0), fCudaCalls() {
+TPZCoefToGradSol::TPZCoefToGradSol() : fBlockMatrix(0,0), fNColor(-1), fIndexes(0), fIndexesColor(0) {
 #ifdef USING_CUDA
+    // fCudaCalls.Initialize();
     dStorage.resize(0);
     dRowSizes.resize(0);
     dColSizes.resize(0);
@@ -123,6 +124,7 @@ void TPZCoefToGradSol::MultiplyTranspose(TPZFMatrix<REAL> &sigma, TPZFMatrix<REA
 }
 
 void TPZCoefToGradSol::TransferDataToGPU() {
+    #ifdef USING_CUDA
     dStorage.resize(fBlockMatrix.Blocks().fStorage.size());
     dStorage.set(&fBlockMatrix.Blocks().fStorage[0]);
 
@@ -146,4 +148,5 @@ void TPZCoefToGradSol::TransferDataToGPU() {
 
     dIndexesColor.resize(fIndexesColor.size());
     dIndexesColor.set(&fIndexesColor[0]);
+    #endif
 }

@@ -61,6 +61,7 @@ private:
 
     TPZVec<int> fIndexesColor; //nedeed to scatter operation
 
+#ifdef USING_CUDA
     TPZVecGPU<REAL> dStorage;
     TPZVecGPU<int> dRowSizes;
     TPZVecGPU<int> dColSizes;
@@ -70,6 +71,7 @@ private:
     TPZVecGPU<int> dIndexes;
     TPZVecGPU<int> dIndexesColor;
     CudaCalls fCudaCalls;
+#endif
 
 
 };
