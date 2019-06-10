@@ -61,8 +61,8 @@ public:
         return start_;
     }
 
-    void fill(T value) { 
-        gpuErrchk(cudaMemset(start_, value, getSize() * sizeof(T)));
+    void Zero() { 
+        gpuErrchk(cudaMemset(start_, 0, getSize() * sizeof(T)));
     }
 
     // set

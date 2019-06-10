@@ -37,30 +37,28 @@ void TPZCoefToGradSol::Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &grad_u
     int64_t cols = fBlockMatrix.Cols();
     int nelem = fBlockMatrix.Blocks().fNumBlocks;
 
-    #ifdef USING_CUDA
-
+#ifdef USING_CUDA
     TPZVecGPU<REAL> dcoef(coef.Rows());
     dcoef.set(&coef(0,0));
 
     TPZVecGPU<REAL> dgather_solution(dim * cols);
-    dgather_solution.fill(0.);
+    dgather_solution.Zero();
 
     fCudaCalls.GatherOperation(dim * cols, dcoef, dgather_solution, dIndexes);
-
-    // TPZVec<REAL> teste(dim * cols);
-    // dgather_solution.get(&teste[0]);
-    // std::cout << teste << std::endl;
-
     
+    TPZVec<int> one(nelem);
+    one.Fill(1);
+
     TPZVecGPU<int> dOne(nelem);
-    dOne.fill(1.);
+    dOne.set(&one[0]);
 
     TPZVecGPU<REAL> dgrad_u(dim * rows);
-    dgrad_u.fill(0.);
+    dgrad_u.Zero();
 
-    // fCudaCalls.Multiply(false, dRowSizes, dOne, dColSizes, dStorage, dMatrixPosition, 
-    //     TPZVecGPU<REAL> B, dColFirstIndex, TPZVecGPU<REAL> C, dRowFirstIndex, 1., nelem); 
-    #else
+//change this to TPZIrregularBlocksMatrix class
+    fCudaCalls.Multiply(false, dRowSizes.getData(), dOne.getData(), dColSizes.getData(), dStorage.getData(), dMatrixPosition.getData(), &dgather_solution.getData()[0], dColFirstIndex.getData(), &dgrad_u.getData()[0], dRowFirstIndex.getData(), 1., nelem); 
+    fCudaCalls.Multiply(false, dRowSizes.getData(), dOne.getData(), dColSizes.getData(), dStorage.getData(), dMatrixPosition.getData(), &dgather_solution.getData()[cols], dColFirstIndex.getData(), &dgrad_u.getData()[rows], dRowFirstIndex.getData(), 1., nelem); 
+#else
     TPZFMatrix<REAL> gather_solution(dim * cols, 1);
     grad_u.Resize(dim * rows, 1);
 
@@ -76,7 +74,7 @@ void TPZCoefToGradSol::Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &grad_u
 
     fBlockMatrix.Multiply(gather_x, grad_u_x, false);
     fBlockMatrix.Multiply(gather_y, grad_u_y, false);
-    #endif
+#endif
     
 }
 

@@ -12,8 +12,8 @@ public:
 	~CudaCalls();
 
 	//PASSAR A ----------REFERENCIA!!!!!!!!!-------
-	void Multiply(bool trans, TPZVecGPU<int> m, TPZVecGPU<int> n, TPZVecGPU<int> k, TPZVecGPU<REAL> A, TPZVecGPU<int> strideA, 
-		TPZVecGPU<REAL> B, TPZVecGPU<int> strideB,  TPZVecGPU<REAL> C, TPZVecGPU<int> strideC, REAL alpha, int nmatrices);
+	void Multiply(bool trans, int *m, int *n, int *k, REAL *A, int *strideA, 
+		REAL *B, int *strideB,  REAL *C, int *strideC, REAL alpha, int nmatrices);
 
 	void GatherOperation(int n, TPZVecGPU<REAL> &x, TPZVecGPU<REAL> &y, TPZVecGPU<int> &id);
 
