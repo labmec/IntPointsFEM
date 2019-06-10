@@ -75,6 +75,13 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     fCoefToGradSol.SetNColors(ncolor);
 
     AssembleBoundaryData(boundary_matids);
+
+    #ifdef USING_CUDA
+    std::cout << "Transfering data to GPU..." << std::endl;
+    fCoefToGradSol.TransferDataToGPU();
+    std::cout << "Done!" << std::endl;
+    #endif
+
 }
 
 
@@ -125,9 +132,9 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TP
     rhs.Zero();
 
     fCoefToGradSol.Multiply(fMesh->Solution(), grad_u);
-    fLambdaExp.ComputeSigma(grad_u, sigma);
-    fCoefToGradSol.MultiplyTranspose(sigma, rhs);
-    rhs += fRhsLinear;
+    // fLambdaExp.ComputeSigma(grad_u, sigma);
+    // fCoefToGradSol.MultiplyTranspose(sigma, rhs);
+    // rhs += fRhsLinear;
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::AssembleBoundaryData(std::set<int> &boundary_matids) {

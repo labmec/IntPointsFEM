@@ -4,6 +4,12 @@
 
 #include "TPZIrregularBlocksMatrix.h"
 
+#ifdef USING_CUDA
+#include "TPZVecGPU.h"
+#include "CudaCalls.h"
+#endif
+
+
 #ifdef USING_MKL
 #include <mkl.h>
 #endif
@@ -43,6 +49,8 @@ public:
         return fBlockMatrix;
     }
 
+    void TransferDataToGPU();
+
 
 private:
     TPZIrregularBlocksMatrix fBlockMatrix;
@@ -52,6 +60,17 @@ private:
     TPZVec<int> fIndexes; //needed to do the gather operation
 
     TPZVec<int> fIndexesColor; //nedeed to scatter operation
+
+    TPZVecGPU<REAL> dStorage;
+    TPZVecGPU<int> dRowSizes;
+    TPZVecGPU<int> dColSizes;
+    TPZVecGPU<int> dRowFirstIndex;
+    TPZVecGPU<int> dColFirstIndex;
+    TPZVecGPU<int> dMatrixPosition;
+    TPZVecGPU<int> dIndexes;
+    TPZVecGPU<int> dIndexesColor;
+    CudaCalls fCudaCalls;
+
 
 };
 

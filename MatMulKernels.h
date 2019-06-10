@@ -1,129 +1,135 @@
-#include "pzreal.h"
+// #include "pzreal.h"
+// #include "cuda.h"
+// #include "cublas_v2.h"
+// #include <cuda_runtime.h>
 
-extern "C" {
-__global__ void MatMulcuBLASKernel(cublasOperation_t trans, int64_t nelem,
-		REAL *A, int *rowsizes, int *colsizes, int *matrixpos,
-		int *rowfirstindex, int* colfirstindex, int npts, int nphis, REAL *B,
-		REAL *C) {
 
-	int iel = blockIdx.x * blockDim.x + threadIdx.x;
+// extern "C" {
+// __global__ void MatMulcuBLASKernel(cublasOperation_t trans, int64_t nelem,
+// 		REAL *A, int *rowsizes, int *colsizes, int *matrixpos,
+// 		int *rowfirstindex, int* colfirstindex, int npts, int nphis, REAL *B,
+// 		REAL *C) {
 
-	REAL alpha;
-	REAL beta;
+// 	int iel = blockIdx.x * blockDim.x + threadIdx.x;
 
-	int lda, ldb, ldc;
-	int Bpos, Cpos;
-	int Boffset, Coffset;
-	int m, n, k;
-	int Apos;
+// 	REAL alpha;
+// 	REAL beta;
 
-	if (iel < nelem) {
-		cublasHandle_t cnpHandle; //each thread must have its own handle
-		cublasCreate(&cnpHandle);
+// 	int lda, ldb, ldc;
+// 	int Bpos, Cpos;
+// 	int Boffset, Coffset;
+// 	int m, n, k;
+// 	int Apos;
 
-		Apos = matrixpos[iel];
+// 	if (iel < nelem) {
+// 		cublasHandle_t cnpHandle; //each thread must have its own handle
+// 		cublasCreate(&cnpHandle);
 
-		if (trans == CUBLAS_OP_N) {
-			m = rowsizes[iel];
-			n = 1;
-			k = colsizes[iel];
+// 		Apos = matrixpos[iel];
 
-			alpha = 1.;
-			beta = 0;
+// 		if (trans == CUBLAS_OP_N) {
+// 			m = rowsizes[iel];
+// 			n = 1;
+// 			k = colsizes[iel];
 
-			lda = m;
-			ldb = k;
-			ldc = m;
+// 			alpha = 1.;
+// 			beta = 0;
 
-			Bpos = colfirstindex[iel];
-			Boffset = nphis;
+// 			lda = m;
+// 			ldb = k;
+// 			ldc = m;
 
-			Cpos = rowfirstindex[iel];
-			Coffset = npts;
+// 			Bpos = colfirstindex[iel];
+// 			Boffset = nphis;
 
-		} else if (trans == CUBLAS_OP_T) {
-			m = colsizes[iel];
-			n = 1;
-			k = rowsizes[iel];
+// 			Cpos = rowfirstindex[iel];
+// 			Coffset = npts;
 
-			alpha = -1.;
-			beta = 0;
+// 		} else if (trans == CUBLAS_OP_T) {
+// 			m = colsizes[iel];
+// 			n = 1;
+// 			k = rowsizes[iel];
 
-			lda = k;
-			ldb = k;
-			ldc = m;
+// 			alpha = -1.;
+// 			beta = 0;
 
-			Bpos = rowfirstindex[iel];
-			Boffset = npts;
+// 			lda = k;
+// 			ldb = k;
+// 			ldc = m;
 
-			Cpos = colfirstindex[iel];
-			Coffset = nphis;
-		}
-		cublasDgemm(cnpHandle, trans, CUBLAS_OP_N, m, n, k, &alpha, &A[Apos],
-				lda, &B[Bpos], ldb, &beta, &C[Cpos], ldc);
+// 			Bpos = rowfirstindex[iel];
+// 			Boffset = npts;
 
-		cublasDgemm(cnpHandle, trans, CUBLAS_OP_N, m, n, k, &alpha, &A[Apos],
-				lda, &B[Bpos + Boffset], ldb, &beta, &C[Cpos + Coffset], ldc);
+// 			Cpos = colfirstindex[iel];
+// 			Coffset = nphis;
+// 		}
+// 		cublasDgemm(cnpHandle, trans, CUBLAS_OP_N, m, n, k, &alpha, &A[Apos],
+// 				lda, &B[Bpos], ldb, &beta, &C[Cpos], ldc);
 
-		__syncthreads();
-		cublasDestroy(cnpHandle);
+// 		cublasDgemm(cnpHandle, trans, CUBLAS_OP_N, m, n, k, &alpha, &A[Apos],
+// 				lda, &B[Bpos + Boffset], ldb, &beta, &C[Cpos + Coffset], ldc);
 
-	}
-}
-}
+// 		__syncthreads();
+// 		cublasDestroy(cnpHandle);
 
-__global__ void MatMulKernel(bool trans, int64_t nelem, REAL *A, int *rowsizes,
-		int *colsizes, int *matrixpos, int *rowfirstindex, int* colfirstindex,
-		int npts, int nphis, REAL *B, REAL *C) {
-	int iel = blockIdx.x * blockDim.x + threadIdx.x;
+// 	}
+// }
+// }
 
-	__shared__ REAL alpha;
+// __global__ void MatMulKernel(bool trans, int64_t nelem, REAL *A, int *rowsizes,
+// 		int *colsizes, int *matrixpos, int *rowfirstindex, int* colfirstindex,
+// 		int npts, int nphis, REAL *B, REAL *C) {
+// 	int iel = blockIdx.x * blockDim.x + threadIdx.x;
 
-	int Bpos, Cpos;
-	int Boffset, Coffset;
-	int m, k;
-	int Apos;
-	int aux1;
-	int aux2;
+// 	__shared__ REAL alpha;
 
-	if (iel < nelem) {
-		Apos = matrixpos[iel];
+// 	int Bpos, Cpos;
+// 	int Boffset, Coffset;
+// 	int m, k;
+// 	int Apos;
+// 	int aux1;
+// 	int aux2;
 
-		if (trans == false) {
-			m = rowsizes[iel];
-			k = colsizes[iel];
+// 	if (iel < nelem) {
+// 		Apos = matrixpos[iel];
 
-			aux1 = rowsizes[iel];
-			aux2 = 1;
+// 		if (trans == false) {
+// 			m = rowsizes[iel];
+// 			k = colsizes[iel];
 
-			alpha = 1.;
+// 			aux1 = rowsizes[iel];
+// 			aux2 = 1;
 
-			Bpos = colfirstindex[iel];
-			Boffset = nphis;
+// 			alpha = 1.;
 
-			Cpos = rowfirstindex[iel];
-			Coffset = npts;
+// 			Bpos = colfirstindex[iel];
+// 			Boffset = nphis;
 
-		} else if (trans == true) {
-			m = colsizes[iel];
-			k = rowsizes[iel];
+// 			Cpos = rowfirstindex[iel];
+// 			Coffset = npts;
 
-			aux1 = 1;
-			aux2 = rowsizes[iel];
+// 		} else if (trans == true) {
+// 			m = colsizes[iel];
+// 			k = rowsizes[iel];
 
-			alpha = -1.;
+// 			aux1 = 1;
+// 			aux2 = rowsizes[iel];
 
-			Bpos = rowfirstindex[iel];
-			Boffset = npts;
+// 			alpha = -1.;
 
-			Cpos = colfirstindex[iel];
-			Coffset = nphis;
-		}
-		for (int i = 0; i < m; i++) {
-			for (int j = 0; j < k; j++) {
-				C[i + Cpos] += alpha * A[j * aux1 + i * aux2 + Apos] * B[j + Bpos];
-				C[i + Cpos + Coffset] += alpha * A[j * aux1 + i * aux2 + Apos] * B[j + Bpos + Boffset];
-			}
-		}
-	}
-}
+// 			Bpos = rowfirstindex[iel];
+// 			Boffset = npts;
+
+// 			Cpos = colfirstindex[iel];
+// 			Coffset = nphis;
+// 		}
+// 		for (int i = 0; i < m; i++) {
+// 			for (int j = 0; j < k; j++) {
+// 				C[i + Cpos] += alpha * A[j * aux1 + i * aux2 + Apos] * B[j + Bpos];
+// 				C[i + Cpos + Coffset] += alpha * A[j * aux1 + i * aux2 + Apos] * B[j + Bpos + Boffset];
+// 			}
+// 		}
+// 	}
+// }
+
+
