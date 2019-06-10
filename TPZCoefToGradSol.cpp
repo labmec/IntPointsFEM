@@ -7,7 +7,6 @@
 
 TPZCoefToGradSol::TPZCoefToGradSol() : fBlockMatrix(0,0), fNColor(-1), fIndexes(0), fIndexesColor(0) {
 #ifdef USING_CUDA
-    // fCudaCalls.Initialize();
     dStorage.resize(0);
     dRowSizes.resize(0);
     dColSizes.resize(0);
@@ -40,29 +39,24 @@ void TPZCoefToGradSol::Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &grad_u
 
     #ifdef USING_CUDA
 
-    // TPZVecGPU<REAL> dcoef;
-    // dcoef.set(&coef(0,0),coef.Rows());
+    TPZVecGPU<REAL> dcoef(coef.Rows());
+    dcoef.set(&coef(0,0));
 
-    // TPZVecGPU<REAL> dgather_solution(dim * cols);
-    // dgather_solution.fill(0., dim * cols);
+    TPZVecGPU<REAL> dgather_solution(dim * cols);
+    dgather_solution.fill(0.);
 
-    int n = nelem;
-    TPZVec<int> teste(n);
-    dRowSizes.get(&teste[0]);
-    std::cout << "indexes: " << teste << std::endl;
-    std::cout << "indexes: " << fBlockMatrix.Blocks().fRowSizes << std::endl;
+    fCudaCalls.GatherOperation(dim * cols, dcoef, dgather_solution, dIndexes);
 
-    // fCudaCalls.GatherOperation(dim * cols, dcoef, dgather_solution, dIndexes);
-
+    // TPZVec<REAL> teste(dim * cols);
+    // dgather_solution.get(&teste[0]);
+    // std::cout << teste << std::endl;
 
     
-    // TPZVecGPU<int> dOne;
-    // dOne.fill(1, nelem);
+    TPZVecGPU<int> dOne(nelem);
+    dOne.fill(1.);
 
-
-
-    // TPZVecGPU<REAL> dgrad_u;
-    // dgrad_u.fill(0, dim * rows);
+    TPZVecGPU<REAL> dgrad_u(dim * rows);
+    dgrad_u.fill(0.);
 
     // fCudaCalls.Multiply(false, dRowSizes, dOne, dColSizes, dStorage, dMatrixPosition, 
     //     TPZVecGPU<REAL> B, dColFirstIndex, TPZVecGPU<REAL> C, dRowFirstIndex, 1., nelem); 

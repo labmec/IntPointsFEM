@@ -1,5 +1,6 @@
 #include "CudaCalls.h"
 #include "pzreal.h"
+#include "pzvec.h"
 
 __global__ void matrixMultiplication (bool trans, int *m, int *n, int *k, REAL *A, int *strideA, REAL *B, int *strideB, REAL *C, int *strideC, REAL alpha, int nmatrices) {
 
@@ -37,13 +38,16 @@ __global__ void matrixMultiplication (bool trans, int *m, int *n, int *k, REAL *
 }
 
 	CudaCalls::CudaCalls() {
-		cublasCreate(&handle_cublas);
-		cusparseCreate(&handle_cusparse);
+
 	}
 
 	CudaCalls::~CudaCalls() {
-		cublasDestroy(handle_cublas);
-		cusparseDestroy(handle_cusparse);
+		if(handle_cublas) {
+			cublasDestroy(handle_cublas);
+		}
+		if(handle_cusparse) {
+			cusparseDestroy(handle_cusparse);			
+		}
 	}
 
 	void CudaCalls::Multiply(bool trans, TPZVecGPU<int> m, TPZVecGPU<int> n, TPZVecGPU<int> k, TPZVecGPU<REAL> A, TPZVecGPU<int> strideA, 
@@ -54,6 +58,16 @@ __global__ void matrixMultiplication (bool trans, int *m, int *n, int *k, REAL *
 
 	}
 
-	void CudaCalls::GatherOperation(int n, TPZVecGPU<REAL> x, TPZVecGPU<REAL> y, TPZVecGPU<int> id) {
-		cusparseDgthr(handle_cusparse, n, x.getData(), y.getData(), id.getData(), CUSPARSE_INDEX_BASE_ZERO);
+	void CudaCalls::GatherOperation(int n, TPZVecGPU<REAL> &x, TPZVecGPU<REAL> &y, TPZVecGPU<int> &id) {
+		if(!handle_cusparse) {
+			cusparseStatus_t result = cusparseCreate(&handle_cusparse);
+			if (result != CUSPARSE_STATUS_SUCCESS) {
+            throw std::runtime_error("failed to initialize cuSparse");      
+       		}			
+		}
+		cusparseStatus_t result = cusparseDgthr(handle_cusparse, n, x.getData(), &y.getData()[0], &id.getData()[0], CUSPARSE_INDEX_BASE_ZERO);
+		if (result != CUSPARSE_STATUS_SUCCESS) {
+			throw std::runtime_error("failed to perform GatherOperation");      
+		}	
+
 	}

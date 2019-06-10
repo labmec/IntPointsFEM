@@ -4,6 +4,17 @@
 #include <stdexcept>
 #include <algorithm>
 #include <cuda_runtime.h>
+#include <iostream>
+
+#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+   if (code != cudaSuccess) 
+   {
+      fprintf(stderr,"GPUassert: %s %s line:%d\n", cudaGetErrorString(code), file, line);
+      if (abort) exit(code);
+   }
+}
 
 template <class T>
 class TPZVecGPU
@@ -50,56 +61,32 @@ public:
         return start_;
     }
 
-    void fill(T value)
-    { 
-        cudaError_t result = cudaMemset(start_, value, getSize() * sizeof(T));
-        if (result != cudaSuccess)
-        {
-            throw std::runtime_error("failed to copy to device memory");
-        }
+    void fill(T value) { 
+        gpuErrchk(cudaMemset(start_, value, getSize() * sizeof(T)));
     }
-
-
 
     // set
-    void set(const T* src)
-    {
-        cudaError_t result = cudaMemcpy(start_, src, getSize() * sizeof(T), cudaMemcpyHostToDevice);
-        if (result != cudaSuccess)
-        {
-            throw std::runtime_error("failed to copy to device memory");
-        }
+    void set(const T* src) {
+        gpuErrchk(cudaMemcpy(start_, src, getSize() * sizeof(T), cudaMemcpyHostToDevice));
     }
+
     // get
-    void get(T* dest)
-    {
-        cudaError_t result = cudaMemcpy(dest, start_, getSize() * sizeof(T), cudaMemcpyDeviceToHost);
-        if (result != cudaSuccess)
-        {
-            throw std::runtime_error("failed to copy to host memory");
-        }
+    void get(T* dest) {
+        gpuErrchk(cudaMemcpy(dest, start_, getSize() * sizeof(T), cudaMemcpyDeviceToHost)); 
     }
 
 
 // private functions
 private:
     // allocate memory on the device
-    void allocate(size_t size)
-    {
-        cudaError_t result = cudaMalloc((void**)&start_, size * sizeof(T));
-        if (result != cudaSuccess)
-        {
-            start_ = end_ = 0;
-            throw std::runtime_error("failed to allocate device memory");
-        }
+    void allocate(size_t size) {
+        gpuErrchk(cudaMalloc((void**)&start_, size * sizeof(T)));
         end_ = start_ + size;
     }
 
     // free memory on the device
-    void free()
-    {
-        if (start_ != 0)
-        {
+    void free() {
+        if (start_ != 0) {
             cudaFree(start_);
             start_ = end_ = 0;
         }
