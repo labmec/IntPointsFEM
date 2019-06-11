@@ -64,7 +64,6 @@ private:
     TPZVecGPU<int> dIndexes;
     TPZVecGPU<int> dIndexesColor;
     CudaCalls fCudaCalls;
-    // CudaCalls *fCudaCalls;
 #endif
 
 

@@ -22,9 +22,6 @@ TPZCoefToGradSol::~TPZCoefToGradSol() {
 
 void TPZCoefToGradSol::SetIrregularBlocksMatrix(TPZIrregularBlocksMatrix & irregularBlocksMatrix) {
     fBlockMatrix = irregularBlocksMatrix;
-#ifdef USING_CUDA
-    fBlockMatrix.TransferDataToGPU();
-#endif
 }
 
 
@@ -60,9 +57,6 @@ void TPZCoefToGradSol::Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &grad_u
     fBlockMatrix.Multiply(gather_x, grad_u_x, false);
     fBlockMatrix.Multiply(gather_y, grad_u_y, false);   
 #endif
-
-
-
 }
 
 void TPZCoefToGradSol::MultiplyTranspose(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &res) {
@@ -104,28 +98,12 @@ void TPZCoefToGradSol::MultiplyTranspose(TPZFMatrix<REAL> &sigma, TPZFMatrix<REA
 
 void TPZCoefToGradSol::TransferDataToGPU() {
 #ifdef USING_CUDA
-    // dStorage.resize(fBlockMatrix.Blocks().fStorage.size());
-    // dStorage.set(&fBlockMatrix.Blocks().fStorage[0]);
-
-    // dRowSizes.resize(fBlockMatrix.Blocks().fRowSizes.size());
-    // dRowSizes.set(&fBlockMatrix.Blocks().fRowSizes[0]);
-
-    // dColSizes.resize(fBlockMatrix.Blocks().fColSizes.size());
-    // dColSizes.set(&fBlockMatrix.Blocks().fColSizes[0]);
-
-    // dMatrixPosition.resize(fBlockMatrix.Blocks().fMatrixPosition.size());
-    // dMatrixPosition.set(&fBlockMatrix.Blocks().fMatrixPosition[0]);
-
-    // dRowFirstIndex.resize(fBlockMatrix.Blocks().fRowFirstIndex.size());
-    // dRowFirstIndex.set(&fBlockMatrix.Blocks().fRowFirstIndex[0]);
-
-    // dColFirstIndex.resize(fBlockMatrix.Blocks().fColFirstIndex.size());
-    // dColFirstIndex.set(&fBlockMatrix.Blocks().fColFirstIndex[0]);
+    fBlockMatrix.TransferDataToGPU();
 
     dIndexes.resize(fIndexes.size());
     dIndexes.set(&fIndexes[0]);
 
     dIndexesColor.resize(fIndexesColor.size());
     dIndexesColor.set(&fIndexesColor[0]);
-    #endif
+#endif
 }

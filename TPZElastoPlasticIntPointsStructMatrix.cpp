@@ -76,11 +76,11 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 
     AssembleBoundaryData(boundary_matids);
 
-    #ifdef USING_CUDA
+#ifdef USING_CUDA
     std::cout << "Transfering data to GPU..." << std::endl;
     fCoefToGradSol.TransferDataToGPU();
     std::cout << "Done!" << std::endl;
-    #endif
+#endif
 
 }
 
