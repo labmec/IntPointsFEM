@@ -71,7 +71,7 @@ public:
     }
 
     // get
-    void get(T* dest) {
+   void get(T* dest) {
         gpuErrchk(cudaMemcpy(dest, start_, getSize() * sizeof(T), cudaMemcpyDeviceToHost)); 
     }
 

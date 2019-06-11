@@ -23,7 +23,7 @@ class TPZCoefToGradSol {
 public:
     TPZCoefToGradSol();
 
-    TPZCoefToGradSol(TPZIrregularBlocksMatrix irregularBlocksMatrix);
+    TPZCoefToGradSol(TPZIrregularBlocksMatrix &irregularBlocksMatrix);
 
     ~TPZCoefToGradSol();
 
@@ -51,7 +51,6 @@ public:
 
     void TransferDataToGPU();
 
-
 private:
     TPZIrregularBlocksMatrix fBlockMatrix;
 
@@ -62,15 +61,10 @@ private:
     TPZVec<int> fIndexesColor; //nedeed to scatter operation
 
 #ifdef USING_CUDA
-    TPZVecGPU<REAL> dStorage;
-    TPZVecGPU<int> dRowSizes;
-    TPZVecGPU<int> dColSizes;
-    TPZVecGPU<int> dRowFirstIndex;
-    TPZVecGPU<int> dColFirstIndex;
-    TPZVecGPU<int> dMatrixPosition;
     TPZVecGPU<int> dIndexes;
     TPZVecGPU<int> dIndexesColor;
     CudaCalls fCudaCalls;
+    // CudaCalls *fCudaCalls;
 #endif
 
 

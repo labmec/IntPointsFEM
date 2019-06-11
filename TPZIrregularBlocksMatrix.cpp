@@ -8,6 +8,16 @@
 #endif
 
 TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix() : TPZMatrix<REAL>(), fBlocksInfo() {
+
+#ifdef USING_CUDA
+    dStorage.resize(0);
+    dRowSizes.resize(0);
+    dColSizes.resize(0);
+    dRowFirstIndex.resize(0);
+    dColFirstIndex.resize(0);
+    dMatrixPosition.resize(0);
+    fCudaCalls = new CudaCalls();
+#endif
     this->Resize(0,0);
     fBlocksInfo.fNumBlocks = -1;
     fBlocksInfo.fStorage.resize(0);
@@ -21,6 +31,15 @@ TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix() : TPZMatrix<REAL>(), fBlock
 }
 
 TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix(const int64_t rows,const int64_t cols) : TPZMatrix<REAL>(rows,cols), fBlocksInfo() {
+#ifdef USING_CUDA
+    dStorage.resize(0);
+    dRowSizes.resize(0);
+    dColSizes.resize(0);
+    dRowFirstIndex.resize(0);
+    dColFirstIndex.resize(0);
+    dMatrixPosition.resize(0);
+    fCudaCalls = new CudaCalls();
+#endif
     fBlocksInfo.fNumBlocks = -1;
     fBlocksInfo.fStorage.resize(0);
     fBlocksInfo.fRowSizes.resize(0);
@@ -32,11 +51,22 @@ TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix(const int64_t rows,const int6
     fBlocksInfo.fColInd.resize(0);
 }
 
-TPZIrregularBlocksMatrix::~TPZIrregularBlocksMatrix() {}
+TPZIrregularBlocksMatrix::~TPZIrregularBlocksMatrix() {
+}
 
 TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix(const TPZIrregularBlocksMatrix &copy) {
     TPZMatrix<REAL>::operator=(copy);
     fBlocksInfo = copy.fBlocksInfo;
+
+#ifdef USING_CUDA
+    dStorage = copy.dStorage;
+    dRowSizes = copy.dRowSizes;
+    dColSizes = copy.dColSizes;
+    dRowFirstIndex = copy.dRowFirstIndex;
+    dColFirstIndex = copy.dColFirstIndex;
+    dMatrixPosition = copy.dMatrixPosition;
+    fCudaCalls = copy.fCudaCalls;
+#endif
 }
 
 TPZIrregularBlocksMatrix &TPZIrregularBlocksMatrix::operator=(const TPZIrregularBlocksMatrix &copy) {
@@ -45,6 +75,16 @@ TPZIrregularBlocksMatrix &TPZIrregularBlocksMatrix::operator=(const TPZIrregular
     }
     TPZMatrix<REAL>::operator=(copy);
     fBlocksInfo = copy.fBlocksInfo;
+
+#ifdef USING_CUDA
+    dStorage = copy.dStorage;
+    dRowSizes = copy.dRowSizes;
+    dColSizes = copy.dColSizes;
+    dRowFirstIndex = copy.dRowFirstIndex;
+    dColFirstIndex = copy.dColFirstIndex;
+    dMatrixPosition = copy.dMatrixPosition;
+    fCudaCalls = copy.fCudaCalls;
+#endif
 
     return *this;
 }
@@ -69,4 +109,40 @@ void TPZIrregularBlocksMatrix::Multiply(TPZFMatrix<REAL> &A, TPZFMatrix<REAL> &r
     beta = 0.;
 //    mkl_dcsrmm (&trans, &m, &n, &k, &alpha, matdescra, &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &A(0,0), &n, &beta, &res(0,0), &n);
     mkl_dcsrmv(&trans, &m, &k, &alpha, matdescra , &fBlocksInfo.fStorage[0], &fBlocksInfo.fColInd[0], &fBlocksInfo.fRowPtr[0], &fBlocksInfo.fRowPtr[1], A, &beta, &res(0,0));
+}
+
+void TPZIrregularBlocksMatrix::Multiply(REAL *A, REAL *res, int opt) {
+#ifdef USING_CUDA
+    int nblocks = fBlocksInfo.fNumBlocks;
+
+    TPZVec<int> one(nblocks);
+    one.Fill(1);
+
+    TPZVecGPU<int> dOne(nblocks);
+    dOne.set(&one[0]);
+
+    fCudaCalls->Multiply(opt, dRowSizes.getData(), dOne.getData(), dColSizes.getData(), dStorage.getData(), dMatrixPosition.getData(), A, dColFirstIndex.getData(), res, dRowFirstIndex.getData(), 1., nblocks); 
+#endif
+}
+
+void TPZIrregularBlocksMatrix::TransferDataToGPU() {
+#ifdef USING_CUDA
+    dStorage.resize(fBlocksInfo.fStorage.size());
+    dStorage.set(&fBlocksInfo.fStorage[0]);
+
+    dRowSizes.resize(fBlocksInfo.fRowSizes.size());
+    dRowSizes.set(&fBlocksInfo.fRowSizes[0]);
+
+    dColSizes.resize(fBlocksInfo.fColSizes.size());
+    dColSizes.set(&fBlocksInfo.fColSizes[0]);
+
+    dMatrixPosition.resize(fBlocksInfo.fMatrixPosition.size());
+    dMatrixPosition.set(&fBlocksInfo.fMatrixPosition[0]);
+
+    dRowFirstIndex.resize(fBlocksInfo.fRowFirstIndex.size());
+    dRowFirstIndex.set(&fBlocksInfo.fRowFirstIndex[0]);
+
+    dColFirstIndex.resize(fBlocksInfo.fColFirstIndex.size());
+    dColFirstIndex.set(&fBlocksInfo.fColFirstIndex[0]);
+#endif
 }

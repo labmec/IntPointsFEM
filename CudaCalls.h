@@ -3,6 +3,8 @@
 #include <cublas_v2.h>
 #include <cusparse.h>
 
+#ifndef CUDACALLS_H
+#define CUDACALLS_H
 
 
 class CudaCalls {
@@ -10,6 +12,16 @@ public:
 	CudaCalls();
 
 	~CudaCalls();
+
+	CudaCalls &operator=(const CudaCalls &copy) {
+		if(&copy == this){
+			return *this;
+		}
+		handle_cusparse = copy.handle_cusparse;
+		handle_cublas = copy.handle_cublas;
+
+    	return *this;
+	}
 
 	//PASSAR A ----------REFERENCIA!!!!!!!!!-------
 	void Multiply(bool trans, int *m, int *n, int *k, REAL *A, int *strideA, 
@@ -22,3 +34,4 @@ private:
 	cublasHandle_t handle_cublas;
 
 };
+#endif

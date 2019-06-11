@@ -67,6 +67,7 @@ __global__ void matrixMultiplication (bool trans, int *m, int *n, int *k, REAL *
 		if (cudaGetLastError() != cudaSuccess) {
 			throw std::runtime_error("failed to perform Multiply kernel");      
 		}
+
 	}
 
 	void CudaCalls::GatherOperation(int n, REAL *x, REAL *y, int *id) {
@@ -80,5 +81,4 @@ __global__ void matrixMultiplication (bool trans, int *m, int *n, int *k, REAL *
 		if (result != CUSPARSE_STATUS_SUCCESS) {
 			throw std::runtime_error("failed to perform GatherOperation");      
 		}	
-
 	}

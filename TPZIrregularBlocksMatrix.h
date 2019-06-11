@@ -5,6 +5,11 @@
 #define INTPOINTSFEM_TPZIRREGULARBLOCKSMATRIX_H
 #include "pzmatrix.h"
 
+#ifdef USING_CUDA
+#include "TPZVecGPU.h"
+#include "CudaCalls.h"
+#endif
+
 class TPZIrregularBlocksMatrix : public TPZMatrix<REAL> {
 
 public:
@@ -56,6 +61,8 @@ public:
      */
     void Multiply(TPZFMatrix<REAL> &A, TPZFMatrix<REAL> &res, int opt);
 
+    void Multiply(REAL *A, REAL *res, int opt);
+
     /** @brief Set method */
     void SetBlocks(struct IrregularBlocks & blocks) {
         fBlocksInfo = blocks;
@@ -66,8 +73,21 @@ public:
         return fBlocksInfo;
     }
 
-protected:
+    void TransferDataToGPU();
+
+private:
     struct IrregularBlocks fBlocksInfo;
+
+#ifdef USING_CUDA
+    TPZVecGPU<REAL> dStorage;
+    TPZVecGPU<int> dRowSizes;
+    TPZVecGPU<int> dColSizes;
+    TPZVecGPU<int> dRowFirstIndex;
+    TPZVecGPU<int> dColFirstIndex;
+    TPZVecGPU<int> dMatrixPosition;
+    // CudaCalls fCudaCalls;
+    CudaCalls *fCudaCalls;
+#endif
 };
 
 
