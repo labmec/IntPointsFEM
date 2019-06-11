@@ -31,6 +31,10 @@ public:
 
     void Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &grad_u);
 
+#ifdef USING_CUDA
+    void Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &grad_u);
+    #endif
+
     void MultiplyTranspose(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &res);
 
     void SetIndexes(TPZVec<int> indexes) {

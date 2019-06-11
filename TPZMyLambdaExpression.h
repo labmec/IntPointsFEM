@@ -6,6 +6,11 @@
 #include "TPZElastoPlasticMem.h"
 #include "TPZMatElastoPlastic2D.h"
 
+#ifdef USING_CUDA
+#include "TPZVecGPU.h"
+#include "CudaCalls.h"
+#endif
+
 #ifndef INTPOINTSFEM_TPZMYLAMBDAEXPRESSION_H
 #define INTPOINTSFEM_TPZMYLAMBDAEXPRESSION_H
 
@@ -43,6 +48,10 @@ public:
     void PlasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strainS);
 
     void ComputeSigma(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &sigma);
+
+#ifdef USING_CUDA
+    void ComputeSigma(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &sigma);
+#endif
 
 protected:
     int64_t fNpts;

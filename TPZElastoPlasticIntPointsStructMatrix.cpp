@@ -126,15 +126,36 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TP
 
     int neq = fMesh->NEquations();
 
+#ifdef USING_CUDA
+    TPZVecGPU<REAL> solution(fMesh->Solution().Rows());
+    solution.set(&fMesh->Solution()(0,0));
+
+    TPZVecGPU<REAL> grad_u;
+    TPZVecGPU<REAL> sigma;
+    TPZVecGPU<REAL> drhs(neq);
+    rhs.Resize(neq, 1);
+    rhs.Zero();
+
+    fCoefToGradSol.Multiply(solution, grad_u);
+    // fLambdaExp.ComputeSigma(grad_u, sigma);
+    // TPZFMatrix<REAL> teste(576,1);
+    // grad_u.get(&teste(0,0));
+    // teste.Print(std::cout);
+
+#else
     TPZFMatrix<REAL> grad_u;
     TPZFMatrix<REAL> sigma;
     rhs.Resize(neq, 1);
     rhs.Zero();
 
     fCoefToGradSol.Multiply(fMesh->Solution(), grad_u);
-    // fLambdaExp.ComputeSigma(grad_u, sigma);
-    // fCoefToGradSol.MultiplyTranspose(sigma, rhs);
-    // rhs += fRhsLinear;
+    fLambdaExp.ComputeSigma(grad_u, sigma);
+    fCoefToGradSol.MultiplyTranspose(sigma, rhs);
+#endif
+    rhs += fRhsLinear;
+
+   
+
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::AssembleBoundaryData(std::set<int> &boundary_matids) {

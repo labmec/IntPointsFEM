@@ -10,6 +10,9 @@
 #include "SpectralDecomp.h"
 #include "SigmaProjection.h"
 
+
+
+
 TPZMyLambdaExpression::TPZMyLambdaExpression() : fNpts(-1), fWeight(0), fMaterial(), fPlasticStrain(0,0), fMType(0,0), fAlpha(0,0) {
 }
 
@@ -196,3 +199,37 @@ void TPZMyLambdaExpression::ComputeSigma(TPZFMatrix<REAL> &delta_strain, TPZFMat
     ComputeStrain(sigma, elastic_strain);
     PlasticStrain(delta_strain, elastic_strain);
 }
+
+#ifdef USING_CUDA
+void TPZMyLambdaExpression::ComputeSigma(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &sigma) {
+    // int dim = 2;
+
+    // sigma.Resize(dim * dim * fNpts, 1);
+
+    // fPlasticStrain.Resize(dim * dim * fNpts, 1);
+    // fPlasticStrain.Zero();
+
+    // fMType.Resize(fNpts, 1);
+    // fMType.Zero();
+
+    // fAlpha.Resize(fNpts, 1);
+    // fAlpha.Zero();
+
+    // TPZFMatrix<REAL> elastic_strain(dim * dim * fNpts, 1, 0.);
+    // TPZFMatrix<REAL> sigma_trial(dim * dim * fNpts, 1, 0.);
+    // TPZFMatrix<REAL> eigenvalues(3 * fNpts, 1, 0.);
+    // TPZFMatrix<REAL> eigenvectors(9 * fNpts, 1, 0.);
+    // TPZFMatrix<REAL> sigma_projected(3 * fNpts, 1, 0.);
+
+    // // Compute sigma
+    // ElasticStrain(delta_strain, elastic_strain);
+    // ComputeStress(elastic_strain, sigma_trial);
+    // SpectralDecomposition(sigma_trial, eigenvalues, eigenvectors);
+    // ProjectSigma(eigenvalues, sigma_projected);
+    // StressCompleteTensor(sigma_projected, eigenvectors, sigma);
+
+    // // Update plastic strain
+    // ComputeStrain(sigma, elastic_strain);
+    // PlasticStrain(delta_strain, elastic_strain);
+}
+#endif

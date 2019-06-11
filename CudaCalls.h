@@ -1,10 +1,12 @@
+#ifndef CUDACALLS_H
+#define CUDACALLS_H
+
 #include "TPZVecGPU.h"
 #include "pzreal.h"
 #include <cublas_v2.h>
 #include <cusparse.h>
 
-#ifndef CUDACALLS_H
-#define CUDACALLS_H
+
 
 
 class CudaCalls {

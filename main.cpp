@@ -127,25 +127,25 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
         du += delta_du;
         analysis->LoadSolution(du);
         analysis->AssembleResidual();
-//         norm_delta_du = Norm(delta_du);
-//         norm_res = Norm(analysis->Rhs());
-//         stop_criterion_Q = norm_res < tolerance;
-//         std::cout << "Nonlinear process :: delta_du norm = " << norm_delta_du << std::endl;
-//         std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
-//         if (stop_criterion_Q) {
-//             AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
-//             norm_res = Norm(analysis->Rhs());
-//             std::cout << "Nonlinear process converged with residue norm = " << norm_res << std::endl;
-//             std::cout << "Number of iterations = " << i + 1 << std::endl;
-//             break;
-//         }
-// //        analysis->Assemble();
-//     }
+        norm_delta_du = Norm(delta_du);
+        norm_res = Norm(analysis->Rhs());
+        stop_criterion_Q = norm_res < tolerance;
+        std::cout << "Nonlinear process :: delta_du norm = " << norm_delta_du << std::endl;
+        std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
+        if (stop_criterion_Q) {
+            AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
+            norm_res = Norm(analysis->Rhs());
+            std::cout << "Nonlinear process converged with residue norm = " << norm_res << std::endl;
+            // std::cout << "Number of iterations = " << i + 1 << std::endl;
+            // break;
+        }
+//        analysis->Assemble();
+    // }
 
-//     if (stop_criterion_Q == false) {
-//         AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
-//         std::cout << "Nonlinear process not converged with residue norm = " << norm_res << std::endl;
-//     }
+    if (stop_criterion_Q == false) {
+        AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
+        std::cout << "Nonlinear process not converged with residue norm = " << norm_res << std::endl;
+    }
 }
 
 TPZAnalysis *Analysis(TPZCompMesh *cmesh, int n_threads) {
