@@ -1,6 +1,6 @@
 #include "pzreal.h"
 
-__global__ void matrixMultiplication (bool trans, int *m, int *n, int *k, REAL *A, int *strideA, REAL *B, int *strideB, REAL *C, int *strideC, REAL alpha, int nmatrices) {
+__global__ void MatrixMultiplicationKernel (bool trans, int *m, int *n, int *k, REAL *A, int *strideA, REAL *B, int *strideB, REAL *C, int *strideC, REAL alpha, int nmatrices) {
 
 	int imatrix = blockIdx.x;
 
@@ -19,7 +19,7 @@ __global__ void matrixMultiplication (bool trans, int *m, int *n, int *k, REAL *
 			aux2 = k_i;
 
 		} else {
-			aux1 = k_i;
+			aux1 = m_i;
 			aux2 = 1;
 		}
 

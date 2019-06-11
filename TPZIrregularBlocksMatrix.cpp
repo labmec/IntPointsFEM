@@ -121,7 +121,11 @@ void TPZIrregularBlocksMatrix::Multiply(REAL *A, REAL *res, int opt) {
     TPZVecGPU<int> dOne(nblocks);
     dOne.set(&one[0]);
 
-    fCudaCalls->Multiply(opt, dRowSizes.getData(), dOne.getData(), dColSizes.getData(), dStorage.getData(), dMatrixPosition.getData(), A, dColFirstIndex.getData(), res, dRowFirstIndex.getData(), 1., nblocks); 
+    if(opt == 0) {
+        fCudaCalls->Multiply(opt, dRowSizes.getData(), dOne.getData(), dColSizes.getData(), dStorage.getData(), dMatrixPosition.getData(), A, dColFirstIndex.getData(), res, dRowFirstIndex.getData(), 1., nblocks); 
+    } else {
+        fCudaCalls->Multiply(opt, dColSizes.getData(), dOne.getData(), dRowSizes.getData(), dStorage.getData(), dMatrixPosition.getData(), A, dRowFirstIndex.getData(), res, dColFirstIndex.getData(), -1., nblocks); 
+    }
 #endif
 }
 

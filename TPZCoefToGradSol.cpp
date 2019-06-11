@@ -61,6 +61,39 @@ void TPZCoefToGradSol::Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &grad_u
     fBlockMatrix.Multiply(gather_y, grad_u_y, false);   
 }
 
+#ifdef USING_CUDA
+void TPZCoefToGradSol::MultiplyTranspose(TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL> &res) {
+    int dim = 2;
+    int64_t rows = fBlockMatrix.Rows();
+    int64_t cols = fBlockMatrix.Cols();
+
+    int64_t ncolor = fNColor;
+    int64_t neq = res.getSize();    
+
+    TPZVecGPU<REAL> forces(dim * cols);
+    res.resize(ncolor * neq);
+    res.Zero();
+
+    fBlockMatrix.Multiply(&sigma.getData()[0], &forces.getData()[0], true);
+    fBlockMatrix.Multiply(&sigma.getData()[rows], &forces.getData()[cols], true); 
+
+    // Assemble forces
+    fCudaCalls.ScatterOperation(dim * cols, forces.getData(), res.getData(), dIndexesColor.getData());
+
+    int64_t colorassemb = ncolor / 2.;
+    while (colorassemb > 0) {
+
+        int64_t firsteq = (ncolor - colorassemb) * neq;
+        fCudaCalls.DaxpyOperation(colorassemb * neq, 1., &res.getData()[firsteq], &res.getData()[0]); 
+
+        ncolor -= colorassemb;
+        colorassemb = ncolor/2;
+    }
+    // res.resize(neq);
+}
+#endif
+
+
 void TPZCoefToGradSol::MultiplyTranspose(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &res) {
     int dim = 2;
     int64_t rows = fBlockMatrix.Rows();

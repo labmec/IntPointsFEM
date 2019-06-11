@@ -71,8 +71,9 @@ public:
     }
 
     // get
-   void get(T* dest) {
-        gpuErrchk(cudaMemcpy(dest, start_, getSize() * sizeof(T), cudaMemcpyDeviceToHost)); 
+   void get(T* dest, size_t size) {
+        size_t min = std::min(size, getSize());
+        gpuErrchk(cudaMemcpy(dest, start_, min * sizeof(T), cudaMemcpyDeviceToHost)); 
     }
 
 

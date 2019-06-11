@@ -53,7 +53,7 @@ public:
     void ComputeSigma(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &sigma);
 #endif
 
-protected:
+private:
     int64_t fNpts;
 
     TPZVec<REAL> fWeight;
@@ -65,6 +65,11 @@ protected:
     TPZFMatrix<REAL> fMType;
 
     TPZFMatrix<REAL> fAlpha;
+
+#ifdef USING_CUDA
+    CudaCalls *fCudaCalls;
+    TPZVecGPU<REAL> dWeight;
+#endif
 
 };
 
