@@ -42,18 +42,16 @@ void TPZCoefToGradSol::Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &grad_u
     dcoef.set(&coef(0,0));
 
     TPZVecGPU<REAL> dgather_solution(dim * cols);
-    dgather_solution.Zero();
+    TPZVecGPU<REAL> dgrad_u(dim * rows);
 
-    fCudaCalls.GatherOperation(dim * cols, dcoef, dgather_solution, dIndexes);
+    // Gather operation
+    fCudaCalls.GatherOperation(dim * cols, dcoef.getData(), dgather_solution.getData(), dIndexes.getData());
     
     TPZVec<int> one(nelem);
     one.Fill(1);
 
     TPZVecGPU<int> dOne(nelem);
     dOne.set(&one[0]);
-
-    TPZVecGPU<REAL> dgrad_u(dim * rows);
-    dgrad_u.Zero();
 
 //change this to TPZIrregularBlocksMatrix class
     fCudaCalls.Multiply(false, dRowSizes.getData(), dOne.getData(), dColSizes.getData(), dStorage.getData(), dMatrixPosition.getData(), &dgather_solution.getData()[0], dColFirstIndex.getData(), &dgrad_u.getData()[0], dRowFirstIndex.getData(), 1., nelem); 

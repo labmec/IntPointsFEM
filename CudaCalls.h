@@ -15,7 +15,7 @@ public:
 	void Multiply(bool trans, int *m, int *n, int *k, REAL *A, int *strideA, 
 		REAL *B, int *strideB,  REAL *C, int *strideC, REAL alpha, int nmatrices);
 
-	void GatherOperation(int n, TPZVecGPU<REAL> &x, TPZVecGPU<REAL> &y, TPZVecGPU<int> &id);
+	void GatherOperation(int n, REAL *x, REAL *y, int *id);
 
 private:
 	cusparseHandle_t handle_cusparse;
