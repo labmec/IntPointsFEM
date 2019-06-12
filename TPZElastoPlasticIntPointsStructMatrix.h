@@ -58,8 +58,6 @@ private:
 
     void SetUpIrregularBlocksData(TPZStack<int> &elindex_domain, TPZIrregularBlocksMatrix::IrregularBlocks &blocksData);
 
-    void CSRVectors(TPZIrregularBlocksMatrix::IrregularBlocks &blocksData);
-
     void SetUpIndexes(TPZStack<int> &elindex_domain, TPZVec<int> & dof_indexes);
 
     void ColoredIndexes(TPZStack<int> &elindex_domain, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor);

@@ -30,8 +30,6 @@ TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix() : TPZMatrix<REAL>(), fBlock
     fBlocksInfo.fColFirstIndex.resize(0);
     fBlocksInfo.fRowPtr.resize(0);
     fBlocksInfo.fColInd.resize(0);
-    fBlocksInfo.fRowRowPosition.resize(0);
-    fBlocksInfo.fColColPosition.resize(0);
 }
 
 TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix(const int64_t rows,const int64_t cols) : TPZMatrix<REAL>(rows,cols), fBlocksInfo() {
@@ -53,8 +51,6 @@ TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix(const int64_t rows,const int6
     fBlocksInfo.fColFirstIndex.resize(0);
     fBlocksInfo.fRowPtr.resize(0);
     fBlocksInfo.fColInd.resize(0);
-    fBlocksInfo.fRowRowPosition.resize(0);
-    fBlocksInfo.fColColPosition.resize(0);
 }
 
 TPZIrregularBlocksMatrix::~TPZIrregularBlocksMatrix() {
@@ -137,4 +133,23 @@ void TPZIrregularBlocksMatrix::TransferDataToGPU() {
     dColFirstIndex.resize(fBlocksInfo.fColFirstIndex.size());
     dColFirstIndex.set(&fBlocksInfo.fColFirstIndex[0], fBlocksInfo.fColFirstIndex.size());
 #endif
+}
+
+void TPZIrregularBlocksMatrix::CSRVectors() {
+    int64_t nblocks = fBlocksInfo.fNumBlocks;
+    int64_t rows = fBlocksInfo.fRowFirstIndex[nblocks];
+
+    fBlocksInfo.fRowPtr.resize(rows + 1);
+    fBlocksInfo.fColInd.resize(fBlocksInfo.fMatrixPosition[nblocks]);
+
+    for (int iel = 0; iel < nblocks; ++iel) {
+        for (int irow = 0; irow < fBlocksInfo.fRowSizes[iel]; ++irow) {
+            fBlocksInfo.fRowPtr[irow + fBlocksInfo.fRowFirstIndex[iel]] = fBlocksInfo.fMatrixPosition[iel] + irow * fBlocksInfo.fColSizes[iel];
+
+            for (int icol = 0; icol < fBlocksInfo.fColSizes[iel]; ++icol) {
+                fBlocksInfo.fColInd[icol + fBlocksInfo.fMatrixPosition[iel] + irow * fBlocksInfo.fColSizes[iel]] = icol + fBlocksInfo.fColFirstIndex[iel];
+            }
+        }
+    }
+    fBlocksInfo.fRowPtr[rows] = fBlocksInfo.fMatrixPosition[nblocks];
 }

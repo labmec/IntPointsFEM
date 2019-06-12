@@ -92,6 +92,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     KMatrixBip();
     KMatrixBel();
 
+
     
     auto it_end = fSparseMatrixLinear.MapEnd();
     
@@ -192,14 +193,10 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZStack<in
     blocksData.fMatrixPosition.resize(nblocks + 1);
     blocksData.fRowFirstIndex.resize(nblocks + 1);
     blocksData.fColFirstIndex.resize(nblocks + 1);
-    blocksData.fRowRowPosition.resize(nblocks + 1);
-    blocksData.fColColPosition.resize(nblocks + 1);
 
     blocksData.fMatrixPosition[0] = 0;
     blocksData.fRowFirstIndex[0] = 0;
     blocksData.fColFirstIndex[0] = 0;
-    blocksData.fRowRowPosition[0] = 0;
-    blocksData.fColColPosition[0] = 0;
 
     int64_t rows = 0;
     int64_t cols = 0;
@@ -218,9 +215,6 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZStack<in
         blocksData.fMatrixPosition[iel + 1] = blocksData.fMatrixPosition[iel] + blocksData.fRowSizes[iel] * blocksData.fColSizes[iel];
         blocksData.fRowFirstIndex[iel + 1] =  blocksData.fRowFirstIndex[iel] + blocksData.fRowSizes[iel];
         blocksData.fColFirstIndex[iel + 1] = blocksData.fColFirstIndex[iel] + blocksData.fColSizes[iel];
-
-        blocksData.fRowRowPosition[iel + 1] = blocksData.fRowSizes[iel] * blocksData.fRowSizes[iel];
-        blocksData.fColColPosition[iel + 1] = blocksData.fColSizes[iel] * blocksData.fColSizes[iel];
 
         rows += blocksData.fRowSizes[iel];
         cols += blocksData.fColSizes[iel];
@@ -264,27 +258,6 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZStack<in
         TPZFMatrix<REAL> elmatloc(row_el, col_el, &blocksData.fStorage[pos_el], row_el * col_el);
         elmatloc = elmatrix;
     }
-
-    this->CSRVectors(blocksData);
-}
-
-void TPZElastoPlasticIntPointsStructMatrix::CSRVectors(TPZIrregularBlocksMatrix::IrregularBlocks &blocksData) {
-    int64_t nblocks = blocksData.fNumBlocks;
-    int64_t rows = blocksData.fRowFirstIndex[nblocks];
-
-    blocksData.fRowPtr.resize(rows + 1);
-    blocksData.fColInd.resize(blocksData.fMatrixPosition[nblocks]);
-
-    for (int iel = 0; iel < nblocks; ++iel) {
-        for (int irow = 0; irow < blocksData.fRowSizes[iel]; ++irow) {
-            blocksData.fRowPtr[irow + blocksData.fRowFirstIndex[iel]] = blocksData.fMatrixPosition[iel] + irow * blocksData.fColSizes[iel];
-
-            for (int icol = 0; icol < blocksData.fColSizes[iel]; ++icol) {
-                blocksData.fColInd[icol + blocksData.fMatrixPosition[iel] + irow * blocksData.fColSizes[iel]] = icol + blocksData.fColFirstIndex[iel];
-            }
-        }
-    }
-    blocksData.fRowPtr[rows] = blocksData.fMatrixPosition[nblocks];
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::SetUpIndexes(TPZStack<int> &elindex_domain, TPZVec<int> & dof_indexes) {
