@@ -24,6 +24,9 @@ public:
         TPZVec<int> fColFirstIndex; // blocks first column index
         TPZVec<int> fRowPtr; // vector of the start of every row and the end of the last row plus one (this is for CSR format)
         TPZVec<int> fColInd; // vector of column indices for each non-zero element of the matrix (this is for CSR format)
+        TPZVec<int> fRowRowPosition;
+        TPZVec<int> fColColPosition; 
+
     };
 
     /** @brief Default constructor */
@@ -59,7 +62,7 @@ public:
      * @param beta : scalar parameter
      * @param opt : indicates if transpose or not
      */
-    void Multiply(TPZFMatrix<REAL> &A, TPZFMatrix<REAL> &res, int opt);
+    void Multiply(TPZFMatrix<REAL> &A, TPZFMatrix<REAL> &res, TPZVec<int> ColsA, int opt) ;
 
     void Multiply(REAL *A, REAL *res, int *ColsA, int opt);
 

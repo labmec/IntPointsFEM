@@ -3,6 +3,8 @@
 //
 #include "TPZIrregularBlocksMatrix.h"
 
+#include "MatMul.h"
+
 #ifdef USING_MKL
 #include <mkl.h>
 #endif
@@ -28,6 +30,8 @@ TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix() : TPZMatrix<REAL>(), fBlock
     fBlocksInfo.fColFirstIndex.resize(0);
     fBlocksInfo.fRowPtr.resize(0);
     fBlocksInfo.fColInd.resize(0);
+    fBlocksInfo.fRowRowPosition.resize(0);
+    fBlocksInfo.fColColPosition.resize(0);
 }
 
 TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix(const int64_t rows,const int64_t cols) : TPZMatrix<REAL>(rows,cols), fBlocksInfo() {
@@ -49,6 +53,8 @@ TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix(const int64_t rows,const int6
     fBlocksInfo.fColFirstIndex.resize(0);
     fBlocksInfo.fRowPtr.resize(0);
     fBlocksInfo.fColInd.resize(0);
+    fBlocksInfo.fRowRowPosition.resize(0);
+    fBlocksInfo.fColColPosition.resize(0);
 }
 
 TPZIrregularBlocksMatrix::~TPZIrregularBlocksMatrix() {
@@ -89,26 +95,14 @@ TPZIrregularBlocksMatrix &TPZIrregularBlocksMatrix::operator=(const TPZIrregular
     return *this;
 }
 
-void TPZIrregularBlocksMatrix::Multiply(TPZFMatrix<REAL> &A, TPZFMatrix<REAL> &res, int opt) {
-    char trans;
-    char matdescra[] = {'G',' ',' ','C'};
-    REAL alpha, beta;
+void TPZIrregularBlocksMatrix::Multiply(TPZFMatrix<REAL> &A, TPZFMatrix<REAL> &res, TPZVec<int> ColsA, int opt) {
+    int nblocks = fBlocksInfo.fNumBlocks;
 
-    if (opt == false) {
-        trans = 'N';
-        alpha = 1.;
+    if(opt == 0) {
+        MatrixMultiplication(opt, &fBlocksInfo.fRowSizes[0], &ColsA[0], &fBlocksInfo.fColSizes[0], &fBlocksInfo.fStorage[0], &fBlocksInfo.fMatrixPosition[0], &A(0,0), &fBlocksInfo.fColFirstIndex[0], &res(0,0), &fBlocksInfo.fRowFirstIndex[0], 1., nblocks);
+    } else {
+        MatrixMultiplication(opt, &fBlocksInfo.fColSizes[0], &ColsA[0], &fBlocksInfo.fRowSizes[0], &fBlocksInfo.fStorage[0], &fBlocksInfo.fMatrixPosition[0], &A(0,0), &fBlocksInfo.fRowFirstIndex[0], &res(0,0), &fBlocksInfo.fColFirstIndex[0], -1., nblocks);
     }
-    else if (opt == true) {
-        trans = 'T';
-        alpha = -1.;
-    }
-
-    const int m = fRow;
-    const int n = 1;
-    const int k = fCol;
-    beta = 0.;
-//    mkl_dcsrmm (&trans, &m, &n, &k, &alpha, matdescra, &fStorage[0], &fColInd[0], &fRowPtr[0], &fRowPtr[1], &A(0,0), &n, &beta, &res(0,0), &n);
-    mkl_dcsrmv(&trans, &m, &k, &alpha, matdescra , &fBlocksInfo.fStorage[0], &fBlocksInfo.fColInd[0], &fBlocksInfo.fRowPtr[0], &fBlocksInfo.fRowPtr[1], A, &beta, &res(0,0));
 }
 
 void TPZIrregularBlocksMatrix::Multiply(REAL *A, REAL *res, int *ColsA, int opt) {

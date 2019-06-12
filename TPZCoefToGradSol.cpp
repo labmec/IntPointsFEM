@@ -65,8 +65,12 @@ void TPZCoefToGradSol::Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &grad_u
     TPZFMatrix<REAL> grad_u_x(rows, 1, &grad_u(0, 0), rows);
     TPZFMatrix<REAL> grad_u_y(rows, 1, &grad_u(rows, 0), rows);
 
-    fBlockMatrix.Multiply(gather_x, grad_u_x, false);
-    fBlockMatrix.Multiply(gather_y, grad_u_y, false);   
+    int nblocks = fBlockMatrix.Blocks().fNumBlocks;
+    TPZVec<int> one(nblocks);
+    one.Fill(1);
+
+    fBlockMatrix.Multiply(gather_x, grad_u_x, one, false);
+    fBlockMatrix.Multiply(gather_y, grad_u_y, one, false);   
 }
 
 #ifdef USING_CUDA
@@ -129,8 +133,12 @@ void TPZCoefToGradSol::MultiplyTranspose(TPZFMatrix<REAL> &sigma, TPZFMatrix<REA
     TPZFMatrix<REAL> forces_x(cols, 1, &forces(0, 0), cols);
     TPZFMatrix<REAL> forces_y(cols, 1, &forces(cols, 0), cols);
 
-    fBlockMatrix.Multiply(sigma_x, forces_x, true);
-    fBlockMatrix.Multiply(sigma_y, forces_y, true);
+    int nblocks = fBlockMatrix.Blocks().fNumBlocks;
+    TPZVec<int> one(nblocks);
+    one.Fill(1);
+
+    fBlockMatrix.Multiply(sigma_x, forces_x, one, true);
+    fBlockMatrix.Multiply(sigma_y, forces_y, one, true);
 
     // Assemble forces
     cblas_dsctr(dim * cols, forces, &fIndexesColor[0], &res(0,0));
