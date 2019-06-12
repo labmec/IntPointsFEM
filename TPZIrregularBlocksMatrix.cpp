@@ -111,20 +111,14 @@ void TPZIrregularBlocksMatrix::Multiply(TPZFMatrix<REAL> &A, TPZFMatrix<REAL> &r
     mkl_dcsrmv(&trans, &m, &k, &alpha, matdescra , &fBlocksInfo.fStorage[0], &fBlocksInfo.fColInd[0], &fBlocksInfo.fRowPtr[0], &fBlocksInfo.fRowPtr[1], A, &beta, &res(0,0));
 }
 
-void TPZIrregularBlocksMatrix::Multiply(REAL *A, REAL *res, int opt) {
+void TPZIrregularBlocksMatrix::Multiply(REAL *A, REAL *res, int *ColsA, int opt) {
 #ifdef USING_CUDA
     int nblocks = fBlocksInfo.fNumBlocks;
 
-    TPZVec<int> one(nblocks);
-    one.Fill(1);
-
-    TPZVecGPU<int> dOne(nblocks);
-    dOne.set(&one[0], nblocks);
-
     if(opt == 0) {
-        fCudaCalls->Multiply(opt, dRowSizes.getData(), dOne.getData(), dColSizes.getData(), dStorage.getData(), dMatrixPosition.getData(), A, dColFirstIndex.getData(), res, dRowFirstIndex.getData(), 1., nblocks); 
+        fCudaCalls->Multiply(opt, dRowSizes.getData(), ColsA, dColSizes.getData(), dStorage.getData(), dMatrixPosition.getData(), A, dColFirstIndex.getData(), res, dRowFirstIndex.getData(), 1., nblocks); 
     } else {
-        fCudaCalls->Multiply(opt, dColSizes.getData(), dOne.getData(), dRowSizes.getData(), dStorage.getData(), dMatrixPosition.getData(), A, dRowFirstIndex.getData(), res, dColFirstIndex.getData(), -1., nblocks); 
+        fCudaCalls->Multiply(opt, dColSizes.getData(), ColsA, dRowSizes.getData(), dStorage.getData(), dMatrixPosition.getData(), A, dRowFirstIndex.getData(), res, dColFirstIndex.getData(), -1., nblocks); 
     }
 #endif
 }

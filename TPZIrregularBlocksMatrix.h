@@ -61,7 +61,7 @@ public:
      */
     void Multiply(TPZFMatrix<REAL> &A, TPZFMatrix<REAL> &res, int opt);
 
-    void Multiply(REAL *A, REAL *res, int opt);
+    void Multiply(REAL *A, REAL *res, int *ColsA, int opt);
 
     /** @brief Set method */
     void SetBlocks(struct IrregularBlocks & blocks) {

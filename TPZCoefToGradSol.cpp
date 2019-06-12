@@ -35,8 +35,16 @@ void TPZCoefToGradSol::Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &grad_u) 
 
     grad_u.resize(dim * rows);
 
-    fBlockMatrix.Multiply(&gather_solution.getData()[0], &grad_u.getData()[0], false);
-    fBlockMatrix.Multiply(&gather_solution.getData()[cols], &grad_u.getData()[rows], false);   
+    // cols of gather_solution (one because it is a vector!!)
+    int nblocks = fBlockMatrix.Blocks().fNumBlocks;
+    TPZVec<int> one(nblocks);
+    one.Fill(1);
+
+    TPZVecGPU<int> dOne(nblocks);
+    dOne.set(&one[0], nblocks);
+
+    fBlockMatrix.Multiply(&gather_solution.getData()[0], &grad_u.getData()[0], dOne.getData(), false);
+    fBlockMatrix.Multiply(&gather_solution.getData()[cols], &grad_u.getData()[rows], dOne.getData(), false);   
 }
 #endif 
 
@@ -74,8 +82,16 @@ void TPZCoefToGradSol::MultiplyTranspose(TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL>
     res.resize(ncolor * neq);
     res.Zero();
 
-    fBlockMatrix.Multiply(&sigma.getData()[0], &forces.getData()[0], true);
-    fBlockMatrix.Multiply(&sigma.getData()[rows], &forces.getData()[cols], true); 
+    // cols of sigma (one because it is a vector!!)
+    int nblocks = fBlockMatrix.Blocks().fNumBlocks;
+    TPZVec<int> one(nblocks);
+    one.Fill(1);
+
+    TPZVecGPU<int> dOne(nblocks);
+    dOne.set(&one[0], nblocks);
+
+    fBlockMatrix.Multiply(&sigma.getData()[0], &forces.getData()[0], dOne.getData(), true);
+    fBlockMatrix.Multiply(&sigma.getData()[rows], &forces.getData()[cols], dOne.getData(), true); 
 
     // Assemble forces
     fCudaCalls.ScatterOperation(dim * cols, forces.getData(), res.getData(), dIndexesColor.getData());
