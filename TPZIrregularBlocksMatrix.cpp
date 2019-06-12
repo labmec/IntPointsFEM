@@ -16,7 +16,7 @@ TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix() : TPZMatrix<REAL>(), fBlock
     dRowFirstIndex.resize(0);
     dColFirstIndex.resize(0);
     dMatrixPosition.resize(0);
-    fCudaCalls = new CudaCalls();
+    fCudaCalls = new TPZCudaCalls();
 #endif
     this->Resize(0,0);
     fBlocksInfo.fNumBlocks = -1;
@@ -38,7 +38,7 @@ TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix(const int64_t rows,const int6
     dRowFirstIndex.resize(0);
     dColFirstIndex.resize(0);
     dMatrixPosition.resize(0);
-    fCudaCalls = new CudaCalls();
+    fCudaCalls = new TPZCudaCalls();
 #endif
     fBlocksInfo.fNumBlocks = -1;
     fBlocksInfo.fStorage.resize(0);
@@ -119,7 +119,7 @@ void TPZIrregularBlocksMatrix::Multiply(REAL *A, REAL *res, int opt) {
     one.Fill(1);
 
     TPZVecGPU<int> dOne(nblocks);
-    dOne.set(&one[0]);
+    dOne.set(&one[0], nblocks);
 
     if(opt == 0) {
         fCudaCalls->Multiply(opt, dRowSizes.getData(), dOne.getData(), dColSizes.getData(), dStorage.getData(), dMatrixPosition.getData(), A, dColFirstIndex.getData(), res, dRowFirstIndex.getData(), 1., nblocks); 
@@ -132,21 +132,21 @@ void TPZIrregularBlocksMatrix::Multiply(REAL *A, REAL *res, int opt) {
 void TPZIrregularBlocksMatrix::TransferDataToGPU() {
 #ifdef USING_CUDA
     dStorage.resize(fBlocksInfo.fStorage.size());
-    dStorage.set(&fBlocksInfo.fStorage[0]);
+    dStorage.set(&fBlocksInfo.fStorage[0], fBlocksInfo.fStorage.size());
 
     dRowSizes.resize(fBlocksInfo.fRowSizes.size());
-    dRowSizes.set(&fBlocksInfo.fRowSizes[0]);
+    dRowSizes.set(&fBlocksInfo.fRowSizes[0], fBlocksInfo.fRowSizes.size());
 
     dColSizes.resize(fBlocksInfo.fColSizes.size());
-    dColSizes.set(&fBlocksInfo.fColSizes[0]);
+    dColSizes.set(&fBlocksInfo.fColSizes[0], fBlocksInfo.fColSizes.size());
 
     dMatrixPosition.resize(fBlocksInfo.fMatrixPosition.size());
-    dMatrixPosition.set(&fBlocksInfo.fMatrixPosition[0]);
+    dMatrixPosition.set(&fBlocksInfo.fMatrixPosition[0], fBlocksInfo.fMatrixPosition.size());
 
     dRowFirstIndex.resize(fBlocksInfo.fRowFirstIndex.size());
-    dRowFirstIndex.set(&fBlocksInfo.fRowFirstIndex[0]);
+    dRowFirstIndex.set(&fBlocksInfo.fRowFirstIndex[0], fBlocksInfo.fRowFirstIndex.size());
 
     dColFirstIndex.resize(fBlocksInfo.fColFirstIndex.size());
-    dColFirstIndex.set(&fBlocksInfo.fColFirstIndex[0]);
+    dColFirstIndex.set(&fBlocksInfo.fColFirstIndex[0], fBlocksInfo.fColFirstIndex.size());
 #endif
 }

@@ -2,11 +2,12 @@
 #include "pzintel.h"
 #include "pzskylstrmatrix.h"
 #include "pzmetis.h"
+#include "TPZMyLambdaExpression.h"
 
 #ifdef USING_MKL
 #include <mkl.h>
 #endif
-#include "TPZMyLambdaExpression.h"
+
 
 TPZElastoPlasticIntPointsStructMatrix::TPZElastoPlasticIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZSymetricSpStructMatrix(cmesh), fLambdaExp(), fSparseMatrixLinear(), fRhsLinear(), fCoefToGradSol() {
 
@@ -102,19 +103,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
         vol_val += val; /// TODO:: Add val
         mat.PutVal(row, col, vol_val);
     }
-    
-    
-//    TPZSYsmpMatrix<STATE> &mat_vol = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
-//    int64_t n_data = mat_vol.A().size();
-//    int64_t n_data_bc = fSparseMatrixLinear.A().size();
-//    if (n_data!=n_data_bc) {
-//        DebugStop();
-//    }
-//
-//    for (int64_t i = 0; i < n_data; i++) {
-//        mat_vol.A()[i] += fSparseMatrixLinear.A()[i];
-//    }
-    
+   
     rhs+=fRhsLinear;
 }
 
@@ -127,8 +116,8 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TP
     int neq = fMesh->NEquations();
 
 #ifdef USING_CUDA
-    TPZVecGPU<REAL> solution(fMesh->Solution().Rows());
-    solution.set(&fMesh->Solution()(0,0));
+    TPZVecGPU<REAL> solution(neq);
+    solution.set(&fMesh->Solution()(0,0), neq);
 
     TPZVecGPU<REAL> dgrad_u;
     TPZVecGPU<REAL> drhs(neq);
@@ -144,7 +133,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TP
     fLambdaExp.ComputeSigma(grad_u, sigma);
 
     TPZVecGPU<REAL> dsigma(sigma.Rows());
-    dsigma.set(&sigma(0,0));
+    dsigma.set(&sigma(0,0), sigma.Rows());
 
     fCoefToGradSol.MultiplyTranspose(dsigma, drhs);
     drhs.get(&rhs(0,0), neq);
@@ -167,12 +156,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TP
 
 void TPZElastoPlasticIntPointsStructMatrix::AssembleBoundaryData(std::set<int> &boundary_matids) {
     int64_t neq = fMesh->NEquations();
-    
-//    std::set<int> materialids;
-//    materialids.insert(2);
-//    materialids.insert(3);
-//    materialids.insert(4);
-//    materialids.insert(5);
+
     TPZStructMatrix str(fMesh);
     str.SetMaterialIds(boundary_matids);
     TPZAutoPointer<TPZGuiInterface> guiInterface;
@@ -180,26 +164,6 @@ void TPZElastoPlasticIntPointsStructMatrix::AssembleBoundaryData(std::set<int> &
     fRhsLinear.Zero();
     fSparseMatrixLinear.Resize(neq, neq);
     str.Assemble(fSparseMatrixLinear, fRhsLinear, guiInterface);
-    
-
-//
-//
-//    int dim = fMesh->Dimension();
-//    for (int iel = 0; iel < fMesh->NElements(); iel++) {
-//        TPZCompEl *cel = fMesh->Element(iel);
-//        if (!cel) continue;
-//        TPZGeoEl *gel = cel->Reference();
-//        if (!gel) continue;
-//        if(gel->Dimension() < dim) {
-//            TPZElementMatrix ef(fMesh, TPZElementMatrix::EF);
-//            TPZElementMatrix ek(fMesh, TPZElementMatrix::EK);
-//            cel->CalcStiff(ek, ef);
-//            ef.ComputeDestinationIndices();
-//            ek.ComputeDestinationIndices();
-//            fRhsLinear.AddFel(ef.fMat, ef.fSourceIndex, ef.fDestinationIndex);
-//            fSparseMatrixLinear.AddKel(ek.fMat, ek.fDestinationIndex);
-//        }
-//    }
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::GetDomainElements(TPZStack<int> &elindex_domain, std::set<int> &boundary_matids) {

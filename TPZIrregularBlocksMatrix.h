@@ -7,7 +7,7 @@
 
 #ifdef USING_CUDA
 #include "TPZVecGPU.h"
-#include "CudaCalls.h"
+#include "TPZCudaCalls.h"
 #endif
 
 class TPZIrregularBlocksMatrix : public TPZMatrix<REAL> {
@@ -85,8 +85,8 @@ private:
     TPZVecGPU<int> dRowFirstIndex;
     TPZVecGPU<int> dColFirstIndex;
     TPZVecGPU<int> dMatrixPosition;
-    // CudaCalls fCudaCalls;
-    CudaCalls *fCudaCalls;
+    // TPZCudaCalls fCudaCalls;
+    TPZCudaCalls *fCudaCalls;
 #endif
 };
 

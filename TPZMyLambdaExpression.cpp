@@ -15,7 +15,7 @@
 
 TPZMyLambdaExpression::TPZMyLambdaExpression() : fNpts(-1), fWeight(0), fMaterial(), fPlasticStrain(0,0), fMType(0,0), fAlpha(0,0) {
 #ifdef USING_CUDA
-    fCudaCalls = new CudaCalls();
+    fCudaCalls = new TPZCudaCalls();
     dWeight.resize(0);
 #endif
 }
@@ -207,32 +207,32 @@ void TPZMyLambdaExpression::ComputeSigma(TPZFMatrix<REAL> &delta_strain, TPZFMat
 
 #ifdef USING_CUDA
 void TPZMyLambdaExpression::ComputeSigma(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &sigma) {
-    REAL lambda = fMaterial->GetPlasticModel().fER.Lambda();
-    REAL mu =  fMaterial->GetPlasticModel().fER.Mu();
-    REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();
-    REAL mc_psi = fMaterial->GetPlasticModel().fYC.Psi();
-    REAL mc_cohesion = fMaterial->GetPlasticModel().fYC.Cohesion();
-    REAL K = fMaterial->GetPlasticModel().fER.K();
-    REAL G = fMaterial->GetPlasticModel().fER.G();
+    // REAL lambda = fMaterial->GetPlasticModel().fER.Lambda();
+    // REAL mu =  fMaterial->GetPlasticModel().fER.Mu();
+    // REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();
+    // REAL mc_psi = fMaterial->GetPlasticModel().fYC.Psi();
+    // REAL mc_cohesion = fMaterial->GetPlasticModel().fYC.Cohesion();
+    // REAL K = fMaterial->GetPlasticModel().fER.K();
+    // REAL G = fMaterial->GetPlasticModel().fER.G();
 
-    int dim = 2;
+    // int dim = 2;
 
-    sigma.resize(dim * dim * fNpts);
-    sigma.Zero();
+    // sigma.resize(dim * dim * fNpts);
+    // sigma.Zero();
 
-    TPZVecGPU<REAL> eigenvalues(3 * fNpts);
-    TPZVecGPU<REAL> eigenvectors(9 * fNpts);
-    eigenvalues.Zero();
-    eigenvectors.Zero();
-    TPZVecGPU<REAL> elastic_strain(dim * dim * fNpts);
-    TPZVecGPU<REAL> sigma_trial(dim * dim * fNpts);
+    // TPZVecGPU<REAL> eigenvalues(3 * fNpts);
+    // TPZVecGPU<REAL> eigenvectors(9 * fNpts);
+    // eigenvalues.Zero();
+    // eigenvectors.Zero();
+    // TPZVecGPU<REAL> elastic_strain(dim * dim * fNpts);
+    // TPZVecGPU<REAL> sigma_trial(dim * dim * fNpts);
 
-    TPZVecGPU<REAL> sigma_projected(3 * fNpts);
+    // TPZVecGPU<REAL> sigma_projected(3 * fNpts);
 
-    fCudaCalls->ElasticStrain(delta_strain.getData(), elastic_strain.getData(), dim * dim * fNpts);
-    fCudaCalls->ComputeStress(elastic_strain.getData(), sigma_trial.getData(), fNpts, mu, lambda); 
-    fCudaCalls->SpectralDecomposition(sigma_trial.getData(), eigenvalues.getData(), eigenvectors.getData(), fNpts); 
-    fCudaCalls->ProjectSigma(eigenvalues.getData(), sigma_projected.getData(), fNpts, mc_phi, mc_psi, mc_cohesion, K, G);
+    // fCudaCalls->ElasticStrain(delta_strain.getData(), elastic_strain.getData(), dim * dim * fNpts);
+    // fCudaCalls->ComputeStress(elastic_strain.getData(), sigma_trial.getData(), fNpts, mu, lambda); 
+    // fCudaCalls->SpectralDecomposition(sigma_trial.getData(), eigenvalues.getData(), eigenvectors.getData(), fNpts); 
+    // fCudaCalls->ProjectSigma(eigenvalues.getData(), sigma_projected.getData(), fNpts, mc_phi, mc_psi, mc_cohesion, K, G);
     // ERRADO
 
 

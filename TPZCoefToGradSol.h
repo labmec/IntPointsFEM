@@ -6,7 +6,7 @@
 
 #ifdef USING_CUDA
 #include "TPZVecGPU.h"
-#include "CudaCalls.h"
+#include "TPZCudaCalls.h"
 #endif
 
 
@@ -68,7 +68,7 @@ private:
 #ifdef USING_CUDA
     TPZVecGPU<int> dIndexes;
     TPZVecGPU<int> dIndexesColor;
-    CudaCalls fCudaCalls;
+    TPZCudaCalls fCudaCalls;
 #endif
 
 

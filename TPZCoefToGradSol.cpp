@@ -136,9 +136,9 @@ void TPZCoefToGradSol::TransferDataToGPU() {
     fBlockMatrix.TransferDataToGPU();
 
     dIndexes.resize(fIndexes.size());
-    dIndexes.set(&fIndexes[0]);
+    dIndexes.set(&fIndexes[0], fIndexes.size());
 
     dIndexesColor.resize(fIndexesColor.size());
-    dIndexesColor.set(&fIndexesColor[0]);
+    dIndexesColor.set(&fIndexesColor[0], fIndexesColor.size());
 #endif
 }

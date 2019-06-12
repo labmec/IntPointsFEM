@@ -8,7 +8,7 @@
 
 #ifdef USING_CUDA
 #include "TPZVecGPU.h"
-#include "CudaCalls.h"
+#include "TPZCudaCalls.h"
 #endif
 
 #ifndef INTPOINTSFEM_TPZMYLAMBDAEXPRESSION_H
@@ -67,7 +67,7 @@ private:
     TPZFMatrix<REAL> fAlpha;
 
 #ifdef USING_CUDA
-    CudaCalls *fCudaCalls;
+    TPZCudaCalls *fCudaCalls;
     TPZVecGPU<REAL> dWeight;
 #endif
 

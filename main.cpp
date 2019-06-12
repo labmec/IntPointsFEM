@@ -109,7 +109,10 @@ int main(int argc, char *argv[]) {
 }
 
 void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
-    std::cout << "\n\nSolving with PZ ...\n" << std::endl;
+#ifdef USING_CUDA
+    std::cout << "Using CUDA" << std::endl;
+#endif
+
     bool stop_criterion_Q = false;
     REAL norm_res, norm_delta_du;
 
