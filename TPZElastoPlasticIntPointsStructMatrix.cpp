@@ -77,6 +77,8 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 
     AssembleBoundaryData(boundary_matids);
 
+    SetUpDepStructure();
+
 #ifdef USING_CUDA
     std::cout << "Transfering data to GPU..." << std::endl;
     fCoefToGradSol.TransferDataToGPU();
@@ -585,4 +587,26 @@ void TPZElastoPlasticIntPointsStructMatrix::KMatrixBel() {
         kpos = cols * cols;
         deppos = rows * rows;
     }
+}
+
+void TPZElastoPlasticIntPointsStructMatrix::SetUpDepStructure() {
+    TPZIrregularBlocksMatrix::IrregularBlocks blocksData;
+
+    blocksData.fNumBlocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
+    int nblocks = blocksData.fNumBlocks;
+    int rows = fCoefToGradSol.IrregularBlocksMatrix().Rows();
+
+    blocksData.fRowSizes = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fRowSizes;
+    blocksData.fColSizes = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fRowSizes;
+    blocksData.fRowFirstIndex = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fRowFirstIndex;
+    blocksData.fColFirstIndex = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fRowFirstIndex;
+    blocksData.fMatrixPosition.resize(nblocks + 1);
+    blocksData.fMatrixPosition[0] = 0;
+
+    for (int iblock = 0; iblock < nblocks; iblock++) {
+        blocksData.fMatrixPosition[iblock + 1] = blocksData.fMatrixPosition[iblock] + blocksData.fRowSizes[iblock] * blocksData.fRowSizes[iblock];
+    }
+
+    fDep.Resize(rows, rows);
+    fDep.SetBlocks(blocksData);
 }

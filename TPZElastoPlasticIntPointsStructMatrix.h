@@ -54,6 +54,8 @@ public:
      void KMatrixBel();
 
 private:
+    void SetUpDepStructure();
+
     void GetDomainElements(TPZStack<int> &elindex_domain, std::set<int> &boundary_matids);
 
     void SetUpIrregularBlocksData(TPZStack<int> &elindex_domain, TPZIrregularBlocksMatrix::IrregularBlocks &blocksData);
@@ -68,6 +70,8 @@ private:
 
     TPZVerySparseMatrix<STATE> fSparseMatrixLinear; //-> BC data
     TPZFMatrix<STATE> fRhsLinear; //-> BC data
+
+    TPZIrregularBlocksMatrix fDep;
     
 };
 
