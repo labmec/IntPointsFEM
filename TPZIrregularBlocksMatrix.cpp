@@ -95,8 +95,8 @@ void TPZIrregularBlocksMatrix::Multiply(TPZFMatrix<REAL> &A, TPZFMatrix<REAL> &r
     }
 }
 
-void TPZIrregularBlocksMatrix::Multiply(REAL *A, REAL *res, int *ColsA, int opt) {
 #ifdef USING_CUDA
+void TPZIrregularBlocksMatrix::Multiply(REAL *A, REAL *res, int *ColsA, int opt) {
     int nblocks = fBlocksInfo.fNumBlocks;
 
     if(opt == 0) {
@@ -104,8 +104,8 @@ void TPZIrregularBlocksMatrix::Multiply(REAL *A, REAL *res, int *ColsA, int opt)
     } else {
         fCudaCalls->Multiply(opt, dBlocksInfo.dColSizes.getData(), ColsA, dBlocksInfo.dRowSizes.getData(), dBlocksInfo.dStorage.getData(), dBlocksInfo.dMatrixPosition.getData(), A, dBlocksInfo.dRowFirstIndex.getData(), res, dBlocksInfo.dColFirstIndex.getData(), -1., nblocks); 
     }
-#endif
 }
+#endif
 
 void TPZIrregularBlocksMatrix::MultiplyMatrix(TPZIrregularBlocksMatrix &A, TPZIrregularBlocksMatrix &res, int opt) {
     int nblocks = fBlocksInfo.fNumBlocks;
@@ -135,8 +135,8 @@ void TPZIrregularBlocksMatrix::MultiplyMatrix(TPZIrregularBlocksMatrix &A, TPZIr
     res.Blocks().fColFirstIndex = A.Blocks().fColFirstIndex;
 }
 
-void TPZIrregularBlocksMatrix::TransferDataToGPU() {
 #ifdef USING_CUDA
+void TPZIrregularBlocksMatrix::TransferDataToGPU() {
     dBlocksInfo.dStorage.resize(fBlocksInfo.fStorage.size());
     dBlocksInfo.dStorage.set(&fBlocksInfo.fStorage[0], fBlocksInfo.fStorage.size());
 
@@ -160,8 +160,8 @@ void TPZIrregularBlocksMatrix::TransferDataToGPU() {
 
     dBlocksInfo.dColInd.resize(fBlocksInfo.fColInd.size());
     dBlocksInfo.dColInd.set(&fBlocksInfo.fColInd[0], fBlocksInfo.fColInd.size());
-#endif
 }
+#endif
 
 void TPZIrregularBlocksMatrix::CSRVectors() {
     int64_t nblocks = fBlocksInfo.fNumBlocks;
