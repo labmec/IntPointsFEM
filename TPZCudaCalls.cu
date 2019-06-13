@@ -29,7 +29,7 @@ void TPZCudaCalls::Multiply(bool trans, int *m, int *n, int *k, REAL *A, int *st
 	MatrixMultiplicationKernel<<<nmatrices,1>>> (trans, m, n, k, A, strideA, B, strideB, C, strideC, alpha, nmatrices);
 	cudaDeviceSynchronize();
 	if (cudaGetLastError() != cudaSuccess) {
-		throw std::runtime_error("failed to perform MatrixMultiplicationKernel kernel");      
+		throw std::runtime_error("failed to perform MatrixMultiplicationKernel");      
 	}
 
 }
@@ -76,7 +76,32 @@ void TPZCudaCalls::DaxpyOperation(int n, REAL alpha, REAL *x, REAL *y) {
 	}	
 }
 
-void TPZCudaCalls::MultiplyCSR(int opt, int m, int n, int k, int nnzA, REAL *csrValA, int *csrRowPtrA, int *csrColIndA, int nnzB, REAL *csrValB, int *csrRowPtrB, int *csrColIndB, REAL *csrValC) {
+void TPZCudaCalls::SpMV(int opt, int m, int k, int nnz, REAL alpha, REAL *csrVal, int *csrRowPtr, int *csrColInd, REAL *B, REAL *C) {
+	if(cusparse_h == false) {
+		cusparse_h = true;
+		cusparseStatus_t result = cusparseCreate(&handle_cusparse);
+		if (result != CUSPARSE_STATUS_SUCCESS) {
+			throw std::runtime_error("failed to initialize cuSparse");      
+		}			
+	}
+	cusparseMatDescr_t descr;
+	cusparseCreateMatDescr(&descr);
+	cusparseSetMatType(descr, CUSPARSE_MATRIX_TYPE_GENERAL);
+	cusparseSetMatIndexBase(descr, CUSPARSE_INDEX_BASE_ZERO);
+
+	REAL beta = 0.;
+	cusparseStatus_t result;
+	if(opt == 0) {
+		result = cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_NON_TRANSPOSE, m, k, nnz, &alpha, descr, csrVal, csrRowPtr, csrColInd, B, &beta, C);
+	} else {
+		result = cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_TRANSPOSE, m, k, nnz, &alpha, descr, csrVal, csrRowPtr, csrColInd, B, &beta, C);
+	}
+	if (result != CUSPARSE_STATUS_SUCCESS) {
+		throw std::runtime_error("failed to perform cusparseDcsrmv");      
+	}	
+}
+
+void TPZCudaCalls::SpMSpM(int opt, int m, int n, int k, int nnzA, REAL *csrValA, int *csrRowPtrA, int *csrColIndA, int nnzB, REAL *csrValB, int *csrRowPtrB, int *csrColIndB, REAL *csrValC) {
 	if(cusparse_h == false) {
 		cusparse_h = true;
 		cusparseStatus_t result = cusparseCreate(&handle_cusparse);
@@ -129,72 +154,6 @@ void TPZCudaCalls::MultiplyCSR(int opt, int m, int n, int k, int nnzA, REAL *csr
 					descr, nnzB, csrValB, csrRowPtrB, csrColIndB,
 					descr, csrValC, csrRowPtrC, csrColIndC);
 	if (result != CUSPARSE_STATUS_SUCCESS) {
-		throw std::runtime_error("failed to perform cusparseDsctr");      
+		throw std::runtime_error("failed to perform cusparseDcsrgemm");      
 	}	
-
 }
-
-
-
-
-
-
-
-
-// void TPZCudaCalls::ElasticStrain(REAL *delta_strain, REAL *elastic_strain, int64_t n) {
-// 	cudaMemcpy(elastic_strain, &delta_strain[0], n * sizeof(REAL), cudaMemcpyDeviceToDevice);
-// 	REAL *plastic_strain;
-// 	cudaMalloc(&plastic_strain, n * sizeof(REAL));
-// 	cudaMemset(plastic_strain, 0, n * sizeof(REAL));
-
-// 	REAL a = -1.;
-// 	if(cublas_h == false) {
-// 		cublas_h = true;
-// 		cublasStatus_t result = cublasCreate(&handle_cublas);
-// 		if (result != CUBLAS_STATUS_SUCCESS) {
-// 			throw std::runtime_error("failed to initialize cuBLAS");      
-// 		}			
-// 	}
-// 	cublasStatus_t result = cublasDaxpy(handle_cublas, n, &a, &plastic_strain[0], 1, &elastic_strain[0], 1);
-// 	if (result != CUBLAS_STATUS_SUCCESS) {
-// 		throw std::runtime_error("failed to perform cublasDaxpy");      
-// 	}
-// 	cudaFree(plastic_strain);
-// }
-
-// void TPZCudaCalls::ComputeStress(REAL *elastic_strain, REAL *sigma, int64_t n, REAL mu, REAL lambda) {
-// 	int numBlocks = (n + NT - 1) / NT;
-
-// 	ComputeStressKernel<<<numBlocks, NT>>>(elastic_strain, sigma, n, mu, lambda);
-// 	cudaDeviceSynchronize();
-// 	if (cudaGetLastError() != cudaSuccess) {
-// 		throw std::runtime_error("failed to perform ComputeStressKernel");      
-// 	}
-// }
-
-// void TPZCudaCalls::SpectralDecomposition(REAL *sigma_trial, REAL *eigenvalues, REAL *eigenvectors, int64_t n) {
-// 	int numBlocks = (n + NT - 1) / NT;
-
-// 	SpectralDecompositionKernel<<<numBlocks, NT>>>(sigma_trial, eigenvalues, eigenvectors, n);
-// 	cudaDeviceSynchronize();
-// 		// if (cudaGetLastError() != cudaSuccess) {
-// 		// 	throw std::runtime_error("failed to perform SpectralDecompositionKernel");      
-// 		// }
-// }
-
-// void TPZCudaCalls::ProjectSigma(REAL *eigenvalues, REAL *sigma_projected, int64_t n, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL K, REAL G) {
-// 	REAL *m_type;
-// 	cudaMalloc((void**) &m_type, n * sizeof(REAL));
-
-// 	REAL *alpha;
-// 	cudaMalloc((void**) &alpha, n * sizeof(REAL));
-
-// 	int numBlocks = (n + NT - 1) / NT;
-
-// 	ProjectSigmaKernel<<<numBlocks, NT>>>(eigenvalues, sigma_projected, m_type, alpha, n, mc_phi, mc_psi, mc_cohesion, K, G);	
-// 	cudaDeviceSynchronize();
-// 	// if (cudaGetLastError() != cudaSuccess) {
-// 	// 	throw std::runtime_error("failed to perform ProjectSigmaKernel");      
-// 	// }
-
-// }

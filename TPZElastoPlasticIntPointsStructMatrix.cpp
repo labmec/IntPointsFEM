@@ -78,9 +78,6 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 
     AssembleBoundaryData(boundary_matids);
 
-    SetUpDepStructure();
-    fDep.TransferDataToGPU();
-
 #ifdef USING_CUDA
     std::cout << "Transfering data to GPU..." << std::endl;
     fCoefToGradSol.TransferDataToGPU();
@@ -88,7 +85,6 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 #endif
 
 }
-
 
 void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface){
     TPZSymetricSpStructMatrix::Assemble(mat,rhs, guiInterface);
@@ -98,74 +94,33 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     TPZVec<REAL> depxy;
     Dep(depxx, depyy, depxy);
 
-    int rows = fCoefToGradSol.IrregularBlocksMatrix().Rows();
-    int cols = fCoefToGradSol.IrregularBlocksMatrix().Cols();
-
-    TPZIrregularBlocksMatrix aux(rows, cols);
-    TPZIrregularBlocksMatrix Kxx(cols, cols);
-    TPZIrregularBlocksMatrix Kyy(cols, cols);
-    TPZIrregularBlocksMatrix Kxy(cols, cols);
-
 #ifdef USING_CUDA
     int nblocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
-    int sizek = 0;
-    for (int i = 0; i < nblocks; ++i) {
-        int icol = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColSizes[i];
-        sizek += icol * icol;
-    }
+    TPZVecGPU<REAL> Kxx(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
+    TPZVecGPU<REAL> Kyy(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
+    TPZVecGPU<REAL> Kxy(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
 
-    int size = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fMatrixPosition[nblocks];
-    TPZVecGPU<REAL> dAux(size);
-    TPZVecGPU<REAL> K(sizek);
+    TPZVecGPU<REAL> d_dep(depxx.size());
 
+    d_dep.set(&depxx[0], depxx.size());
+    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(d_dep.getData(), Kxx.getData());
 
-    fDep.BlocksDev().dStorage.resize(depxx.size());
-    fDep.BlocksDev().dStorage.set(&depxx[0], depxx.size());
-    fCoefToGradSol.CudaCalls().MultiplyCSR(0, rows, rows, cols, fDep.BlocksDev().dStorage.getSize(), fDep.BlocksDev().dStorage.getData(), fDep.BlocksDev().dRowPtr.getData(), fDep.BlocksDev().dColInd.getData(), fCoefToGradSol.IrregularBlocksMatrix().BlocksDev().dStorage.getSize(), fCoefToGradSol.IrregularBlocksMatrix().BlocksDev().dStorage.getData(), fCoefToGradSol.IrregularBlocksMatrix().BlocksDev().dRowPtr.getData(), fCoefToGradSol.IrregularBlocksMatrix().BlocksDev().dColInd.getData(), dAux.getData());
-    fCoefToGradSol.CudaCalls().MultiplyCSR(1, cols, cols, rows, fCoefToGradSol.IrregularBlocksMatrix().BlocksDev().dStorage.getSize(), fCoefToGradSol.IrregularBlocksMatrix().BlocksDev().dStorage.getData(), fCoefToGradSol.IrregularBlocksMatrix().BlocksDev().dRowPtr.getData(), fCoefToGradSol.IrregularBlocksMatrix().BlocksDev().dColInd.getData(), size, dAux.getData(), fCoefToGradSol.IrregularBlocksMatrix().BlocksDev().dRowPtr.getData(), fCoefToGradSol.IrregularBlocksMatrix().BlocksDev().dColInd.getData(), K.getData());
+    d_dep.set(&depyy[0], depyy.size());
+    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(d_dep.getData(), Kyy.getData());
 
-    // TPZVec<REAL> teste(sizek);
-    // K.get(&teste[0], sizek);
-    // std::cout << teste << std::endl;
-    // std::cout << "passou" << std::endl;
-
-
-
-    fDep.BlocksDev().dStorage.resize(depxx.size());
-    fDep.BlocksDev().dStorage.set(&depxx[0], depxx.size());
-    fDep.MultiplyMatrix(fCoefToGradSol.IrregularBlocksMatrix(), aux, 0);
-    fCoefToGradSol.IrregularBlocksMatrix().MultiplyMatrix(aux, Kxx, 1);
-
-    // int nblocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
-    // int size = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fMatrixPosition[nblocks];
-    // TPZVec<REAL> teste(size);
-    // aux.BlocksDev().dStorage.get(&teste[0], size);
-    // std::cout << teste << std::endl;
-
-
-
-    // fDep.BlocksDev().dStorage.resize(depyy.size());
-    // fDep.BlocksDev().dStorage.set(&depyy[0], depyy.size());
-    // fDep.MultiplyMatrix(fCoefToGradSol.IrregularBlocksMatrix(), aux, 0);
-    // fCoefToGradSol.IrregularBlocksMatrix().MultiplyMatrix(aux, Kyy, 1);
-
-    // fDep.BlocksDev().dStorage.resize(depxy.size());
-    // fDep.BlocksDev().dStorage.set(&depxy[0], depxy.size());
-    // fDep.MultiplyMatrix(fCoefToGradSol.IrregularBlocksMatrix(), aux, 0);
-    // fCoefToGradSol.IrregularBlocksMatrix().MultiplyMatrix(aux, Kxy, 1);
+    d_dep.set(&depxy[0], depxy.size());
+    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(d_dep.getData(), Kxy.getData());
 #else
-    fDep.Blocks().fStorage = depxx;
-    fDep.MultiplyMatrix(fCoefToGradSol.IrregularBlocksMatrix(), aux, 0);
-    fCoefToGradSol.IrregularBlocksMatrix().MultiplyMatrix(aux, Kxx, 1);
+    int nblocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
+    TPZVec<REAL> Kxx(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
+    TPZVec<REAL> Kyy(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
+    TPZVec<REAL> Kxy(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
 
-    fDep.Blocks().fStorage = depyy;
-    fDep.MultiplyMatrix(fCoefToGradSol.IrregularBlocksMatrix(), aux, 0);
-    fCoefToGradSol.IrregularBlocksMatrix().MultiplyMatrix(aux, Kyy, 1);
+    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(&depxx[0], &Kxx[0]);
+    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(&depyy[0], &Kyy[0]);
+    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(&depxy[0], &Kxy[0]);
 
-    fDep.Blocks().fStorage = depxy;
-    fDep.MultiplyMatrix(fCoefToGradSol.IrregularBlocksMatrix(), aux, 0);
-    fCoefToGradSol.IrregularBlocksMatrix().MultiplyMatrix(aux, Kxy, 1);
-#endif
+#endif    
 
     auto it_end = fSparseMatrixLinear.MapEnd();
     
@@ -459,11 +414,11 @@ void TPZElastoPlasticIntPointsStructMatrix::ColoredIndexes(TPZStack<int> &elinde
 
 void TPZElastoPlasticIntPointsStructMatrix::Dep(TPZVec<REAL> &depxx, TPZVec<REAL> &depyy, TPZVec<REAL> &depxy) {
     int nblocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
-    int sizedep = 0;
-    for (int i = 0; i < nblocks; ++i) {
-        int rows = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fRowSizes[i];
-        sizedep += rows * rows;
-    }
+    int sizedep = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fRowRowPosition[nblocks];
+    // for (int i = 0; i < nblocks; ++i) {
+    //     int rows = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fRowSizes[i];
+    //     sizedep += rows * rows;
+    // }
 
     depxx.resize(sizedep);
     depyy.resize(sizedep);
@@ -525,26 +480,4 @@ void TPZElastoPlasticIntPointsStructMatrix::Dep(TPZVec<REAL> &depxx, TPZVec<REAL
         }
         depel_pos = depel_pos + (npts * dim) * (npts * dim);
     }
-}
-
-void TPZElastoPlasticIntPointsStructMatrix::SetUpDepStructure() {
-    TPZIrregularBlocksMatrix::IrregularBlocks blocksData;
-
-    int nblocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;;
-    blocksData.fNumBlocks = nblocks;
-    int rows = fCoefToGradSol.IrregularBlocksMatrix().Rows();
-
-    blocksData.fRowSizes = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fRowSizes;
-    blocksData.fColSizes = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fRowSizes;
-    blocksData.fRowFirstIndex = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fRowFirstIndex;
-    blocksData.fColFirstIndex = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fRowFirstIndex;
-    blocksData.fMatrixPosition.resize(nblocks + 1);
-    blocksData.fMatrixPosition[0] = 0;
-
-    for (int iblock = 0; iblock < nblocks; iblock++) {
-        blocksData.fMatrixPosition[iblock + 1] = blocksData.fMatrixPosition[iblock] + blocksData.fRowSizes[iblock] * blocksData.fRowSizes[iblock];
-    }
-
-    fDep.Resize(rows, rows);
-    fDep.SetBlocks(blocksData);
 }

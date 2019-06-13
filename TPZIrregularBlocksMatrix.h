@@ -22,17 +22,16 @@ public:
         TPZVec<int> fMatrixPosition; // blocks start position in fStorage vector
         TPZVec<int> fRowFirstIndex; // blocks first row index
         TPZVec<int> fColFirstIndex; // blocks first column index
-        TPZVec<int> fRowPtr; // vector of the start of every row and the end of the last row plus one (this is for CSR format)
-        TPZVec<int> fColInd; // vector of column indices for each non-zero element of the matrix (this is for CSR format)
-
         TPZVec<int> fRowRowPosition;
         TPZVec<int> fColColPosition;
 
+#ifdef USING_SPARSE
+        TPZVec<int> fRowPtr; // vector of the start of every row and the end of the last row plus one (this is for CSR format)
+        TPZVec<int> fColInd; // vector of column indices for each non-zero element of the matrix (this is for CSR format)
         TPZVec<int> fRowRowPtr;
         TPZVec<int> fRowRowInd;
+#endif
 
-        TPZVec<int> fColColPtr;
-        TPZVec<int> fColColInd;
     };
 
 
@@ -44,8 +43,14 @@ public:
         TPZVecGPU<int> dMatrixPosition; // blocks start position in fStorage vector
         TPZVecGPU<int> dRowFirstIndex; // blocks first row index
         TPZVecGPU<int> dColFirstIndex; // blocks first column index
+        TPZVecGPU<int> dRowRowPosition;
+        TPZVecGPU<int> dColColPosition;
+#ifdef USING_SPARSE
         TPZVecGPU<int> dRowPtr; // vector of the start of every row and the end of the last row plus one (this is for CSR format)
         TPZVecGPU<int> dColInd; // vector of column indices for each non-zero element of the matrix (this is for CSR format)
+        TPZVecGPU<int> dRowRowPtr;
+        TPZVecGPU<int> dRowRowInd;
+#endif
     };
 #endif
 
@@ -77,12 +82,14 @@ public:
 
     void MultiplyVector(REAL *A, REAL *res, int opt);
 
-    void MultiplyMatrix(TPZIrregularBlocksMatrix &A, TPZIrregularBlocksMatrix &res, int opt);
+    void KMatrix(REAL *A, REAL *res);
 
     /** @brief Set method */
     void SetBlocks(struct IrregularBlocks & blocks) {
         fBlocksInfo = blocks;
+#ifdef USING_SPARSE
         CSRVectors();
+#endif
     }
 
     /** @brief Access method */

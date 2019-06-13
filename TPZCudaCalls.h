@@ -35,15 +35,9 @@ public:
 
 	void DaxpyOperation(int n, REAL alpha, REAL *x, REAL *y); 
 
-	void MultiplyCSR(int opt, int m, int n, int k, int nnzA, REAL *csrValA, int *csrRowPtrA, int *csrColIndA, int nnzB, REAL *csrValB, int *csrRowPtrB, int *csrColIndB, REAL *csrValC);
+	void SpMSpM(int opt, int m, int n, int k, int nnzA, REAL *csrValA, int *csrRowPtrA, int *csrColIndA, int nnzB, REAL *csrValB, int *csrRowPtrB, int *csrColIndB, REAL *csrValC);
 
-	// void ElasticStrain(REAL *delta_strain, REAL *elastic_strain, int64_t n);
-
-	// void ComputeStress(REAL *elastic_strain, REAL *sigma, int64_t n, REAL mu, REAL lambda);
-
-	// void SpectralDecomposition(REAL *sigma_trial, REAL *eigenvalues, REAL *eigenvectors, int64_t n);
-
-	// void ProjectSigma(REAL *eigenvalues, REAL *sigma_projected, int64_t npts, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL K, REAL G);
+	void SpMV(int opt, int m, int k, int nnz, REAL alpha, REAL *csrVal, int *csrRowPtr, int *csrColInd, REAL *B, REAL *C); 
 
 private:
 	cusparseHandle_t handle_cusparse;
