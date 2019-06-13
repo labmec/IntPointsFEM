@@ -85,13 +85,6 @@ TPZIrregularBlocksMatrix &TPZIrregularBlocksMatrix::operator=(const TPZIrregular
     return *this;
 }
 
-// void TPZIrregularBlocksMatrix::Multiply(TPZFMatrix<REAL> &A, TPZFMatrix<REAL> &res, int opt) {
-//     int nblocks = fBlocksInfo.fNumBlocks;
-
-//     TPZVec<int> one(nblocks);
-//     one.Fill(1);
-// }
-
 void TPZIrregularBlocksMatrix::MultiplyVector(REAL *A, REAL *res, int opt) {
     int nblocks = fBlocksInfo.fNumBlocks;
 
