@@ -26,6 +26,13 @@ public:
         TPZVec<int> fColInd; // vector of column indices for each non-zero element of the matrix (this is for CSR format)
 
         TPZVec<int> fRowRowPosition;
+        TPZVec<int> fColColPosition;
+
+        TPZVec<int> fRowRowPtr;
+        TPZVec<int> fRowRowInd;
+
+        TPZVec<int> fColColPtr;
+        TPZVec<int> fColColInd;
     };
 
 

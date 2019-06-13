@@ -32,6 +32,15 @@ TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix() : TPZMatrix<REAL>(), fBlock
     fBlocksInfo.fColFirstIndex.resize(0);
     fBlocksInfo.fRowPtr.resize(0);
     fBlocksInfo.fColInd.resize(0);
+
+    fRowRowPosition.resize(0);
+    fColColPosition.resize(0);
+
+    fRowRowPtr.resize(0);
+    fRowRowInd.resize(0);
+
+    fColColPtr.resize(0);
+    fColColInd.resize(0);
 }
 
 TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix(const int64_t rows,const int64_t cols) : TPZMatrix<REAL>(rows,cols), fBlocksInfo() {
@@ -55,6 +64,15 @@ TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix(const int64_t rows,const int6
     fBlocksInfo.fColFirstIndex.resize(0);
     fBlocksInfo.fRowPtr.resize(0);
     fBlocksInfo.fColInd.resize(0);
+
+    fRowRowPosition.resize(0);
+    fColColPosition.resize(0);
+
+    fRowRowPtr.resize(0);
+    fRowRowInd.resize(0);
+
+    fColColPtr.resize(0);
+    fColColInd.resize(0);
 }
 
 TPZIrregularBlocksMatrix::~TPZIrregularBlocksMatrix() {
@@ -196,6 +214,12 @@ void TPZIrregularBlocksMatrix::CSRVectors() {
 
     fBlocksInfo.fRowPtr.resize(rows + 1);
     fBlocksInfo.fColInd.resize(fBlocksInfo.fMatrixPosition[nblocks]);
+
+    fBlocksInfo.fRowRowPtr.resize(rows + 1);
+    fBlocksInfo.fRowRowInd.resize(fBlocksInfo.fRowRowPosition[nblocks]);
+
+    fBlocksInfo.fColColPtr.resize(cols + 1);
+    fBlocksInfo.fColColInd.resize(fBlocksInfo.fColColPosition[nblocks]);
 
     for (int iel = 0; iel < nblocks; ++iel) {
         for (int irow = 0; irow < fBlocksInfo.fRowSizes[iel]; ++irow) {

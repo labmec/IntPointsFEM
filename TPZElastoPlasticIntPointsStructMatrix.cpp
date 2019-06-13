@@ -271,6 +271,11 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZStack<in
     blocksData.fRowFirstIndex[0] = 0;
     blocksData.fColFirstIndex[0] = 0;
 
+    blocksData.fRowRowPosition.resize(nblocks + 1);
+    blocksData.fColColPosition.resize(nblocks + 1);
+    blocksData.fRowRowPosition[0] = 0;
+    blocksData.fColColPosition[0] = 0;
+
     int64_t rows = 0;
     int64_t cols = 0;
     for(int iel = 0; iel < nblocks; iel++) {
@@ -288,6 +293,9 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZStack<in
         blocksData.fMatrixPosition[iel + 1] = blocksData.fMatrixPosition[iel] + blocksData.fRowSizes[iel] * blocksData.fColSizes[iel];
         blocksData.fRowFirstIndex[iel + 1] =  blocksData.fRowFirstIndex[iel] + blocksData.fRowSizes[iel];
         blocksData.fColFirstIndex[iel + 1] = blocksData.fColFirstIndex[iel] + blocksData.fColSizes[iel];
+
+        blocksData.fRowRowPosition[iel + 1] = blocksData.fRowRowPosition[iel] + blocksData.fRowSizes[iel] * blocksData.fRowSizes[iel];
+        blocksData.fColColPosition[iel + 1] = blocksData.fColColPosition[iel] + blocksData.fColSizes[iel] * blocksData.fColSizes[iel];
 
         rows += blocksData.fRowSizes[iel];
         cols += blocksData.fColSizes[iel];
