@@ -449,7 +449,6 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int p_order, TElastoPlasti
     TPZElasticResponse ER = wellbore_material.ElasticResponse();
 
     TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse> LEMC;
-    // TPZElasticCriterion LEMC;
     LEMC.SetElasticResponse(ER);
     LEMC.fYC.SetUp(mc_phi, mc_psi, mc_cohesion, ER);
     int PlaneStrain = 1;
@@ -463,7 +462,6 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int p_order, TElastoPlasti
 
     // Creates elastoplatic material
    TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem > * material = new TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem >(matid,PlaneStrain);
-    // TPZMatElastoPlastic2D < TPZElasticCriterion, TPZElastoPlasticMem > * material = new TPZMatElastoPlastic2D < TPZElasticCriterion, TPZElastoPlasticMem >(matid,PlaneStrain);
     material->SetPlasticityModel(LEMC);
     material->SetDefaultMem(default_memory);
     cmesh->InsertMaterialObject(material);

@@ -39,8 +39,6 @@ public:
 
     void SetUpDataStructure();
 
-//    void CalcResidual(TPZFMatrix<REAL> &rhs);
-    
     void Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface);
     
     void Assemble(TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface);
@@ -50,7 +48,6 @@ public:
         else return false;
     }
 
-    void KMatrixBip();
     void Dep(TPZVec<REAL> &depxx, TPZVec<REAL> &depyy, TPZVec<REAL> &depxy);
 
 private:
@@ -69,6 +66,7 @@ private:
     TPZMyLambdaExpression fLambdaExp;
 
     TPZVerySparseMatrix<STATE> fSparseMatrixLinear; //-> BC data
+
     TPZFMatrix<STATE> fRhsLinear; //-> BC data
 
     TPZIrregularBlocksMatrix fDep;
