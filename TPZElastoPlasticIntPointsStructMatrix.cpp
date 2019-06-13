@@ -535,8 +535,8 @@ void TPZElastoPlasticIntPointsStructMatrix::Dep(TPZVec<REAL> &depxx, TPZVec<REAL
         cel_inter->InitMaterialData(data);
 
         TPZMaterial *cel_mat = cel->Material();
-//        TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem> *mat = dynamic_cast<TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem> *>(cel_mat);
-        TPZMatElastoPlastic2D<TPZElasticCriterion, TPZElastoPlasticMem> *mat = dynamic_cast<TPZMatElastoPlastic2D<TPZElasticCriterion, TPZElastoPlasticMem> *>(cel_mat);
+       TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem> *mat = dynamic_cast<TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem> *>(cel_mat);
+        // TPZMatElastoPlastic2D<TPZElasticCriterion, TPZElastoPlasticMem> *mat = dynamic_cast<TPZMatElastoPlastic2D<TPZElasticCriterion, TPZElastoPlasticMem> *>(cel_mat);
 
         int64_t npts = int_rule->NPoints(); // number of integration points of the element
         int64_t dim = cel_inter->Dimension(); //dimension of the element

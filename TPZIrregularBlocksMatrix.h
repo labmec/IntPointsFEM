@@ -24,8 +24,23 @@ public:
         TPZVec<int> fColFirstIndex; // blocks first column index
         TPZVec<int> fRowPtr; // vector of the start of every row and the end of the last row plus one (this is for CSR format)
         TPZVec<int> fColInd; // vector of column indices for each non-zero element of the matrix (this is for CSR format)
-
     };
+
+
+    struct IrregularBlocksDev {
+#ifdef USING_CUDA
+        int64_t dNumBlocks; //number of blocks
+        TPZVecGPU<REAL> dStorage; // blocks values
+        TPZVecGPU<int> dRowSizes; // blocks row sizes
+        TPZVecGPU<int> dColSizes; // blocks columns sizes
+        TPZVecGPU<int> dMatrixPosition; // blocks start position in fStorage vector
+        TPZVecGPU<int> dRowFirstIndex; // blocks first row index
+        TPZVecGPU<int> dColFirstIndex; // blocks first column index
+        TPZVecGPU<int> dRowPtr; // vector of the start of every row and the end of the last row plus one (this is for CSR format)
+        TPZVecGPU<int> dColInd; // vector of column indices for each non-zero element of the matrix (this is for CSR format)
+#endif
+    };
+
 
     /** @brief Default constructor */
     TPZIrregularBlocksMatrix();
@@ -77,6 +92,10 @@ public:
         return fBlocksInfo;
     }
 
+    struct IrregularBlocksDev & BlocksDev() {
+        return dBlocksInfo;
+    }
+
     void TransferDataToGPU();
 
     void CSRVectors();
@@ -84,14 +103,10 @@ public:
 private:
     struct IrregularBlocks fBlocksInfo;
 
+
+
 #ifdef USING_CUDA
-    TPZVecGPU<REAL> dStorage;
-    TPZVecGPU<int> dRowSizes;
-    TPZVecGPU<int> dColSizes;
-    TPZVecGPU<int> dRowFirstIndex;
-    TPZVecGPU<int> dColFirstIndex;
-    TPZVecGPU<int> dMatrixPosition;
-    // TPZCudaCalls fCudaCalls;
+    struct IrregularBlocksDev dBlocksInfo;
     TPZCudaCalls *fCudaCalls;
 #endif
 };
