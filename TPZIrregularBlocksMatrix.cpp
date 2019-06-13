@@ -85,27 +85,37 @@ TPZIrregularBlocksMatrix &TPZIrregularBlocksMatrix::operator=(const TPZIrregular
     return *this;
 }
 
-void TPZIrregularBlocksMatrix::Multiply(TPZFMatrix<REAL> &A, TPZFMatrix<REAL> &res, TPZVec<int> ColsA, int opt) {
+// void TPZIrregularBlocksMatrix::Multiply(TPZFMatrix<REAL> &A, TPZFMatrix<REAL> &res, int opt) {
+//     int nblocks = fBlocksInfo.fNumBlocks;
+
+//     TPZVec<int> one(nblocks);
+//     one.Fill(1);
+// }
+
+void TPZIrregularBlocksMatrix::MultiplyVector(REAL *A, REAL *res, int opt) {
     int nblocks = fBlocksInfo.fNumBlocks;
 
-    if(opt == 0) {
-        MatrixMultiplication(opt, &fBlocksInfo.fRowSizes[0], &ColsA[0], &fBlocksInfo.fColSizes[0], &fBlocksInfo.fStorage[0], &fBlocksInfo.fMatrixPosition[0], &A(0,0), &fBlocksInfo.fColFirstIndex[0], &res(0,0), &fBlocksInfo.fRowFirstIndex[0], 1., nblocks);
-    } else {
-        MatrixMultiplication(opt, &fBlocksInfo.fColSizes[0], &ColsA[0], &fBlocksInfo.fRowSizes[0], &fBlocksInfo.fStorage[0], &fBlocksInfo.fMatrixPosition[0], &A(0,0), &fBlocksInfo.fRowFirstIndex[0], &res(0,0), &fBlocksInfo.fColFirstIndex[0], -1., nblocks);
-    }
-}
+    TPZVec<int> one(nblocks);
+    one.Fill(1);
 
 #ifdef USING_CUDA
-void TPZIrregularBlocksMatrix::Multiply(REAL *A, REAL *res, int *ColsA, int opt) {
-    int nblocks = fBlocksInfo.fNumBlocks;
+    TPZVecGPU<int> dOne(nblocks);
+    dOne.set(&one[0], nblocks);
 
     if(opt == 0) {
-        fCudaCalls->Multiply(opt, dBlocksInfo.dRowSizes.getData(), ColsA, dBlocksInfo.dColSizes.getData(), dBlocksInfo.dStorage.getData(), dBlocksInfo.dMatrixPosition.getData(), A, dBlocksInfo.dColFirstIndex.getData(), res, dBlocksInfo.dRowFirstIndex.getData(), 1., nblocks); 
+        fCudaCalls->Multiply(opt, dBlocksInfo.dRowSizes.getData(), dOne.getData(), dBlocksInfo.dColSizes.getData(), dBlocksInfo.dStorage.getData(), dBlocksInfo.dMatrixPosition.getData(), A, dBlocksInfo.dColFirstIndex.getData(), res, dBlocksInfo.dRowFirstIndex.getData(), 1., nblocks); 
     } else {
-        fCudaCalls->Multiply(opt, dBlocksInfo.dColSizes.getData(), ColsA, dBlocksInfo.dRowSizes.getData(), dBlocksInfo.dStorage.getData(), dBlocksInfo.dMatrixPosition.getData(), A, dBlocksInfo.dRowFirstIndex.getData(), res, dBlocksInfo.dColFirstIndex.getData(), -1., nblocks); 
+        fCudaCalls->Multiply(opt, dBlocksInfo.dColSizes.getData(), dOne.getData(), dBlocksInfo.dRowSizes.getData(), dBlocksInfo.dStorage.getData(), dBlocksInfo.dMatrixPosition.getData(), A, dBlocksInfo.dRowFirstIndex.getData(), res, dBlocksInfo.dColFirstIndex.getData(), -1., nblocks); 
     }
-}
+ #else
+    if(opt == 0) {
+        MatrixMultiplication(opt, &fBlocksInfo.fRowSizes[0], &one[0], &fBlocksInfo.fColSizes[0], &fBlocksInfo.fStorage[0], &fBlocksInfo.fMatrixPosition[0], A, &fBlocksInfo.fColFirstIndex[0], res, &fBlocksInfo.fRowFirstIndex[0], 1., nblocks);
+    } else {
+        MatrixMultiplication(opt, &fBlocksInfo.fColSizes[0], &one[0], &fBlocksInfo.fRowSizes[0], &fBlocksInfo.fStorage[0], &fBlocksInfo.fMatrixPosition[0], A, &fBlocksInfo.fRowFirstIndex[0], res, &fBlocksInfo.fColFirstIndex[0], -1., nblocks);
+    }
+
 #endif
+}
 
 void TPZIrregularBlocksMatrix::MultiplyMatrix(TPZIrregularBlocksMatrix &A, TPZIrregularBlocksMatrix &res, int opt) {
     int nblocks = fBlocksInfo.fNumBlocks;

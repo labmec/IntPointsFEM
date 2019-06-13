@@ -68,15 +68,8 @@ public:
     /** @brief operator= */
     TPZIrregularBlocksMatrix &operator=(const TPZIrregularBlocksMatrix &copy);
 
-    /** @brief Performs the following operation: res = alpha * this * A + beta * res
-     * @param A : matrix that will be multipied
-     * @param res : result of the multiplication
-     * @param alpha : scalar parameter
-     * @param beta : scalar parameter
-     * @param opt : indicates if transpose or not
-     */
-    void Multiply(TPZFMatrix<REAL> &A, TPZFMatrix<REAL> &res, TPZVec<int> ColsA, int opt) ;
 
+    void MultiplyVector(REAL *A, REAL *res, int opt);
 
     void MultiplyMatrix(TPZIrregularBlocksMatrix &A, TPZIrregularBlocksMatrix &res, int opt);
 
@@ -92,7 +85,6 @@ public:
     }
 
 #ifdef USING_CUDA
-    void Multiply(REAL *A, REAL *res, int *ColsA, int opt);
     
     struct IrregularBlocksDev & BlocksDev() {
         return dBlocksInfo;
