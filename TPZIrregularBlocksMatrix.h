@@ -24,6 +24,8 @@ public:
         TPZVec<int> fColFirstIndex; // blocks first column index
         TPZVec<int> fRowPtr; // vector of the start of every row and the end of the last row plus one (this is for CSR format)
         TPZVec<int> fColInd; // vector of column indices for each non-zero element of the matrix (this is for CSR format)
+
+        TPZVec<int> fRowRowPosition;
     };
 
 

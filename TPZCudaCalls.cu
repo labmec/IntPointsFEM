@@ -76,6 +76,65 @@ void TPZCudaCalls::DaxpyOperation(int n, REAL alpha, REAL *x, REAL *y) {
 	}	
 }
 
+void TPZCudaCalls::MultiplyCSR(int opt, int m, int n, int k, int nnzA, REAL *csrValA, int *csrRowPtrA, int *csrColIndA, int nnzB, REAL *csrValB, int *csrRowPtrB, int *csrColIndB, REAL *csrValC) {
+	if(cusparse_h == false) {
+		cusparse_h = true;
+		cusparseStatus_t result = cusparseCreate(&handle_cusparse);
+		if (result != CUSPARSE_STATUS_SUCCESS) {
+			throw std::runtime_error("failed to initialize cuSparse");      
+		}			
+	}
+
+	int *csrRowPtrC;
+	int nnzC;
+	int baseC;
+	int *csrColIndC;
+
+	cusparseMatDescr_t descr;
+	cusparseCreateMatDescr(&descr);
+	cusparseSetMatType(descr, CUSPARSE_MATRIX_TYPE_GENERAL);
+	cusparseSetMatIndexBase(descr, CUSPARSE_INDEX_BASE_ZERO);
+
+	int *nnzTotalDevHostPtr = &nnzC;
+	cusparseSetPointerMode(handle_cusparse, CUSPARSE_POINTER_MODE_HOST);
+	cudaMalloc((void**)&csrRowPtrC, sizeof(int)*(m+1));
+
+	cusparseOperation_t trans;
+	if(opt == 0) {
+		trans = CUSPARSE_OPERATION_NON_TRANSPOSE;
+
+	} else {
+		trans = CUSPARSE_OPERATION_TRANSPOSE;
+	}
+
+	cusparseXcsrgemmNnz(handle_cusparse, trans, CUSPARSE_OPERATION_NON_TRANSPOSE, m, n, k,
+						descr, nnzA, csrRowPtrA, csrColIndA,
+						descr, nnzB, csrRowPtrB, csrColIndB,
+						descr, csrRowPtrC, nnzTotalDevHostPtr);
+
+	if (NULL != nnzTotalDevHostPtr){
+		nnzC = *nnzTotalDevHostPtr;
+	}
+
+	else{
+		cudaMemcpy(&nnzC, csrRowPtrC+m, sizeof(int), cudaMemcpyDeviceToHost);
+		cudaMemcpy(&baseC, csrRowPtrC, sizeof(int), cudaMemcpyDeviceToHost);
+		nnzC -= baseC;
+	}
+
+	cudaMalloc((void**)&csrColIndC, sizeof(int)*nnzC);
+
+	cusparseStatus_t result = cusparseDcsrgemm(handle_cusparse, trans, CUSPARSE_OPERATION_NON_TRANSPOSE, m, n, k, 
+					descr, nnzA, csrValA, csrRowPtrA, csrColIndA, 
+					descr, nnzB, csrValB, csrRowPtrB, csrColIndB,
+					descr, csrValC, csrRowPtrC, csrColIndC);
+	if (result != CUSPARSE_STATUS_SUCCESS) {
+		throw std::runtime_error("failed to perform cusparseDsctr");      
+	}	
+
+}
+
+
 
 
 

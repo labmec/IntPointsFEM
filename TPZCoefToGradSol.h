@@ -56,6 +56,11 @@ public:
 
     void TransferDataToGPU();
 
+    TPZCudaCalls & CudaCalls() {
+        return fCudaCalls;
+    }
+
+
 private:
     TPZIrregularBlocksMatrix fBlockMatrix;
 

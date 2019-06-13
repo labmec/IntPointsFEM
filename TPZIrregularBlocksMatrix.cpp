@@ -160,6 +160,8 @@ void TPZIrregularBlocksMatrix::MultiplyMatrix(TPZIrregularBlocksMatrix &A, TPZIr
     res.BlocksDev().dColFirstIndex.set(&res.Blocks().fColFirstIndex[0], nblocks + 1);
 }
 
+
+
 #ifdef USING_CUDA
 void TPZIrregularBlocksMatrix::TransferDataToGPU() {
     dBlocksInfo.dStorage.resize(fBlocksInfo.fStorage.size());
