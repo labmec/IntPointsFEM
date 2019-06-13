@@ -22,7 +22,7 @@ TPZStructMatrix * TPZElastoPlasticIntPointsStructMatrix::Clone(){
 }
 
 TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
-    
+
     if(!isBuilt()) {
         this->SetUpDataStructure();
     }
@@ -35,7 +35,7 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
 }
 
 TPZMatrix<STATE> *TPZElastoPlasticIntPointsStructMatrix::CreateAssemble(TPZFMatrix<STATE> &rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
-    
+
     int64_t neq = fMesh->NEquations();
     TPZMatrix<STATE> *stiff = Create();
     TPZSYsmpMatrix<STATE> *mat = dynamic_cast<TPZSYsmpMatrix<STATE> *> (stiff);
@@ -47,7 +47,7 @@ TPZMatrix<STATE> *TPZElastoPlasticIntPointsStructMatrix::CreateAssemble(TPZFMatr
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
-    
+
     if(isBuilt()) {
         std::cout << __PRETTY_FUNCTION__ << " Data structure has been setup." << std::endl;
         return;
@@ -79,6 +79,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     AssembleBoundaryData(boundary_matids);
 
     SetUpDepStructure();
+    fDep.TransferDataToGPU();
 
 #ifdef USING_CUDA
     std::cout << "Transfering data to GPU..." << std::endl;
@@ -105,6 +106,22 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     TPZIrregularBlocksMatrix Kyy(cols, cols);
     TPZIrregularBlocksMatrix Kxy(cols, cols);
 
+#ifdef USING_CUDA
+    fDep.BlocksDev().dStorage.resize(depxx.size());
+    fDep.BlocksDev().dStorage.set(&depxx[0], depxx.size());
+    fDep.MultiplyMatrix(fCoefToGradSol.IrregularBlocksMatrix(), aux, 0);
+    fCoefToGradSol.IrregularBlocksMatrix().MultiplyMatrix(aux, Kxx, 1);
+
+    fDep.BlocksDev().dStorage.resize(depyy.size());
+    fDep.BlocksDev().dStorage.set(&depyy[0], depyy.size());
+    fDep.MultiplyMatrix(fCoefToGradSol.IrregularBlocksMatrix(), aux, 0);
+    fCoefToGradSol.IrregularBlocksMatrix().MultiplyMatrix(aux, Kyy, 1);
+
+    fDep.BlocksDev().dStorage.resize(depxy.size());
+    fDep.BlocksDev().dStorage.set(&depxy[0], depxy.size());
+    fDep.MultiplyMatrix(fCoefToGradSol.IrregularBlocksMatrix(), aux, 0);
+    fCoefToGradSol.IrregularBlocksMatrix().MultiplyMatrix(aux, Kxy, 1);
+#else
     fDep.Blocks().fStorage = depxx;
     fDep.MultiplyMatrix(fCoefToGradSol.IrregularBlocksMatrix(), aux, 0);
     fCoefToGradSol.IrregularBlocksMatrix().MultiplyMatrix(aux, Kxx, 1);
@@ -116,6 +133,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     fDep.Blocks().fStorage = depxy;
     fDep.MultiplyMatrix(fCoefToGradSol.IrregularBlocksMatrix(), aux, 0);
     fCoefToGradSol.IrregularBlocksMatrix().MultiplyMatrix(aux, Kxy, 1);
+#endif
 
     auto it_end = fSparseMatrixLinear.MapEnd();
     
@@ -127,7 +145,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
         vol_val += val; /// TODO:: Add val
         mat.PutVal(row, col, vol_val);
     }
-   
+
     rhs+=fRhsLinear;
 }
 
@@ -173,7 +191,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TP
 #endif
     rhs += fRhsLinear;
 
-   
+
 
 }
 
@@ -425,7 +443,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Dep(TPZVec<REAL> &depxx, TPZVec<REAL
         cel_inter->InitMaterialData(data);
 
         TPZMaterial *cel_mat = cel->Material();
-       TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem> *mat = dynamic_cast<TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem> *>(cel_mat);
+        TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem> *mat = dynamic_cast<TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem> *>(cel_mat);
 
         int64_t npts = int_rule->NPoints(); // number of integration points of the element
         int64_t dim = cel_inter->Dimension(); //dimension of the element

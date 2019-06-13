@@ -125,6 +125,17 @@ void TPZIrregularBlocksMatrix::MultiplyMatrix(TPZIrregularBlocksMatrix &A, TPZIr
         }
     }
 
+#ifdef USING_CUDA
+    res.BlocksDev().dMatrixPosition.resize(nblocks + 1);
+    res.BlocksDev().dMatrixPosition.set(&res.Blocks().fMatrixPosition[0], nblocks + 1);
+    res.BlocksDev().dStorage.resize(res.Blocks().fMatrixPosition[nblocks]);
+
+    if(opt == 0) {
+        fCudaCalls->Multiply(opt, dBlocksInfo.dRowSizes.getData(), A.BlocksDev().dColSizes.getData(), dBlocksInfo.dColSizes.getData(), dBlocksInfo.dStorage.getData(), dBlocksInfo.dMatrixPosition.getData(), A.BlocksDev().dStorage.getData(), A.BlocksDev().dMatrixPosition.getData(), res.BlocksDev().dStorage.getData(), res.BlocksDev().dMatrixPosition.getData(), 1., nblocks);
+    } else {
+        fCudaCalls->Multiply(opt, dBlocksInfo.dColSizes.getData(), A.BlocksDev().dColSizes.getData(), dBlocksInfo.dRowSizes.getData(), dBlocksInfo.dStorage.getData(), dBlocksInfo.dMatrixPosition.getData(), A.BlocksDev().dStorage.getData(), A.BlocksDev().dMatrixPosition.getData(), res.BlocksDev().dStorage.getData(), res.BlocksDev().dMatrixPosition.getData(), 1., nblocks);
+    }
+#else
     res.Blocks().fStorage.resize(res.Blocks().fMatrixPosition[nblocks]);
 
     if(opt == 0) {
@@ -132,10 +143,21 @@ void TPZIrregularBlocksMatrix::MultiplyMatrix(TPZIrregularBlocksMatrix &A, TPZIr
     } else {
         MatrixMultiplication(opt, &fBlocksInfo.fColSizes[0], &A.Blocks().fColSizes[0], &fBlocksInfo.fRowSizes[0], &fBlocksInfo.fStorage[0], &fBlocksInfo.fMatrixPosition[0], &A.Blocks().fStorage[0], &A.Blocks().fMatrixPosition[0], &res.Blocks().fStorage[0], &res.Blocks().fMatrixPosition[0], 1., nblocks);
     }
+#endif
     res.Blocks().fRowSizes = fBlocksInfo.fRowSizes;
     res.Blocks().fColSizes = A.Blocks().fColSizes;
     res.Blocks().fRowFirstIndex = fBlocksInfo.fRowFirstIndex;
     res.Blocks().fColFirstIndex = A.Blocks().fColFirstIndex;
+
+    res.BlocksDev().dRowSizes.resize(nblocks);
+    res.BlocksDev().dColSizes.resize(nblocks);
+    res.BlocksDev().dRowFirstIndex.resize(nblocks + 1);
+    res.BlocksDev().dColFirstIndex.resize(nblocks + 1);
+
+    res.BlocksDev().dRowSizes.set(&res.Blocks().fRowSizes[0], nblocks);
+    res.BlocksDev().dColSizes.set(&res.Blocks().fColSizes[0], nblocks);
+    res.BlocksDev().dRowFirstIndex.set(&res.Blocks().fRowFirstIndex[0], nblocks + 1);
+    res.BlocksDev().dColFirstIndex.set(&res.Blocks().fColFirstIndex[0], nblocks + 1);
 }
 
 #ifdef USING_CUDA
