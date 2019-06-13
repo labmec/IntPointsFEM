@@ -125,7 +125,7 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
     analysis->Assemble();
 
 // //    analysis->Solver().Matrix()->Print("kip = ",std::cout, EMathematicaInput);
-    for (int i = 0; i < n_iterations, i++) {
+    for (int i = 0; i < n_iterations; i++) {
         analysis->Solve();
         delta_du = analysis->Solution();
         du += delta_du;
