@@ -113,6 +113,34 @@ void TPZIrregularBlocksMatrix::Multiply(REAL *A, REAL *res, int *ColsA, int opt)
 #endif
 }
 
+void TPZIrregularBlocksMatrix::MultiplyMatrix(TPZIrregularBlocksMatrix &A, TPZIrregularBlocksMatrix &res, int opt) {
+    int nblocks = fBlocksInfo.fNumBlocks;
+
+    res.Blocks().fMatrixPosition.resize(nblocks + 1);
+    res.Blocks().fMatrixPosition[0] = 0;
+    if (opt == 0) {
+        for (int i = 0; i < nblocks; ++i) {
+            res.Blocks().fMatrixPosition[i + 1] = res.Blocks().fMatrixPosition[i] + fBlocksInfo.fRowSizes[i] * A.Blocks().fColSizes[i];
+        }
+    } else {
+        for (int i = 0; i < nblocks; ++i) {
+            res.Blocks().fMatrixPosition[i + 1] = res.Blocks().fMatrixPosition[i] + fBlocksInfo.fColSizes[i] * A.Blocks().fColSizes[i];
+        }
+    }
+
+    res.Blocks().fStorage.resize(res.Blocks().fMatrixPosition[nblocks]);
+
+    if(opt == 0) {
+        MatrixMultiplication(opt, &fBlocksInfo.fRowSizes[0], &A.Blocks().fColSizes[0], &fBlocksInfo.fColSizes[0], &fBlocksInfo.fStorage[0], &fBlocksInfo.fMatrixPosition[0], &A.Blocks().fStorage[0], &A.Blocks().fMatrixPosition[0], &res.Blocks().fStorage[0], &res.Blocks().fMatrixPosition[0], 1., nblocks);
+    } else {
+        MatrixMultiplication(opt, &fBlocksInfo.fColSizes[0], &A.Blocks().fColSizes[0], &fBlocksInfo.fRowSizes[0], &fBlocksInfo.fStorage[0], &fBlocksInfo.fMatrixPosition[0], &A.Blocks().fStorage[0], &A.Blocks().fMatrixPosition[0], &res.Blocks().fStorage[0], &res.Blocks().fMatrixPosition[0], 1., nblocks);
+    }
+    res.Blocks().fRowSizes = fBlocksInfo.fRowSizes;
+    res.Blocks().fColSizes = A.Blocks().fColSizes;
+    res.Blocks().fRowFirstIndex = fBlocksInfo.fRowFirstIndex;
+    res.Blocks().fColFirstIndex = A.Blocks().fColFirstIndex;
+}
+
 void TPZIrregularBlocksMatrix::TransferDataToGPU() {
 #ifdef USING_CUDA
     dStorage.resize(fBlocksInfo.fStorage.size());

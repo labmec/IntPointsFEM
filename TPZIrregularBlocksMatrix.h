@@ -64,6 +64,8 @@ public:
 
     void Multiply(REAL *A, REAL *res, int *ColsA, int opt);
 
+    void MultiplyMatrix(TPZIrregularBlocksMatrix &A, TPZIrregularBlocksMatrix &res, int opt);
+
     /** @brief Set method */
     void SetBlocks(struct IrregularBlocks & blocks) {
         fBlocksInfo = blocks;

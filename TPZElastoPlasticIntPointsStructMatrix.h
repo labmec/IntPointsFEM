@@ -51,7 +51,7 @@ public:
     }
 
     void KMatrixBip();
-     void KMatrixBel();
+    void Dep(TPZVec<REAL> &depxx, TPZVec<REAL> &depyy, TPZVec<REAL> &depxy);
 
 private:
     void SetUpDepStructure();

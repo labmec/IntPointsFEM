@@ -12,6 +12,7 @@
 #include "TPZElastoPlasticIntPointsStructMatrix.h"
 #include "TElastoPlasticData.h"
 #include "TRKSolution.h"
+#include "TPZElasticCriterion.h"
 
 #ifdef USING_OMP
 #include "omp.h"
@@ -447,9 +448,10 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int p_order, TElastoPlasti
     // Elastic predictor
     TPZElasticResponse ER = wellbore_material.ElasticResponse();
 
-    TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse> LEMC;
+//    TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse> LEMC;
+    TPZElasticCriterion LEMC;
     LEMC.SetElasticResponse(ER);
-    LEMC.fYC.SetUp(mc_phi, mc_psi, mc_cohesion, ER);
+//    LEMC.fYC.SetUp(mc_phi, mc_psi, mc_cohesion, ER);
     int PlaneStrain = 1;
     LEMC.fN.m_eps_t.Zero();
     LEMC.fN.m_eps_p.Zero();
@@ -460,7 +462,8 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int p_order, TElastoPlasti
     default_memory.m_elastoplastic_state = LEMC.fN;
 
     // Creates elastoplatic material
-    TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem > * material = new TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem >(matid,PlaneStrain);
+//    TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem > * material = new TPZMatElastoPlastic2D < TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem >(matid,PlaneStrain);
+    TPZMatElastoPlastic2D < TPZElasticCriterion, TPZElastoPlasticMem > * material = new TPZMatElastoPlastic2D < TPZElasticCriterion, TPZElastoPlasticMem >(matid,PlaneStrain);
     material->SetPlasticityModel(LEMC);
     material->SetDefaultMem(default_memory);
     cmesh->InsertMaterialObject(material);
