@@ -10,9 +10,15 @@
 #endif
 
 TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix() : TPZMatrix<REAL>(), fBlocksInfo() {
-
 #ifdef USING_CUDA
     dBlocksInfo.dStorage.resize(0);
+    #ifdef USING_SPARSE
+    dBlocksInfo.dRowPtr.resize(0);
+    dBlocksInfo.dColInd.resize(0);
+    dBlocksInfo.dRowRowPtr.resize(0);
+    dBlocksInfo.dRowRowInd.resize(0);
+    dBlocksInfo.dColColPtr.resize(0);
+    #else
     dBlocksInfo.dRowSizes.resize(0);
     dBlocksInfo.dColSizes.resize(0);
     dBlocksInfo.dRowFirstIndex.resize(0);
@@ -20,11 +26,6 @@ TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix() : TPZMatrix<REAL>(), fBlock
     dBlocksInfo.dMatrixPosition.resize(0);
     dBlocksInfo.dRowRowPosition.resize(0);
     dBlocksInfo.dColColPosition.resize(0);
-    #ifdef USING_SPARSE
-    dBlocksInfo.dRowPtr.resize(0);
-    dBlocksInfo.dColInd.resize(0);
-    dBlocksInfo.dRowRowPtr.resize(0);
-    dBlocksInfo.dRowRowInd.resize(0);
     #endif
 
     fCudaCalls = new TPZCudaCalls();
@@ -40,17 +41,23 @@ TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix() : TPZMatrix<REAL>(), fBlock
     fBlocksInfo.fRowRowPosition.resize(0);
     fBlocksInfo.fColColPosition.resize(0);
 
-#ifdef USING_SPARSE
+    fBlocksInfo.fColColPtr.resize(0);
     fBlocksInfo.fRowPtr.resize(0);
     fBlocksInfo.fColInd.resize(0);
     fBlocksInfo.fRowRowPtr.resize(0);
     fBlocksInfo.fRowRowInd.resize(0);
-#endif
 }
 
 TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix(const int64_t rows,const int64_t cols) : TPZMatrix<REAL>(rows,cols), fBlocksInfo() {
 #ifdef USING_CUDA
     dBlocksInfo.dStorage.resize(0);
+    #ifdef USING_SPARSE
+    dBlocksInfo.dColColPtr.resize(0);
+    dBlocksInfo.dRowPtr.resize(0);
+    dBlocksInfo.dColInd.resize(0);
+    dBlocksInfo.dRowRowPtr.resize(0);
+    dBlocksInfo.dRowRowInd.resize(0);
+    #else
     dBlocksInfo.dRowSizes.resize(0);
     dBlocksInfo.dColSizes.resize(0);
     dBlocksInfo.dRowFirstIndex.resize(0);
@@ -58,13 +65,7 @@ TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix(const int64_t rows,const int6
     dBlocksInfo.dMatrixPosition.resize(0);
     dBlocksInfo.dRowRowPosition.resize(0);
     dBlocksInfo.dColColPosition.resize(0);
-
-#ifdef USING_SPARSE
-    dBlocksInfo.dRowPtr.resize(0);
-    dBlocksInfo.dColInd.resize(0);
-    dBlocksInfo.dRowRowPtr.resize(0);
-    dBlocksInfo.dRowRowInd.resize(0);
-#endif
+    #endif
 
     fCudaCalls = new TPZCudaCalls();
 #endif
@@ -77,12 +78,13 @@ TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix(const int64_t rows,const int6
     fBlocksInfo.fColFirstIndex.resize(0);
     fBlocksInfo.fRowRowPosition.resize(0);
     fBlocksInfo.fColColPosition.resize(0);
-#ifdef USING_SPARSE
+
+    fBlocksInfo.fColColPtr.resize(0);
     fBlocksInfo.fRowPtr.resize(0);
     fBlocksInfo.fColInd.resize(0);
     fBlocksInfo.fRowRowPtr.resize(0);
     fBlocksInfo.fRowRowInd.resize(0);
- #endif
+    fBlocksInfo.fColColPtr.resize(0);
 }
 
 TPZIrregularBlocksMatrix::~TPZIrregularBlocksMatrix() {
@@ -161,10 +163,11 @@ void TPZIrregularBlocksMatrix::KMatrix(REAL *A, REAL *res) {
     #ifdef USING_SPARSE
     fCudaCalls->SpMSpM(0, rows, rows, cols, fBlocksInfo.fRowRowPosition[nblocks], A, dBlocksInfo.dRowRowPtr.getData(), dBlocksInfo.dRowRowInd.getData(), 
         dBlocksInfo.dStorage.getSize(), dBlocksInfo.dStorage.getData(), dBlocksInfo.dRowPtr.getData(), dBlocksInfo.dColInd.getData(), 
-        aux.getData()); 
+        dBlocksInfo.dStorage.getSize(), aux.getData(), dBlocksInfo.dRowPtr.getData()); 
 
     fCudaCalls->SpMSpM(1, cols, cols, rows, dBlocksInfo.dStorage.getSize(), dBlocksInfo.dStorage.getData(), dBlocksInfo.dRowPtr.getData(), dBlocksInfo.dColInd.getData(), 
-        aux.getSize(), aux.getData(), dBlocksInfo.dRowPtr.getData(), dBlocksInfo.dColInd.getData(), res); 
+        aux.getSize(), aux.getData(), dBlocksInfo.dRowPtr.getData(), dBlocksInfo.dColInd.getData(), fBlocksInfo.fColColPosition[nblocks], res, dBlocksInfo.dColColPtr.getData()); 
+
     #else
     fCudaCalls->Multiply(0, dBlocksInfo.dRowSizes.getData(), dBlocksInfo.dColSizes.getData(), dBlocksInfo.dRowSizes.getData(), A, dBlocksInfo.dRowRowPosition.getData(), dBlocksInfo.dStorage.getData(), dBlocksInfo.dMatrixPosition.getData(), aux.getData(), dBlocksInfo.dMatrixPosition.getData(), 1., nblocks);
     fCudaCalls->Multiply(1, dBlocksInfo.dColSizes.getData(), dBlocksInfo.dColSizes.getData(), dBlocksInfo.dRowSizes.getData(), dBlocksInfo.dStorage.getData(), dBlocksInfo.dMatrixPosition.getData(), aux.getData(), dBlocksInfo.dMatrixPosition.getData(), res, dBlocksInfo.dColColPosition.getData(), 1., nblocks);
@@ -184,6 +187,22 @@ void TPZIrregularBlocksMatrix::TransferDataToGPU() {
     dBlocksInfo.dStorage.resize(fBlocksInfo.fStorage.size());
     dBlocksInfo.dStorage.set(&fBlocksInfo.fStorage[0], fBlocksInfo.fStorage.size());
 
+    #ifdef USING_SPARSE
+    dBlocksInfo.dRowPtr.resize(fBlocksInfo.fRowPtr.size());
+    dBlocksInfo.dRowPtr.set(&fBlocksInfo.fRowPtr[0], fBlocksInfo.fRowPtr.size());
+
+    dBlocksInfo.dColInd.resize(fBlocksInfo.fColInd.size());
+    dBlocksInfo.dColInd.set(&fBlocksInfo.fColInd[0], fBlocksInfo.fColInd.size());
+
+    dBlocksInfo.dRowRowPtr.resize(fBlocksInfo.fRowRowPtr.size());
+    dBlocksInfo.dRowRowPtr.set(&fBlocksInfo.fRowRowPtr[0], fBlocksInfo.fRowRowPtr.size());
+
+    dBlocksInfo.dRowRowInd.resize(fBlocksInfo.fRowRowInd.size());
+    dBlocksInfo.dRowRowInd.set(&fBlocksInfo.fRowRowInd[0], fBlocksInfo.fRowRowInd.size());
+
+    dBlocksInfo.dColColPtr.resize(fBlocksInfo.fColColPtr.size());
+    dBlocksInfo.dColColPtr.set(&fBlocksInfo.fColColPtr[0], fBlocksInfo.fColColPtr.size());
+    #else
     dBlocksInfo.dRowSizes.resize(fBlocksInfo.fRowSizes.size());
     dBlocksInfo.dRowSizes.set(&fBlocksInfo.fRowSizes[0], fBlocksInfo.fRowSizes.size());
 
@@ -204,25 +223,11 @@ void TPZIrregularBlocksMatrix::TransferDataToGPU() {
 
     dBlocksInfo.dColColPosition.resize(fBlocksInfo.fColColPosition.size());
     dBlocksInfo.dColColPosition.set(&fBlocksInfo.fColColPosition[0], fBlocksInfo.fColColPosition.size());
-
-    #ifdef USING_SPARSE
-    dBlocksInfo.dRowPtr.resize(fBlocksInfo.fRowPtr.size());
-    dBlocksInfo.dRowPtr.set(&fBlocksInfo.fRowPtr[0], fBlocksInfo.fRowPtr.size());
-
-    dBlocksInfo.dColInd.resize(fBlocksInfo.fColInd.size());
-    dBlocksInfo.dColInd.set(&fBlocksInfo.fColInd[0], fBlocksInfo.fColInd.size());
-
-    dBlocksInfo.dRowRowPtr.resize(fBlocksInfo.fRowRowPtr.size());
-    dBlocksInfo.dRowRowPtr.set(&fBlocksInfo.fRowRowPtr[0], fBlocksInfo.fRowRowPtr.size());
-
-    dBlocksInfo.dRowRowInd.resize(fBlocksInfo.fRowRowInd.size());
-    dBlocksInfo.dRowRowInd.set(&fBlocksInfo.fRowRowInd[0], fBlocksInfo.fRowRowInd.size());
     #endif
 }
 #endif
 
 void TPZIrregularBlocksMatrix::CSRVectors() {
-    #ifdef USING_SPARSE
     int64_t nblocks = fBlocksInfo.fNumBlocks;
     int64_t rows = this->Rows();
     int64_t cols = this->Cols();
@@ -232,6 +237,8 @@ void TPZIrregularBlocksMatrix::CSRVectors() {
 
     fBlocksInfo.fRowRowPtr.resize(rows + 1);
     fBlocksInfo.fRowRowInd.resize(fBlocksInfo.fRowRowPosition[nblocks]);
+
+    fBlocksInfo.fColColPtr.resize(cols + 1);
 
     for (int iel = 0; iel < nblocks; ++iel) {
         for (int irow = 0; irow < fBlocksInfo.fRowSizes[iel]; ++irow) {
@@ -248,8 +255,12 @@ void TPZIrregularBlocksMatrix::CSRVectors() {
                 fBlocksInfo.fRowRowInd[icol + fBlocksInfo.fRowRowPosition[iel] + irow * fBlocksInfo.fRowSizes[iel]] = icol + fBlocksInfo.fRowFirstIndex[iel];
             }
         }
+
+        for (int irow = 0; irow < fBlocksInfo.fColSizes[iel]; ++irow) {
+            fBlocksInfo.fColColPtr[irow + fBlocksInfo.fColFirstIndex[iel]] = fBlocksInfo.fColColPosition[iel] + irow * fBlocksInfo.fColSizes[iel];
+        }
     }
     fBlocksInfo.fRowPtr[rows] = fBlocksInfo.fMatrixPosition[nblocks];
     fBlocksInfo.fRowRowPtr[rows] = fBlocksInfo.fRowRowPosition[nblocks];
-    #endif
+    fBlocksInfo.fColColPtr[cols] = fBlocksInfo.fColColPosition[nblocks];
 }

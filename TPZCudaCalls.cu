@@ -101,7 +101,9 @@ void TPZCudaCalls::SpMV(int opt, int m, int k, int nnz, REAL alpha, REAL *csrVal
 	}	
 }
 
-void TPZCudaCalls::SpMSpM(int opt, int m, int n, int k, int nnzA, REAL *csrValA, int *csrRowPtrA, int *csrColIndA, int nnzB, REAL *csrValB, int *csrRowPtrB, int *csrColIndB, REAL *csrValC) {
+void TPZCudaCalls::SpMSpM(int opt, int m, int n, int k, int nnzA, REAL *csrValA, int *csrRowPtrA, int *csrColIndA, 
+														int nnzB, REAL *csrValB, int *csrRowPtrB, int *csrColIndB, 
+														int nnzC, REAL *csrValC, int *csrRowPtrC) {
 	if(cusparse_h == false) {
 		cusparse_h = true;
 		cusparseStatus_t result = cusparseCreate(&handle_cusparse);
@@ -110,19 +112,10 @@ void TPZCudaCalls::SpMSpM(int opt, int m, int n, int k, int nnzA, REAL *csrValA,
 		}			
 	}
 
-	int *csrRowPtrC;
-	int nnzC;
-	int baseC;
-	int *csrColIndC;
-
 	cusparseMatDescr_t descr;
 	cusparseCreateMatDescr(&descr);
 	cusparseSetMatType(descr, CUSPARSE_MATRIX_TYPE_GENERAL);
 	cusparseSetMatIndexBase(descr, CUSPARSE_INDEX_BASE_ZERO);
-
-	int *nnzTotalDevHostPtr = &nnzC;
-	cusparseSetPointerMode(handle_cusparse, CUSPARSE_POINTER_MODE_HOST);
-	cudaMalloc((void**)&csrRowPtrC, sizeof(int)*(m+1));
 
 	cusparseOperation_t trans;
 	if(opt == 0) {
@@ -132,21 +125,7 @@ void TPZCudaCalls::SpMSpM(int opt, int m, int n, int k, int nnzA, REAL *csrValA,
 		trans = CUSPARSE_OPERATION_TRANSPOSE;
 	}
 
-	cusparseXcsrgemmNnz(handle_cusparse, trans, CUSPARSE_OPERATION_NON_TRANSPOSE, m, n, k,
-						descr, nnzA, csrRowPtrA, csrColIndA,
-						descr, nnzB, csrRowPtrB, csrColIndB,
-						descr, csrRowPtrC, nnzTotalDevHostPtr);
-
-	if (NULL != nnzTotalDevHostPtr){
-		nnzC = *nnzTotalDevHostPtr;
-	}
-
-	else{
-		cudaMemcpy(&nnzC, csrRowPtrC+m, sizeof(int), cudaMemcpyDeviceToHost);
-		cudaMemcpy(&baseC, csrRowPtrC, sizeof(int), cudaMemcpyDeviceToHost);
-		nnzC -= baseC;
-	}
-
+	int *csrColIndC;
 	cudaMalloc((void**)&csrColIndC, sizeof(int)*nnzC);
 
 	cusparseStatus_t result = cusparseDcsrgemm(handle_cusparse, trans, CUSPARSE_OPERATION_NON_TRANSPOSE, m, n, k, 
