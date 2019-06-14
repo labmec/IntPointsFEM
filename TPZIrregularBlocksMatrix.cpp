@@ -175,8 +175,8 @@ void TPZIrregularBlocksMatrix::KMatrix(REAL *A, REAL *res) {
 #else
     TPZVec<REAL> aux(fBlocksInfo.fMatrixPosition[nblocks]);
 
-    MatrixMultiplication(0, &fBlocksInfo.fRowSizes[0], &fBlocksInfo.fColSizes[0], &fBlocksInfo.fRowSizes[0], A, &fBlocksInfo.fRowRowPosition[0], &fBlocksInfo.fStorage[0], &fBlocksInfo.fMatrixPosition[0], &aux[0], &fBlocksInfo.fMatrixPosition[0], 1., nblocks);
-    MatrixMultiplication(1, &fBlocksInfo.fColSizes[0], &fBlocksInfo.fColSizes[0], &fBlocksInfo.fRowSizes[0], &fBlocksInfo.fStorage[0], &fBlocksInfo.fMatrixPosition[0], &aux[0], &fBlocksInfo.fMatrixPosition[0], res, &fBlocksInfo.fColColPosition[0], 1., nblocks);
+    MatrixMultiplication(0, &fBlocksInfo.fRowSizes[0], &fBlocksInfo.fColSizes[0], &fBlocksInfo.fRowSizes[0], A, &fBlocksInfo.fRowRowPosition[0], &fBlocksInfo.fStorage[0], &fBlocksInfo.fMatrixPosition[0], &aux[0], &fBlocksInfo.fMatrixPosition[0], 1., nblocks); /// aux -> outvar /// A ->Dep, Storage -> eps:  C*eps or Dep*eps
+    MatrixMultiplication(1, &fBlocksInfo.fColSizes[0], &fBlocksInfo.fColSizes[0], &fBlocksInfo.fRowSizes[0], &fBlocksInfo.fStorage[0], &fBlocksInfo.fMatrixPosition[0], &aux[0], &fBlocksInfo.fMatrixPosition[0], res, &fBlocksInfo.fColColPosition[0], 1., nblocks); /// res -> outvar /// eps_t*C*eps
 #endif
 }
 

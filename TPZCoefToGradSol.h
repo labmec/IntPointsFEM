@@ -45,6 +45,14 @@ public:
     void SetIndexesColor(TPZVec<int> indexescolor) {
         fIndexesColor = indexescolor;
     }
+    
+    TPZVec<int> & Indexes() {
+        return fIndexes;
+    }
+    
+    TPZVec<int> & IndexesColor() {
+       return fIndexesColor;
+    }
 
     void SetNColors(int ncolor) {
         fNColor = ncolor;
@@ -57,6 +65,7 @@ public:
     void TransferDataToGPU();
 
 private:
+    
     TPZIrregularBlocksMatrix fBlockMatrix;
 
     int64_t fNColor; //needed to do the assembly

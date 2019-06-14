@@ -174,7 +174,6 @@ TPZAnalysis * Analysis_IPFEM(TPZCompMesh * cmesh, int n_threads){
     bool optimizeBandwidth = true;
     TPZAnalysis *analysis = new TPZAnalysis(cmesh, optimizeBandwidth);
     TPZElastoPlasticIntPointsStructMatrix struc_mat(cmesh);
-//    struc_mat.SetUpDataStructure();
     struc_mat.SetNumThreads(n_threads);
     analysis->SetStructuralMatrix(struc_mat);
     TPZStepSolver<STATE> step;
@@ -273,7 +272,7 @@ TElastoPlasticData WellboreConfigRK(){
 
     /// Elastic verification -> true
     /// ElastoPlastic verification -> false
-    bool is_elastic_Q = false;
+    bool is_elastic_Q = true;
 
     TPZElasticResponse LER;
     REAL Ey = 2000.0;
@@ -487,7 +486,7 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int p_order, TElastoPlasti
         }
 
         TPZBndCondWithMem<TPZElastoPlasticMem> * bc = new  TPZBndCondWithMem<TPZElastoPlasticMem>(material, bc_id, type, val1, val2);
-        cmesh->InsertMaterialObject(bc);
+//        cmesh->InsertMaterialObject(bc);
 
     }
 
