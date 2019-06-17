@@ -38,115 +38,8 @@ TPZMatrix<STATE> *TPZElastoPlasticIntPointsStructMatrix::CreateAssemble(TPZFMatr
 
     int64_t neq = fMesh->NEquations();
     TPZMatrix<STATE> *stiff = Create(); ///
-    TPZSYsmpMatrix<STATE> *mat = dynamic_cast<TPZSYsmpMatrix<STATE> *> (stiff);
     rhs.Redim(neq,1);
-    
-    
-    
-    int n_state = 2; /// or dim
-    TPZVec<STATE> & K_g = mat->A();
-    TPZVec<int> & indexes = fCoefToGradSol.Indexes();
-    int64_t n_vols = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
-    int64_t n_cols = fCoefToGradSol.IrregularBlocksMatrix().Cols();
-    TPZVec<int> el_n_dofs = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColSizes; // Making copy here!
-    TPZVec<int> mat_indexes = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition; // Making copy here!
-    TPZVec<int> cols_first_index = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColFirstIndex;
-
-    TPZVec<REAL> depxx;
-    TPZVec<REAL> depyy;
-    TPZVec<REAL> depxy;
-    Dep(depxx, depyy, depxy);
-    
-#ifdef USING_CUDA
-    int nblocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
-    TPZVecGPU<REAL> Kxx(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
-    TPZVecGPU<REAL> Kyy(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
-    TPZVecGPU<REAL> Kxy(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
-    
-    TPZVecGPU<REAL> d_dep(depxx.size());
-    
-    d_dep.set(&depxx[0], depxx.size());
-    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(d_dep.getData(), Kxx.getData());
-    
-    d_dep.set(&depyy[0], depyy.size());
-    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(d_dep.getData(), Kyy.getData());
-    
-    d_dep.set(&depxy[0], depxy.size());
-    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(d_dep.getData(), Kxy.getData());
-#else
-    int nblocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
-    TPZVec<REAL> Kxx(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
-    TPZVec<REAL> Kyy(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
-    TPZVec<REAL> Kxy(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
-    
-    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(&depxx[0], &Kxx[0]); /// Can
-    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(&depyy[0], &Kyy[0]);
-    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(&depxy[0], &Kxy[0]);
-    
-#endif
-    
-    /// implement OptV1
-    if(1){
-        /// Serial
-        for (int iel = 0; iel < n_vols; iel++) {
-            int el_dof = el_n_dofs[iel];
-            int pos = cols_first_index[iel];
-            int mat_pos = mat_indexes[iel];
-
-            TPZFMatrix<REAL> Kel(n_state*el_dof, n_state*el_dof, 0.);
-//            TPZManVector<REAL,64> kg_el(el_dof*el_dof*n_state*n_state);
-            
-            for (int i_dof = 0; i_dof < el_dof; i_dof++){
-                int i_dest_1 = indexes[pos+i_dof];
-                int j_dest_1 = indexes[pos+i_dof+n_cols];
-                
-                for (int j_dof = 0; j_dof < el_dof; j_dof++){
-                    Kel.PutVal(2*i_dof, 2*j_dof, Kxx[mat_pos+i_dof*el_dof+j_dof]);
-                    Kel.PutVal(2*i_dof + 1, 2*j_dof + 1, Kyy[mat_pos+i_dof*el_dof+j_dof]);
-                    Kel.PutVal(2*i_dof, 2*j_dof + 1, Kxy[mat_pos+i_dof*el_dof+j_dof]);
-                    Kel.PutVal(2*i_dof + 1, 2*j_dof, Kxy[mat_pos+i_dof+j_dof*el_dof]);
-                    
-                    STATE val_xx = Kxx[mat_pos+i_dof*el_dof+j_dof];
-                    STATE val_yy = Kyy[mat_pos+i_dof*el_dof+j_dof];
-                    STATE val_xy = Kxy[mat_pos+i_dof*el_dof+j_dof];
-//                    std::cout << "val_xx = " << val_xx << std::endl;
-                    int i_dest_2 = indexes[pos+j_dof];
-                    int j_dest_2 = indexes[pos+j_dof+n_cols];
-                    
-                    val_xx += stiff->GetVal(i_dest_1, i_dest_2);
-                    val_yy += stiff->GetVal(j_dest_1, j_dest_2);
-                    val_xy += stiff->GetVal(i_dest_1, j_dest_2);
-                    
-                    stiff->PutVal(i_dest_1, i_dest_2, val_xx);
-                    stiff->PutVal(j_dest_1, j_dest_2, val_yy);
-                    stiff->PutVal(i_dest_1, j_dest_2, val_xy);
-                }
-            }
-//            TPZCompEl *cel = fMesh->Element(iel);
-//            TPZElementMatrix ek(fMesh,TPZElementMatrix::EK);
-//            TPZElementMatrix ef(fMesh,TPZElementMatrix::EF);
-//            cel->CalcStiff(ek, ef);
-//
-//            TPZFMatrix<REAL> res(n_state*el_dof, n_state*el_dof);
-//            ek.fMat.Print(std::cout);
-//            Kel.Print(std::cout);
-//            res = ek.fMat - Kel;
-//            res.Print(std::cout);
-        }
-    
-//        std::ofstream out("kg.txt");
-//        stiff->Print("kg = ",out,EMathematicaInput);
-//        out.flush();
-        
-    }
-    
-
-    
     Assemble(*stiff,rhs,guiInterface);
-//    std::ofstream out("Kref.txt");
-//    stiff->Print("Kref = ",out,EMathematicaInput);
-//    out.flush();
-    mat->ComputeDiagonal();
     return stiff;
 }
 
@@ -190,21 +83,102 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 
 }
 
-void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface){
-    TPZSymetricSpStructMatrix::Assemble(mat,rhs, guiInterface);
+void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
 
-//    auto it_end = fSparseMatrixLinear.MapEnd();
-//    
-//    for (auto it = fSparseMatrixLinear.MapBegin(); it!=it_end; it++) {
-//        int64_t row = it->first.first;
-//        int64_t col = it->first.second;
-//        STATE val = it->second;
-//        STATE vol_val = mat.GetVal(row, col);
-//        vol_val += val; /// TODO:: Add val
-//        mat.PutVal(row, col, vol_val);
-//    }
+    TPZSYsmpMatrix<STATE> &stiff = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
 
-    rhs+=fRhsLinear;
+    int n_state = 2; /// or dim
+    TPZVec<STATE> &K_g = stiff.A();
+    TPZVec<int> &indexes = fCoefToGradSol.Indexes();
+    int64_t n_vols = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
+    int64_t n_cols = fCoefToGradSol.IrregularBlocksMatrix().Cols();
+    TPZVec<int> el_n_dofs = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColSizes; // Making copy here!
+    TPZVec<int> mat_indexes = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition; // Making copy here!
+    TPZVec<int> cols_first_index = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColFirstIndex;
+
+    TPZVec<REAL> depxx;
+    TPZVec<REAL> depyy;
+    TPZVec<REAL> depxy;
+    Dep(depxx, depyy, depxy);
+    
+#ifdef USING_CUDA
+    int nblocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
+    TPZVecGPU<REAL> Kxx(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
+    TPZVecGPU<REAL> Kyy(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
+    TPZVecGPU<REAL> Kxy(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
+    
+    TPZVecGPU<REAL> d_dep(depxx.size());
+    
+    d_dep.set(&depxx[0], depxx.size());
+    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(d_dep.getData(), Kxx.getData());
+    
+    d_dep.set(&depyy[0], depyy.size());
+    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(d_dep.getData(), Kyy.getData());
+    
+    d_dep.set(&depxy[0], depxy.size());
+    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(d_dep.getData(), Kxy.getData());
+#else
+    int nblocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
+    TPZVec<REAL> Kxx(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
+    TPZVec<REAL> Kyy(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
+    TPZVec<REAL> Kxy(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
+    
+    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(&depxx[0], &Kxx[0]); /// Can
+    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(&depyy[0], &Kyy[0]);
+    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(&depxy[0], &Kxy[0]);
+    
+#endif
+    
+    /// implement OptV1
+    if (1) {
+
+        /// Serial
+        for (int iel = 0; iel < n_vols; iel++) {
+            int el_dof = el_n_dofs[iel];
+            int pos = cols_first_index[iel];
+            int mat_pos = mat_indexes[iel];
+
+            for (int i_dof = 0; i_dof < el_dof; i_dof++) {
+                int i_dest_1 = indexes[pos + i_dof];
+                int j_dest_1 = indexes[pos + i_dof + n_cols];
+
+                for (int j_dof = 0; j_dof < el_dof; j_dof++) {
+
+                    STATE val_xx = Kxx[mat_pos + i_dof * el_dof + j_dof];
+                    STATE val_yy = Kyy[mat_pos + i_dof * el_dof + j_dof];
+                    STATE val_xy = Kxy[mat_pos + i_dof * el_dof + j_dof];
+                    STATE val_yx = Kxy[mat_pos + i_dof + j_dof * el_dof];
+
+                    int i_dest_2 = indexes[pos + j_dof];
+                    int j_dest_2 = indexes[pos + j_dof + n_cols];
+
+                    val_xx += stiff.GetVal(i_dest_1, i_dest_2);
+                    val_yy += stiff.GetVal(j_dest_1, j_dest_2);
+                    val_xy += stiff.GetVal(i_dest_1, j_dest_2);
+                    val_yx += stiff.GetVal(j_dest_1, i_dest_2);
+
+                    if (i_dest_1 <= i_dest_2) stiff.PutVal(i_dest_1, i_dest_2, val_xx);
+                    if (j_dest_1 <= j_dest_2) stiff.PutVal(j_dest_1, j_dest_2, val_yy);
+                    if (i_dest_1 <= j_dest_2) stiff.PutVal(i_dest_1, j_dest_2, val_xy);
+                    if (j_dest_1 <= i_dest_2) stiff.PutVal(j_dest_1, i_dest_2, val_yx);
+                }
+            }
+        }
+
+    }
+
+    auto it_end = fSparseMatrixLinear.MapEnd();
+
+    for (auto it = fSparseMatrixLinear.MapBegin(); it!=it_end; it++) {
+        int64_t row = it->first.first;
+        int64_t col = it->first.second;
+        STATE val = it->second;
+        STATE vol_val = mat.GetVal(row, col);
+        vol_val += val; /// TODO:: Add val
+        mat.PutVal(row, col, vol_val);
+    }
+
+    Assemble(rhs,guiInterface);
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface){
@@ -248,9 +222,6 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TP
     fCoefToGradSol.MultiplyTranspose(sigma, rhs);
 #endif
     rhs += fRhsLinear;
-
-
-
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::AssembleBoundaryData(std::set<int> &boundary_matids) {

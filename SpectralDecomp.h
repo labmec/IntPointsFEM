@@ -139,9 +139,12 @@ void Normalize(double *sigma, double &maxel) {
             maxel = sigma[i];
         }
     }
-    for (int i = 0; i < 4; i++) {
-        sigma[i] /= maxel;
+    if(maxel != 0) {
+        for (int i = 0; i < 4; i++) {
+            sigma[i] /= maxel;
+        }
     }
+
 }
 
 void Interval(double *sigma, double *interval) {

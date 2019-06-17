@@ -65,7 +65,7 @@ int main(int argc, char *argv[]) {
     int nt = omp_get_max_threads();
     std::cout << "Using " << nt << " threads.\n" << std::endl;
 #endif
-    int pOrder = 1; // Computational mesh order
+    int pOrder = 2; // Computational mesh order
     bool render_vtk_Q = false;
     
 // Generates the geometry
@@ -135,7 +135,7 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
         delta_du = analysis->Solution();
         du += delta_du;
         analysis->LoadSolution(du);
-        analysis->AssembleResidual();
+        analysis->Assemble();
         norm_delta_du = Norm(delta_du);
         norm_res = Norm(analysis->Rhs());
         stop_criterion_Q = norm_res < tolerance;
@@ -148,13 +148,13 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
             std::cout << "Number of iterations = " << i + 1 << std::endl;
             break;
         }
-       analysis->Assemble();
+//       analysis->Assemble();
     }
 
-//     if (stop_criterion_Q == false) {
-//         AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
-//         std::cout << "Nonlinear process not converged with residue norm = " << norm_res << std::endl;
-//     }
+     if (stop_criterion_Q == false) {
+         AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
+         std::cout << "Nonlinear process not converged with residue norm = " << norm_res << std::endl;
+     }
 }
 
 TPZAnalysis *Analysis(TPZCompMesh *cmesh, int n_threads) {
@@ -272,7 +272,7 @@ TElastoPlasticData WellboreConfigRK(){
 
     /// Elastic verification -> true
     /// ElastoPlastic verification -> false
-    bool is_elastic_Q = true;
+    bool is_elastic_Q = false;
 
     TPZElasticResponse LER;
     REAL Ey = 2000.0;
@@ -486,7 +486,7 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int p_order, TElastoPlasti
         }
 
         TPZBndCondWithMem<TPZElastoPlasticMem> * bc = new  TPZBndCondWithMem<TPZElastoPlasticMem>(material, bc_id, type, val1, val2);
-//        cmesh->InsertMaterialObject(bc);
+        cmesh->InsertMaterialObject(bc);
 
     }
 
