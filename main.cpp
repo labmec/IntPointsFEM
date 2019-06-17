@@ -7,7 +7,7 @@
 #include "pzpostprocanalysis.h"
 #include "pzfstrmatrix.h"
 
-#include "TPZBndCondWithMem.h"
+#include "TPZBndCondWithMem_impl.h"
 
 #include "TPZMyLambdaExpression.h"
 #include "TPZElastoPlasticIntPointsStructMatrix.h"
