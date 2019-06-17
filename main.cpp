@@ -36,9 +36,6 @@ TElastoPlasticData WellboreConfig();
 /// Material configuration for RK verification
 TElastoPlasticData WellboreConfigRK();
 
-/// Solve using assemble residual of all intg points at once
-void SolutionIntPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance, TElastoPlasticData & wellbore_material);
-
 ///Set Analysis
 TPZAnalysis * Analysis(TPZCompMesh * cmesh, int n_threads);
 
@@ -94,23 +91,6 @@ int main(int argc, char *argv[]) {
        std::string vtk_file = "Approximation.vtk";
        PostProcess(cmesh, wellbore_material, n_threads, vtk_file);
    }
-
-// Creates the computational mesh
-    TPZCompMesh *cmesh_npts = CmeshElastoplasticity(gmesh, pOrder, wellbore_material);
-    TPZAnalysis *analysis_npts = Analysis(cmesh_npts,n_threads);
-    
-// Calculates the solution using all intg points at once
-//    SolutionIntPoints(analysis_npts, n_iterations, tolerance, wellbore_material);
-    if (render_vtk_Q) { //Post process
-#ifdef USING_CUDA
-        std::string vtk_file = "Approximation_IntPointFEM-GPU.vtk";
-#else
-        std::string vtk_file = "Approximation_IntPointFEM-CPU.vtk";
-
-#endif
-        PostProcess(cmesh_npts, wellbore_material, n_threads, vtk_file);
-    }
-
     return 0;
 }
 
@@ -500,51 +480,6 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int p_order, TElastoPlasti
     cmesh->Print(out);
 #endif
     return cmesh;
-}
-
-void SolutionIntPoints(TPZAnalysis * analysis, int n_iterations, REAL tolerance, TElastoPlasticData & wellbore_material){
-    std::cout << "\n\nSolving with IntPointsFEM ...\n" << std::endl;
-    bool stop_criterion_Q = false;
-    REAL norm_res, norm_delta_du;
-    int neq = analysis->Solution().Rows();
-    TPZFMatrix<REAL> du(neq, 1, 0.), delta_du;
-    TPZFMatrix<REAL> rhs(neq, 1, 0.);
-
-    TPZElastoPlasticIntPointsStructMatrix *intPointsStructMatrix = new TPZElastoPlasticIntPointsStructMatrix(analysis->Mesh());
-//
-    std::cout  << "Solving a NLS with DOF = " << neq << std::endl;
-
-
-    analysis->Solution().Zero();
-    analysis->Assemble();
-    for (int i = 0; i < n_iterations; i++) {
-        analysis->Solve();
-        delta_du = analysis->Solution();
-        du += delta_du;
-        analysis->LoadSolution(du);
-        DebugStop();
-//        intPointsStructMatrix->CalcResidual(rhs);
-        norm_delta_du = Norm(delta_du);
-        norm_res = Norm(rhs);
-        stop_criterion_Q = norm_res < tolerance;
-        std::cout << "Nonlinear process :: delta_du norm = " << norm_delta_du << std::endl;
-        std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
-//        PrintMemory(analysis->Mesh());
-        if (stop_criterion_Q) {
-            AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
-//            PrintMemory(analysis->Mesh());
-            std::cout << "Nonlinear process converged with residue norm = " << norm_res << std::endl;
-            std::cout << "Number of iterations = " << i + 1 << std::endl;
-            break;
-        }
-//        analysis->Assemble();
-        analysis->Rhs() = rhs;
-
-    }
-
-    if (stop_criterion_Q == false) {
-        std::cout << "Nonlinear process not converged with residue norm = " << norm_res << std::endl;
-    }
 }
 
 void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_material, int npoints, std::ostream &out, bool euler) {
