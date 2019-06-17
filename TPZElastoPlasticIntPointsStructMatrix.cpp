@@ -88,11 +88,12 @@ TPZMatrix<STATE> *TPZElastoPlasticIntPointsStructMatrix::CreateAssemble(TPZFMatr
     /// implement OptV1
     if(1){
         /// Serial
-        for (int iel = 1; iel < n_vols; iel++) {
+        for (int iel = 0; iel < n_vols; iel++) {
             int el_dof = el_n_dofs[iel];
             int pos = cols_first_index[iel];
             int mat_pos = mat_indexes[iel];
-            
+
+            TPZFMatrix<REAL> Kel(n_state*el_dof, n_state*el_dof, 0.);
 //            TPZManVector<REAL,64> kg_el(el_dof*el_dof*n_state*n_state);
             
             for (int i_dof = 0; i_dof < el_dof; i_dof++){
@@ -100,6 +101,10 @@ TPZMatrix<STATE> *TPZElastoPlasticIntPointsStructMatrix::CreateAssemble(TPZFMatr
                 int j_dest_1 = indexes[pos+i_dof+n_cols];
                 
                 for (int j_dof = 0; j_dof < el_dof; j_dof++){
+                    Kel.PutVal(2*i_dof, 2*j_dof, Kxx[mat_pos+i_dof*el_dof+j_dof]);
+                    Kel.PutVal(2*i_dof + 1, 2*j_dof + 1, Kyy[mat_pos+i_dof*el_dof+j_dof]);
+                    Kel.PutVal(2*i_dof, 2*j_dof + 1, Kxy[mat_pos+i_dof*el_dof+j_dof]);
+                    Kel.PutVal(2*i_dof + 1, 2*j_dof, Kxy[mat_pos+i_dof+j_dof*el_dof]);
                     
                     STATE val_xx = Kxx[mat_pos+i_dof*el_dof+j_dof];
                     STATE val_yy = Kyy[mat_pos+i_dof*el_dof+j_dof];
@@ -117,6 +122,16 @@ TPZMatrix<STATE> *TPZElastoPlasticIntPointsStructMatrix::CreateAssemble(TPZFMatr
                     stiff->PutVal(i_dest_1, j_dest_2, val_xy);
                 }
             }
+//            TPZCompEl *cel = fMesh->Element(iel);
+//            TPZElementMatrix ek(fMesh,TPZElementMatrix::EK);
+//            TPZElementMatrix ef(fMesh,TPZElementMatrix::EF);
+//            cel->CalcStiff(ek, ef);
+//
+//            TPZFMatrix<REAL> res(n_state*el_dof, n_state*el_dof);
+//            ek.fMat.Print(std::cout);
+//            Kel.Print(std::cout);
+//            res = ek.fMat - Kel;
+//            res.Print(std::cout);
         }
     
 //        std::ofstream out("kg.txt");

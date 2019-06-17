@@ -13,9 +13,9 @@ Mesh.SecondOrderLinear = 0;
 wr = 0.1;
 fr = 4.0;
 
-nt = 32;
-nr = 32;
-radial_progression = 1.2725;
+nt = 4;
+nr = 4;
+radial_progression = 1.725;
 
 // center point
 pc = newp; Point(pc) = {0,0,0};
@@ -85,10 +85,10 @@ Transfinite Surface"*";
  EndIf
 
 Physical Surface("Omega") = {the_circle[]};
-//Physical Line("bc_wellbore") = {i_circle[]};  
-//Physical Line("bc_farfield") = {e_circle[]};  
-//Physical Point("fixed_x") = {fixed_x_points[]};
-//Physical Point("fixed_y") = {fixed_y_points[]};
+Physical Line("bc_wellbore") = {i_circle[]};
+Physical Line("bc_farfield") = {e_circle[]};
+Physical Point("fixed_x") = {fixed_x_points[]};
+Physical Point("fixed_y") = {fixed_y_points[]};
 
 
 Coherence Mesh;
