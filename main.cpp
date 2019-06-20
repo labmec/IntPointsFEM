@@ -14,6 +14,7 @@
 #include "TElastoPlasticData.h"
 #include "TRKSolution.h"
 #include "TPZElasticCriterion.h"
+#include <time.h>
 
 #ifdef USING_OMP
 #include "omp.h"
@@ -62,7 +63,7 @@ int main(int argc, char *argv[]) {
     int nt = omp_get_max_threads();
     std::cout << "Using " << nt << " threads.\n" << std::endl;
 #endif
-    int pOrder = 1; // Computational mesh order
+    int pOrder = 2; // Computational mesh order
     bool render_vtk_Q = false;
     
 // Generates the geometry
@@ -76,22 +77,54 @@ int main(int argc, char *argv[]) {
 // Creates the computational mesh
 //    TElastoPlasticData wellbore_material = WellboreConfig(); /// NVB this one is for recurrent usage
     TElastoPlasticData wellbore_material = WellboreConfigRK(); /// NVB this one is just for verification purposes
-    TPZCompMesh *cmesh = CmeshElastoplasticity(gmesh, pOrder, wellbore_material);
+    
+    TPZCompMesh *cmesh;
+    {
+        time_t start,end;
+        time (&start);
+        cmesh = CmeshElastoplasticity(gmesh, pOrder, wellbore_material);
+        time (&end);
+        double dif = difftime (end,start);
+        std::cout << "Calling CmeshElastoplasticity: Elasped time [sec] = " << dif << std::endl;
+    }
+    
 
 // Defines the analysis
     int n_threads = 0;
-//    TPZAnalysis *analysis = Analysis(cmesh,n_threads);
-    TPZAnalysis *analysis = Analysis_IPFEM(cmesh,n_threads);
+    TPZAnalysis *analysis;
+    {
+        time_t start,end;
+        time (&start);
+//        analysis = Analysis(cmesh,n_threads);
+        analysis = Analysis_IPFEM(cmesh,n_threads);
+        time (&end);
+        double dif = difftime (end,start);
+        std::cout << "Calling Analysis_IPFEM: Elasped time [sec] = " << dif << std::endl;
+    }
     
 // Calculates the solution using Newton method
     int n_iterations = 80;
     REAL tolerance = 1.e-3;
-    Solution(analysis, n_iterations, tolerance);
+    {
+        time_t start,end;
+        time (&start);
+        Solution(analysis, n_iterations, tolerance);
+        time (&end);
+        double dif = difftime (end,start);
+        std::cout << "Calling Solution: Elasped time [sec] = " << dif << std::endl;
+    }
 
 // Post process
    if (render_vtk_Q) {
        std::string vtk_file = "Approximation.vtk";
-       PostProcess(cmesh, wellbore_material, n_threads, vtk_file);
+       {
+           time_t start,end;
+           time (&start);
+           PostProcess(cmesh, wellbore_material, n_threads, vtk_file);
+           time (&end);
+           double dif = difftime (end,start);
+           std::cout << "Calling PostProcess: Elasped time [sec] = " << dif << std::endl;
+       }
    }
     return 0;
 }
@@ -109,8 +142,15 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
 
     analysis->Solution().Zero();
     TPZFMatrix<REAL> du(analysis->Solution()), delta_du;
-    analysis->Assemble();
-    return;
+    {
+        time_t start,end;
+        time (&start);
+        analysis->Assemble();
+        time (&end);
+        double dif = difftime (end,start);
+        std::cout << "Calling CreateAssemble and Assemble: Elasped time [sec] = " << dif << std::endl;
+    }
+
     
 // //    analysis->Solver().Matrix()->Print("kip = ",std::cout, EMathematicaInput);
     for (int i = 0; i < n_iterations; i++) {
@@ -118,10 +158,17 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
         delta_du = analysis->Solution();
         du += delta_du;
         analysis->LoadSolution(du);
-        analysis->Assemble();
+        {
+            time_t start,end;
+            time (&start);
+            analysis->AssembleResidual();
+            time (&end);
+            double dif = difftime (end,start);
+            std::cout << "Calling AssembleResidual: Elasped time [sec] = " << dif << std::endl;
+        }
         norm_delta_du = Norm(delta_du);
         norm_res = Norm(analysis->Rhs());
-        stop_criterion_Q = norm_res < tolerance;
+        stop_criterion_Q = norm_res < tolerance && norm_delta_du < tolerance;
         std::cout << "Nonlinear process :: delta_du norm = " << norm_delta_du << std::endl;
         std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
         if (stop_criterion_Q) {
@@ -131,7 +178,15 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
             std::cout << "Number of iterations = " << i + 1 << std::endl;
             break;
         }
-//       analysis->Assemble();
+        {
+            time_t start,end;
+            time (&start);
+            analysis->Assemble();
+            time (&end);
+            double dif = difftime (end,start);
+            std::cout << "Calling Assemble: Elasped time [sec] = " << dif << std::endl;
+        }
+       
     }
 
      if (stop_criterion_Q == false) {

@@ -13,6 +13,7 @@
 #include "TPZIrregularBlocksMatrix.h"
 #include "TPZMyLambdaExpression.h"
 #include "TPZCoefToGradSol.h"
+#include <unordered_map>
 
 
 class TPZElastoPlasticIntPointsStructMatrix : public TPZSymetricSpStructMatrix {
@@ -66,6 +67,8 @@ private:
     TPZVerySparseMatrix<STATE> fSparseMatrixLinear; //-> BC data
 
     TPZFMatrix<STATE> fRhsLinear; //-> BC data
+    
+    std::unordered_map<int64_t,std::unordered_map<int64_t,int64_t>> m_i_j_to_squence;
     
 };
 

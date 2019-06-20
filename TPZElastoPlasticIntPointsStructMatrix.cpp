@@ -21,6 +21,8 @@ TPZStructMatrix * TPZElastoPlasticIntPointsStructMatrix::Clone(){
     return new TPZElastoPlasticIntPointsStructMatrix(*this);
 }
 
+//#define AssemblyInKgVec_Q
+
 TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
 
     if(!isBuilt()) {
@@ -31,6 +33,29 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
     TPZVec<int64_t> elgraphindex;
     fMesh->ComputeElGraph(elgraph,elgraphindex,fMaterialIds); // This method seems to be efficient.
     TPZMatrix<STATE> * mat = SetupMatrixData(elgraph, elgraphindex);
+    
+    
+#ifdef AssemblyInKgVec_Q
+    
+    /// Sparsify global indexes
+    // Filling local std::map
+    TPZSYsmpMatrix<STATE> *stiff = dynamic_cast<TPZSYsmpMatrix<STATE> *> (mat);
+    TPZVec<int64_t> &IA = stiff->IA();
+    TPZVec<int64_t> &JA = stiff->JA();
+    {
+        int64_t n_ia = IA.size();
+        int64_t l = 0;
+        for (int64_t i = 0; i < n_ia - 1 ; i++) {
+            int NNZ = IA[i+1] - IA[i];
+            for (int64_t j = IA[i]; j < NNZ + IA[i]; j++) {
+                m_i_j_to_squence[i][JA[j]] = l;
+                l++;
+            }
+        }
+        
+    }
+#endif
+    
     return mat;
 }
 
@@ -83,12 +108,12 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 
 }
 
+
+
 void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
 
     TPZSYsmpMatrix<STATE> &stiff = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
-    TPZVec<STATE> &K_g = stiff.A();
-    TPZVec<int64_t> &IA = stiff.IA();
-    TPZVec<int64_t> &JA = stiff.JA();
+    TPZVec<STATE> &Kg = stiff.A();
     
     TPZVec<int> &indexes = fCoefToGradSol.Indexes();
     int64_t n_vols = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
@@ -131,8 +156,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     
 #endif
     
-    /// Sparsify elementary matrixes
-    /// implement OptV1
+    /// implement OptV2
     if (1) {
 
         /// Serial
@@ -149,23 +173,30 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 
                 for (int j_dof = 0; j_dof < el_dof; j_dof++) {
 
+                    int i_dest_2 = indexes[pos + j_dof];
+                    int j_dest_2 = indexes[pos + j_dof + n_cols];
+                    
                     STATE val_xx = Kxx[mat_pos + i_dof * el_dof + j_dof];
                     STATE val_yy = Kyy[mat_pos + i_dof * el_dof + j_dof];
                     STATE val_xy = Kxy[mat_pos + i_dof * el_dof + j_dof];
                     STATE val_yx = Kxy[mat_pos + i_dof + j_dof * el_dof];
-
-                    int i_dest_2 = indexes[pos + j_dof];
-                    int j_dest_2 = indexes[pos + j_dof + n_cols];
-
+                    
+#ifdef AssemblyInKgVec_Q
+                    if (i_dest_1 <= i_dest_2) Kg[m_i_j_to_squence[i_dest_1][i_dest_2]] += val_xx;
+                    if (i_dest_1 <= i_dest_2) Kg[m_i_j_to_squence[j_dest_1][j_dest_2]] += val_yy;
+                    if (i_dest_1 <= i_dest_2) Kg[m_i_j_to_squence[i_dest_1][j_dest_2]] += val_xy;
+                    if (i_dest_1 <= i_dest_2) Kg[m_i_j_to_squence[j_dest_1][i_dest_2]] += val_yx;
+#else
                     val_xx += stiff.GetVal(i_dest_1, i_dest_2);
                     val_yy += stiff.GetVal(j_dest_1, j_dest_2);
                     val_xy += stiff.GetVal(i_dest_1, j_dest_2);
                     val_yx += stiff.GetVal(j_dest_1, i_dest_2);
-
+                    
                     if (i_dest_1 <= i_dest_2) stiff.PutVal(i_dest_1, i_dest_2, val_xx);
                     if (j_dest_1 <= j_dest_2) stiff.PutVal(j_dest_1, j_dest_2, val_yy);
                     if (i_dest_1 <= j_dest_2) stiff.PutVal(i_dest_1, j_dest_2, val_xy);
                     if (j_dest_1 <= i_dest_2) stiff.PutVal(j_dest_1, i_dest_2, val_yx);
+#endif
                 }
             }
         }
@@ -173,25 +204,25 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     }
 
     
-    {
-        int n_ia = IA.size();
-        int n_ja = JA.size();
-        int l = 0;
-        std::ofstream kg_out("kg.txt");
-        for (int i = 0; i < n_ia - 1 ; i++) {
-            int NNZ = IA[i+1] - IA[i];
-            kg_out << "Row i = " << i << ", NNZ = " << IA[i+1] - IA[i] << " " ;
-            kg_out << "IA[" << i << "] = " << IA[i] << " " ;
-            for (int j = IA[i]; j < NNZ + IA[i]; j++) {
-                kg_out << "     JA[" << j << "] = " << JA[j] << " " ;
-                kg_out << "     k " << stiff.GetVal(i, JA[j]) << " brother = " <<  K_g[l] << std::endl;
-                l++;
-            }
-        }
-        for (int l = 0; l < K_g.size(); l++) {
-            kg_out << "Kg[l] = " << K_g[l] << std::endl;
-        }
-    }
+//    {
+//        int n_ia = IA.size();
+//        int n_ja = JA.size();
+//        int l = 0;
+//        std::ofstream kg_out("kg.txt");
+//        for (int i = 0; i < n_ia - 1 ; i++) {
+//            int NNZ = IA[i+1] - IA[i];
+//            kg_out << "Row i = " << i << ", NNZ = " << IA[i+1] - IA[i] << " " ;
+//            kg_out << "IA[" << i << "] = " << IA[i] << std::endl;
+//            for (int j = IA[i]; j < NNZ + IA[i]; j++) {
+//                kg_out << "     JA[" << j << "] = " << JA[j] << " " ;
+//                kg_out << "     k " << stiff.GetVal(i, JA[j]) << " and K_g[" << l << "] = " <<  Kg[l] << std::endl;
+//                l++;
+//            }
+//        }
+//        for (int l = 0; l < Kg.size(); l++) {
+//            kg_out << " K_g[" << l << "] = " <<  Kg[l] << std::endl;
+//        }
+//    }
     
     auto it_end = fSparseMatrixLinear.MapEnd();
 
@@ -199,9 +230,13 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
         int64_t row = it->first.first;
         int64_t col = it->first.second;
         STATE val = it->second;
+#ifdef AssemblyInKgVec_Q
+        Kg[m_i_j_to_squence[row][col]] += val;
+#else
         STATE vol_val = mat.GetVal(row, col);
-        vol_val += val; /// TODO:: Add val
+        vol_val += val;
         mat.PutVal(row, col, vol_val);
+#endif
     }
 
     Assemble(rhs,guiInterface);
