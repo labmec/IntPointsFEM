@@ -69,8 +69,10 @@ int main(int argc, char *argv[]) {
     std::string source_dir = SOURCE_DIR;
     std::string msh_file = source_dir + "/gmsh/wellbore.msh";
     TPZGeoMesh *gmesh = ReadGeometry(msh_file);
+#ifdef PZDEBUG2
     PrintGeometry(gmesh);
-
+#endif
+    
 // Creates the computational mesh
 //    TElastoPlasticData wellbore_material = WellboreConfig(); /// NVB this one is for recurrent usage
     TElastoPlasticData wellbore_material = WellboreConfigRK(); /// NVB this one is just for verification purposes
@@ -108,7 +110,8 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
     analysis->Solution().Zero();
     TPZFMatrix<REAL> du(analysis->Solution()), delta_du;
     analysis->Assemble();
-
+    return;
+    
 // //    analysis->Solver().Matrix()->Print("kip = ",std::cout, EMathematicaInput);
     for (int i = 0; i < n_iterations; i++) {
         analysis->Solve();
@@ -252,7 +255,7 @@ TElastoPlasticData WellboreConfigRK(){
 
     /// Elastic verification -> true
     /// ElastoPlastic verification -> false
-    bool is_elastic_Q = false;
+    bool is_elastic_Q = true;
 
     TPZElasticResponse LER;
     REAL Ey = 2000.0;
@@ -475,7 +478,7 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int p_order, TElastoPlasti
     cmesh->ApproxSpace().CreateWithMemory(true);
     cmesh->AutoBuild();
 
-#ifdef PZDEBUG
+#ifdef PZDEBUG2
     std::ofstream out("cmesh.txt");
     cmesh->Print(out);
 #endif

@@ -13,9 +13,17 @@ Mesh.SecondOrderLinear = 0;
 wr = 0.1;
 fr = 4.0;
 
-nt = 4;
-nr = 4;
-radial_progression = 1.725;
+LargeCBurdenQ = 0;
+
+If(LargeCBurdenQ)
+	nt = 256;
+	nr = 256;
+	radial_progression = 1.01725;
+Else
+	nt = 4;
+	nr = 4;
+	radial_progression = 6.25;	
+EndIf
 
 // center point
 pc = newp; Point(pc) = {0,0,0};

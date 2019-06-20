@@ -24,12 +24,12 @@ TPZStructMatrix * TPZElastoPlasticIntPointsStructMatrix::Clone(){
 TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
 
     if(!isBuilt()) {
-        this->SetUpDataStructure();
+        this->SetUpDataStructure(); // When basis functions are computed and storaged
     }
     
     TPZStack<int64_t> elgraph;
     TPZVec<int64_t> elgraphindex;
-    fMesh->ComputeElGraph(elgraph,elgraphindex,fMaterialIds);
+    fMesh->ComputeElGraph(elgraph,elgraphindex,fMaterialIds); // This method seems to be efficient.
     TPZMatrix<STATE> * mat = SetupMatrixData(elgraph, elgraphindex);
     return mat;
 }
@@ -37,7 +37,7 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
 TPZMatrix<STATE> *TPZElastoPlasticIntPointsStructMatrix::CreateAssemble(TPZFMatrix<STATE> &rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
 
     int64_t neq = fMesh->NEquations();
-    TPZMatrix<STATE> *stiff = Create(); ///
+    TPZMatrix<STATE> *stiff = Create(); // @TODO:: Requires optimization.
     rhs.Redim(neq,1);
     Assemble(*stiff,rhs,guiInterface);
     return stiff;
@@ -99,7 +99,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     TPZVec<REAL> depxx;
     TPZVec<REAL> depyy;
     TPZVec<REAL> depxy;
-    Dep(depxx, depyy, depxy);
+    Dep(depxx, depyy, depxy); // @TODO:: Requires optimization.
     
 #ifdef USING_CUDA
     int nblocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
@@ -123,7 +123,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     TPZVec<REAL> Kyy(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
     TPZVec<REAL> Kxy(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
     
-    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(&depxx[0], &Kxx[0]); /// Can
+    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(&depxx[0], &Kxx[0]); // @TODO:: Requires optimization.
     fCoefToGradSol.IrregularBlocksMatrix().KMatrix(&depyy[0], &Kyy[0]);
     fCoefToGradSol.IrregularBlocksMatrix().KMatrix(&depxy[0], &Kxy[0]);
     
