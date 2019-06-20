@@ -21,7 +21,7 @@ TPZStructMatrix * TPZElastoPlasticIntPointsStructMatrix::Clone(){
     return new TPZElastoPlasticIntPointsStructMatrix(*this);
 }
 
-//#define AssemblyInKgVec_Q
+#define AssemblyInKgVec_Q
 
 TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
 
@@ -48,7 +48,7 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
         for (int64_t i = 0; i < n_ia - 1 ; i++) {
             int NNZ = IA[i+1] - IA[i];
             for (int64_t j = IA[i]; j < NNZ + IA[i]; j++) {
-                m_i_j_to_squence[i][JA[j]] = l;
+                m_i_j_to_sequence[i][JA[j]] = l;
                 l++;
             }
         }
@@ -90,12 +90,12 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 
     TPZVec<int> indexes;
     this->SetUpIndexes(elindex_domain, indexes);
-    fCoefToGradSol.SetIndexes(indexes);
+    fCoefToGradSol.SetDoFIndexes(indexes);
 
     TPZVec<int> coloredindexes;
     int ncolor;
     this->ColoredIndexes(elindex_domain, indexes, coloredindexes, ncolor);
-    fCoefToGradSol.SetIndexesColor(coloredindexes);
+    fCoefToGradSol.SetColorIndexes(coloredindexes);
     fCoefToGradSol.SetNColors(ncolor);
 
     AssembleBoundaryData(boundary_matids);
@@ -115,12 +115,12 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     TPZSYsmpMatrix<STATE> &stiff = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
     TPZVec<STATE> &Kg = stiff.A();
     
-    TPZVec<int> &indexes = fCoefToGradSol.Indexes();
+    TPZVec<int> &indexes = fCoefToGradSol.DoFIndexes();
     int64_t n_vols = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
     int64_t n_cols = fCoefToGradSol.IrregularBlocksMatrix().Cols();
-    TPZVec<int> el_n_dofs = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColSizes; // Making copy here!
-    TPZVec<int> mat_indexes = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition; // Making copy here!
-    TPZVec<int> cols_first_index = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColFirstIndex;
+    TPZVec<int> & el_n_dofs = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColSizes;
+    TPZVec<int> & mat_indexes = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition;
+    TPZVec<int> & cols_first_index = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColFirstIndex;
 
     TPZVec<REAL> depxx;
     TPZVec<REAL> depyy;
@@ -182,10 +182,10 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
                     STATE val_yx = Kxy[mat_pos + i_dof + j_dof * el_dof];
                     
 #ifdef AssemblyInKgVec_Q
-                    if (i_dest_1 <= i_dest_2) Kg[m_i_j_to_squence[i_dest_1][i_dest_2]] += val_xx;
-                    if (i_dest_1 <= i_dest_2) Kg[m_i_j_to_squence[j_dest_1][j_dest_2]] += val_yy;
-                    if (i_dest_1 <= i_dest_2) Kg[m_i_j_to_squence[i_dest_1][j_dest_2]] += val_xy;
-                    if (i_dest_1 <= i_dest_2) Kg[m_i_j_to_squence[j_dest_1][i_dest_2]] += val_yx;
+                    if (i_dest_1 <= i_dest_2) Kg[m_i_j_to_sequence[i_dest_1][i_dest_2]] += val_xx;
+                    if (i_dest_1 <= i_dest_2) Kg[m_i_j_to_sequence[j_dest_1][j_dest_2]] += val_yy;
+                    if (i_dest_1 <= i_dest_2) Kg[m_i_j_to_sequence[i_dest_1][j_dest_2]] += val_xy;
+                    if (i_dest_1 <= i_dest_2) Kg[m_i_j_to_sequence[j_dest_1][i_dest_2]] += val_yx;
 #else
                     val_xx += stiff.GetVal(i_dest_1, i_dest_2);
                     val_yy += stiff.GetVal(j_dest_1, j_dest_2);
@@ -231,7 +231,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
         int64_t col = it->first.second;
         STATE val = it->second;
 #ifdef AssemblyInKgVec_Q
-        Kg[m_i_j_to_squence[row][col]] += val;
+        Kg[m_i_j_to_sequence[row][col]] += val;
 #else
         STATE vol_val = mat.GetVal(row, col);
         vol_val += val;
@@ -414,20 +414,22 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIndexes(TPZStack<int> &elindex_
         TPZCompEl *cel = fMesh->Element(elindex_domain[iel]);
         TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement *>(cel);
         if (!cel_inter) DebugStop();
+        TPZGeoEl * gel = cel->Reference();
+        if (!gel) DebugStop();
+        
         TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
 
         int64_t npts = int_rule->NPoints(); // number of integration points of the element
         int64_t dim = cel_inter->Dimension(); //dimension of the element
 
-        TPZMaterialData data;
-        cel_inter->InitMaterialData(data);
-
+        TPZFMatrix<REAL> jac,axes, jacinv;
+        REAL detjac;
         for (int64_t ipts = 0; ipts < npts; ipts++) {
             TPZVec<REAL> qsi(dim);
             REAL w;
             int_rule->Point(ipts, qsi, w);
-            cel_inter->ComputeRequiredData(data, qsi);
-            weight[wit] = w * std::abs(data.detjac);
+            gel->Jacobian(qsi, jac, axes, detjac, jacinv);
+            weight[wit] = w * std::abs(detjac);
             wit++;
         }
 

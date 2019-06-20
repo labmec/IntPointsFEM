@@ -5,14 +5,14 @@
 #include "TPZCoefToGradSol.h"
 #include "pzcmesh.h"
 
-TPZCoefToGradSol::TPZCoefToGradSol() : fBlockMatrix(0,0), fNColor(-1), fIndexes(0), fIndexesColor(0) {
+TPZCoefToGradSol::TPZCoefToGradSol() : fBlockMatrix(0,0), fNColor(-1), fDoFIndexes(0), fColorIndexes(0) {
 #ifdef USING_CUDA
     dIndexes.resize(0);
     dIndexesColor.resize(0);
 #endif
 }
 
-TPZCoefToGradSol::TPZCoefToGradSol(TPZIrregularBlocksMatrix &irregularBlocksMatrix) : fBlockMatrix(0,0), fNColor(-1), fIndexes(0), fIndexesColor(0) {
+TPZCoefToGradSol::TPZCoefToGradSol(TPZIrregularBlocksMatrix &irregularBlocksMatrix) : fBlockMatrix(0,0), fNColor(-1), fDoFIndexes(0), fColorIndexes(0) {
     SetIrregularBlocksMatrix(irregularBlocksMatrix);
 }
 
@@ -46,7 +46,7 @@ void TPZCoefToGradSol::Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &grad_u
     int64_t cols = fBlockMatrix.Cols();
 
     TPZFMatrix<REAL> gather_solution(dim * cols, 1);
-    cblas_dgthr(dim * cols, coef, &gather_solution(0, 0), &fIndexes[0]);
+    cblas_dgthr(dim * cols, coef, &gather_solution(0, 0), &fDoFIndexes[0]);
 
     grad_u.Resize(dim * rows, 1);
 
@@ -104,7 +104,7 @@ void TPZCoefToGradSol::MultiplyTranspose(TPZFMatrix<REAL> &sigma, TPZFMatrix<REA
     fBlockMatrix.MultiplyVector(&sigma(rows, 0), &forces(cols, 0), true);
 
     // Assemble forces
-    cblas_dsctr(dim * cols, forces, &fIndexesColor[0], &res(0,0));
+    cblas_dsctr(dim * cols, forces, &fColorIndexes[0], &res(0,0));
 
     int64_t colorassemb = ncolor / 2.;
     while (colorassemb > 0) {

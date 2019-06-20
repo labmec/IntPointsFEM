@@ -68,7 +68,7 @@ private:
 
     TPZFMatrix<STATE> fRhsLinear; //-> BC data
     
-    std::unordered_map<int64_t,std::unordered_map<int64_t,int64_t>> m_i_j_to_squence;
+    std::unordered_map<int64_t,std::unordered_map<int64_t,int64_t>> m_i_j_to_sequence;
     
 };
 

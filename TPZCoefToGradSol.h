@@ -21,6 +21,7 @@
 class TPZCoefToGradSol {
 
 public:
+    
     TPZCoefToGradSol();
 
     TPZCoefToGradSol(TPZIrregularBlocksMatrix &irregularBlocksMatrix);
@@ -38,20 +39,20 @@ public:
 
     void MultiplyTranspose(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &res);
 
-    void SetIndexes(TPZVec<int> indexes) {
-        fIndexes = indexes;
+    void SetDoFIndexes(TPZVec<int> dof_indexes) {
+        fDoFIndexes = dof_indexes;
     }
 
-    void SetIndexesColor(TPZVec<int> indexescolor) {
-        fIndexesColor = indexescolor;
+    void SetColorIndexes(TPZVec<int> color_indexes) {
+        fColorIndexes = color_indexes;
     }
     
-    TPZVec<int> & Indexes() {
-        return fIndexes;
+    TPZVec<int> & DoFIndexes() {
+        return fDoFIndexes;
     }
     
-    TPZVec<int> & IndexesColor() {
-       return fIndexesColor;
+    TPZVec<int> & ColorIndexes() {
+       return fColorIndexes;
     }
 
     void SetNColors(int ncolor) {
@@ -66,13 +67,17 @@ public:
 
 private:
     
+    /// Irregular block matrix containing spatial gradients for scalar basis functions of order k
     TPZIrregularBlocksMatrix fBlockMatrix;
 
+    /// Number of colors grouping no adjacent elements
     int64_t fNColor; //needed to do the assembly
 
-    TPZVec<int> fIndexes; //needed to do the gather operation
+    /// Degree of Freedom indexes organized element by element with stride ndof
+    TPZVec<int> fDoFIndexes; // needed to do the gather operation
 
-    TPZVec<int> fIndexesColor; //nedeed to scatter operation
+    /// Color indexes organized element by element with stride ndof
+    TPZVec<int> fColorIndexes; //nedeed to scatter operation
 
 #ifdef USING_CUDA
     TPZVecGPU<int> dIndexes;
