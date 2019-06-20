@@ -86,9 +86,10 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
 
     TPZSYsmpMatrix<STATE> &stiff = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
-
-    int n_state = 2; /// or dim
     TPZVec<STATE> &K_g = stiff.A();
+    TPZVec<int64_t> &IA = stiff.IA();
+    TPZVec<int64_t> &JA = stiff.JA();
+    
     TPZVec<int> &indexes = fCoefToGradSol.Indexes();
     int64_t n_vols = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
     int64_t n_cols = fCoefToGradSol.IrregularBlocksMatrix().Cols();
@@ -118,6 +119,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     d_dep.set(&depxy[0], depxy.size());
     fCoefToGradSol.IrregularBlocksMatrix().KMatrix(d_dep.getData(), Kxy.getData());
 #else
+    
     int nblocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
     TPZVec<REAL> Kxx(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
     TPZVec<REAL> Kyy(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
@@ -129,16 +131,19 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     
 #endif
     
+    /// Sparsify elementary matrixes
     /// implement OptV1
     if (1) {
 
         /// Serial
         for (int iel = 0; iel < n_vols; iel++) {
+            
             int el_dof = el_n_dofs[iel];
             int pos = cols_first_index[iel];
             int mat_pos = mat_indexes[iel];
 
             for (int i_dof = 0; i_dof < el_dof; i_dof++) {
+                
                 int i_dest_1 = indexes[pos + i_dof];
                 int j_dest_1 = indexes[pos + i_dof + n_cols];
 
@@ -167,6 +172,27 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 
     }
 
+    
+    {
+        int n_ia = IA.size();
+        int n_ja = JA.size();
+        int l = 0;
+        std::ofstream kg_out("kg.txt");
+        for (int i = 0; i < n_ia - 1 ; i++) {
+            int NNZ = IA[i+1] - IA[i];
+            kg_out << "Row i = " << i << ", NNZ = " << IA[i+1] - IA[i] << " " ;
+            kg_out << "IA[" << i << "] = " << IA[i] << " " ;
+            for (int j = IA[i]; j < NNZ + IA[i]; j++) {
+                kg_out << "     JA[" << j << "] = " << JA[j] << " " ;
+                kg_out << "     k " << stiff.GetVal(i, JA[j]) << " brother = " <<  K_g[l] << std::endl;
+                l++;
+            }
+        }
+        for (int l = 0; l < K_g.size(); l++) {
+            kg_out << "Kg[l] = " << K_g[l] << std::endl;
+        }
+    }
+    
     auto it_end = fSparseMatrixLinear.MapEnd();
 
     for (auto it = fSparseMatrixLinear.MapBegin(); it!=it_end; it++) {

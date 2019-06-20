@@ -20,9 +20,9 @@ If(LargeCBurdenQ)
 	nr = 256;
 	radial_progression = 1.01725;
 Else
-	nt = 4;
-	nr = 4;
-	radial_progression = 6.25;	
+	nt = 2;
+	nr = 3;
+	radial_progression = 10.25;	
 EndIf
 
 // center point
