@@ -9,7 +9,7 @@
 
 #include "TPZBndCondWithMem_impl.h"
 
-#include "TPZMyLambdaExpression.h"
+#include "TPZConstitutiveLawProcessor.h"
 #include "TPZElastoPlasticIntPointsStructMatrix.h"
 #include "TElastoPlasticData.h"
 #include "TRKSolution.h"

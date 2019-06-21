@@ -15,4 +15,5 @@ void TPZConstitutiveLaw<TMEM>::ComputeFlux(TPZMatWithMem<TMEM> * mat, int int_po
 template <class TMEM>
 void TPZConstitutiveLaw<TMEM>::ComputeFluxAndTanget(TPZMatWithMem<TMEM> * mat, int int_point_index, const TPZVec<STATE> & delta_epsilon, TPZVec<STATE> & sigma, TPZFMatrix<STATE> & dep){
     
+    
 }

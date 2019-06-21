@@ -6,31 +6,31 @@
 #include "omp.h"
 #endif
 
-#include "TPZMyLambdaExpression.h"
+#include "TPZConstitutiveLawProcessor.h"
 #include "SpectralDecomp.h"
 #include "SigmaProjection.h"
 
 
 
 
-TPZMyLambdaExpression::TPZMyLambdaExpression() : fNpts(-1), fWeight(0), fMaterial(), fPlasticStrain(0,0), fMType(0,0), fAlpha(0,0) {
+TPZConstitutiveLawProcessor::TPZConstitutiveLawProcessor() : fNpts(-1), fWeight(0), fMaterial(), fPlasticStrain(0,0), fMType(0,0), fAlpha(0,0) {
 #ifdef USING_CUDA
     fCudaCalls = new TPZCudaCalls();
     dWeight.resize(0);
 #endif
 }
 
-TPZMyLambdaExpression::TPZMyLambdaExpression(int npts, TPZVec<REAL> weight, TPZMaterial *material) : fNpts(-1), fWeight(0), fMaterial(), fPlasticStrain(0,0), fMType(0,0), fAlpha(0,0) {
+TPZConstitutiveLawProcessor::TPZConstitutiveLawProcessor(int npts, TPZVec<REAL> weight, TPZMaterial *material) : fNpts(-1), fWeight(0), fMaterial(), fPlasticStrain(0,0), fMType(0,0), fAlpha(0,0) {
     SetIntPoints(npts);
     SetWeightVector(weight);
     SetMaterial(material);
 }
 
-TPZMyLambdaExpression::~TPZMyLambdaExpression() {
+TPZConstitutiveLawProcessor::~TPZConstitutiveLawProcessor() {
 
 }
 
-TPZMyLambdaExpression::TPZMyLambdaExpression(const TPZMyLambdaExpression &copy) {
+TPZConstitutiveLawProcessor::TPZConstitutiveLawProcessor(const TPZConstitutiveLawProcessor &copy) {
     fNpts = copy.fNpts;
     fWeight = copy.fWeight;
     fMaterial = copy.fMaterial;
@@ -39,7 +39,7 @@ TPZMyLambdaExpression::TPZMyLambdaExpression(const TPZMyLambdaExpression &copy) 
     fAlpha = copy.fAlpha;
 }
 
-TPZMyLambdaExpression &TPZMyLambdaExpression::operator=(const TPZMyLambdaExpression &copy) {
+TPZConstitutiveLawProcessor &TPZConstitutiveLawProcessor::operator=(const TPZConstitutiveLawProcessor &copy) {
     if(&copy == this){
         return *this;
     }
@@ -54,27 +54,27 @@ TPZMyLambdaExpression &TPZMyLambdaExpression::operator=(const TPZMyLambdaExpress
     return *this;
 }
 
-void TPZMyLambdaExpression::SetIntPoints(int64_t npts) {
+void TPZConstitutiveLawProcessor::SetIntPoints(int64_t npts) {
     fNpts = npts;
 }
 
-void TPZMyLambdaExpression::SetWeightVector(TPZVec<REAL> weight) {
+void TPZConstitutiveLawProcessor::SetWeightVector(TPZVec<REAL> weight) {
     fWeight = weight;
 }
 
-void TPZMyLambdaExpression::SetMaterial(TPZMaterial *material) {
+void TPZConstitutiveLawProcessor::SetMaterial(TPZMaterial *material) {
     fMaterial = dynamic_cast<TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse> , TPZElastoPlasticMem> *>(material);
 }
 
-void TPZMyLambdaExpression::ElasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain) {
+void TPZConstitutiveLawProcessor::ElasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain) {
     elastic_strain = delta_strain - fPlasticStrain;
 }
 
-void TPZMyLambdaExpression::PlasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain) {
+void TPZConstitutiveLawProcessor::PlasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain) {
     fPlasticStrain = delta_strain - elastic_strain;
 }
 
-void TPZMyLambdaExpression::ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &sigma) {
+void TPZConstitutiveLawProcessor::ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &sigma) {
     REAL lambda = fMaterial->GetPlasticModel().fER.Lambda();
     REAL mu =  fMaterial->GetPlasticModel().fER.Mu();
 
@@ -92,7 +92,7 @@ void TPZMyLambdaExpression::ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZF
     }
 }
 
-void TPZMyLambdaExpression::ComputeStrain(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &elastic_strain) {
+void TPZConstitutiveLawProcessor::ComputeStrain(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &elastic_strain) {
     REAL E = fMaterial->GetPlasticModel().fER.E();
     REAL nu = fMaterial->GetPlasticModel().fER.Poisson();
 
@@ -109,7 +109,7 @@ void TPZMyLambdaExpression::ComputeStrain(TPZFMatrix<REAL> &sigma, TPZFMatrix<RE
     }
 }
 
-void TPZMyLambdaExpression::SpectralDecomposition(TPZFMatrix<REAL> &sigma_trial, TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &eigenvectors) {
+void TPZConstitutiveLawProcessor::SpectralDecomposition(TPZFMatrix<REAL> &sigma_trial, TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &eigenvectors) {
     REAL maxel;
     TPZVec<REAL> interval(2* fNpts);
 
@@ -124,7 +124,7 @@ void TPZMyLambdaExpression::SpectralDecomposition(TPZFMatrix<REAL> &sigma_trial,
     }
 }
 
-void TPZMyLambdaExpression::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &sigma_projected) {
+void TPZConstitutiveLawProcessor::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &sigma_projected) {
     REAL mc_psi = fMaterial->GetPlasticModel().fYC.Psi();
     REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();
     REAL mc_cohesion = fMaterial->GetPlasticModel().fYC.Cohesion();
@@ -156,7 +156,7 @@ void TPZMyLambdaExpression::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatr
     }
 }
 
-void TPZMyLambdaExpression::StressCompleteTensor(TPZFMatrix<REAL> &sigma_projected, TPZFMatrix<REAL> &eigenvectors, TPZFMatrix<REAL> &sigma){
+void TPZConstitutiveLawProcessor::StressCompleteTensor(TPZFMatrix<REAL> &sigma_projected, TPZFMatrix<REAL> &eigenvectors, TPZFMatrix<REAL> &sigma){
     TPZVec<REAL> weight;
 
     int dim = 2;
@@ -172,7 +172,7 @@ void TPZMyLambdaExpression::StressCompleteTensor(TPZFMatrix<REAL> &sigma_project
     }
 }
 
-void TPZMyLambdaExpression::ComputeSigma(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &sigma) {
+void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &sigma) {
     int dim = 2;
 
     sigma.Resize(dim * dim * fNpts, 1);
@@ -206,7 +206,7 @@ void TPZMyLambdaExpression::ComputeSigma(TPZFMatrix<REAL> &delta_strain, TPZFMat
 }
 
 #ifdef USING_CUDA
-void TPZMyLambdaExpression::ComputeSigma(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &sigma) {
+void TPZConstitutiveLawProcessor::ComputeSigma(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &sigma) {
     // REAL lambda = fMaterial->GetPlasticModel().fER.Lambda();
     // REAL mu =  fMaterial->GetPlasticModel().fER.Mu();
     // REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();

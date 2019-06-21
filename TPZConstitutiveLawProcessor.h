@@ -11,21 +11,22 @@
 #include "TPZCudaCalls.h"
 #endif
 
-#ifndef INTPOINTSFEM_TPZMYLAMBDAEXPRESSION_H
-#define INTPOINTSFEM_TPZMYLAMBDAEXPRESSION_H
+#ifndef INTPOINTSFEM_TPZConstitutiveLawProcessor_H
+#define INTPOINTSFEM_TPZConstitutiveLawProcessor_H
 
-class TPZMyLambdaExpression {
+class TPZConstitutiveLawProcessor {
 
 public:
-    TPZMyLambdaExpression();
+    
+    TPZConstitutiveLawProcessor();
 
-    TPZMyLambdaExpression(int npts, TPZVec<REAL> weight, TPZMaterial *material);
+    TPZConstitutiveLawProcessor(int npts, TPZVec<REAL> weight, TPZMaterial *material);
 
-    ~TPZMyLambdaExpression();
+    ~TPZConstitutiveLawProcessor();
 
-    TPZMyLambdaExpression(const TPZMyLambdaExpression &copy);
+    TPZConstitutiveLawProcessor(const TPZConstitutiveLawProcessor &copy);
 
-    TPZMyLambdaExpression &operator=(const TPZMyLambdaExpression &copy);
+    TPZConstitutiveLawProcessor &operator=(const TPZConstitutiveLawProcessor &copy);
 
     void SetIntPoints(int64_t npts);
 
@@ -74,4 +75,4 @@ private:
 };
 
 
-#endif //INTPOINTSFEM_TPZMYLAMBDAEXPRESSION_H
+#endif //INTPOINTSFEM_TPZConstitutiveLawProcessor_H

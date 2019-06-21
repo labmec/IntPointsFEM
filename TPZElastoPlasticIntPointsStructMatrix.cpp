@@ -2,7 +2,7 @@
 #include "pzintel.h"
 #include "pzskylstrmatrix.h"
 #include "pzmetis.h"
-#include "TPZMyLambdaExpression.h"
+#include "TPZConstitutiveLawProcessor.h"
 #include "TPZElasticCriterion.h"
 
 #ifdef USING_MKL
