@@ -6,6 +6,13 @@
 #include "SpectralDecomp.h"
 #include "SigmaProjection.h"
 
+#ifdef USING_TBB
+#include "/home/natalia/tbb-install/include/tbb/parallel_for.h"
+#include "/home/natalia/tbb-install/include/tbb/tick_count.h"
+#endif
+
+#include "Timer.h"
+
 
 
 
@@ -76,13 +83,30 @@ void TPZMyLambdaExpression::ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZF
 
     int dim = 2;
 
-    for (int64_t ipts=0; ipts < fNpts; ipts++) {
+    int ipts;
+#ifdef USING_TBB
+    tbb::tick_count t0 = tbb::tick_count::now();
+    tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1),[&](size_t ipts)
+#else
+    Timer timer;
+    timer.Start();
+    for (ipts = 0; ipts < fNpts; ipts++)
+#endif
+    {
         //plane strain
         sigma(4 * ipts, 0) = elastic_strain(2 * ipts, 0) * (lambda + 2. * mu) + elastic_strain(2 * ipts + dim * fNpts + 1, 0) * lambda; // Sigma xx
         sigma(4 * ipts + 1, 0) = elastic_strain(2 * ipts + dim * fNpts + 1, 0) * (lambda + 2. * mu) + elastic_strain(2 * ipts, 0) * lambda; // Sigma yy
         sigma(4 * ipts + 2, 0) = lambda * (elastic_strain(2 * ipts, 0) + elastic_strain(2 * ipts + dim * fNpts + 1, 0)); // Sigma zz
         sigma(4 * ipts + 3, 0) = mu * (elastic_strain(2 * ipts + 1, 0) + elastic_strain(2 * ipts + dim * fNpts, 0)); // Sigma xy
     }
+#ifdef USING_TBB
+    );
+    tbb::tick_count t1 = tbb::tick_count::now();
+    std::cout << "Elapsed time: " << (t1-t0).seconds() * 1000 << "ms" << std::endl;
+#else
+    timer.Stop();
+    std::cout << "Elapsed time: " << timer.ElapsedTime() << "ms" << std::endl;
+#endif
 }
 
 void TPZMyLambdaExpression::ComputeStrain(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &elastic_strain) {
