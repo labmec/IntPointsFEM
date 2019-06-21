@@ -75,12 +75,12 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
         return;
     }
     
-    TPZStack<int> elindex_domain;
+    TPZVec<int> element_indexes;
     std::set<int> boundary_matids;
-    this->GetDomainElements(elindex_domain, boundary_matids); // Candidate to tbb or openmp
+    this->GetDomainElements(element_indexes, boundary_matids);
 
     TPZIrregularBlocksMatrix::IrregularBlocks blocksData;
-    this->SetUpIrregularBlocksData(elindex_domain, blocksData);
+    this->SetUpIrregularBlocksData(element_indexes, blocksData);
 
     int64_t rows = blocksData.fRowFirstIndex[blocksData.fNumBlocks];
     int64_t cols = blocksData.fColFirstIndex[blocksData.fNumBlocks];
@@ -88,14 +88,15 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     blocksMatrix.SetBlocks(blocksData);
     fCoefToGradSol.SetIrregularBlocksMatrix(blocksMatrix);
 
-    TPZVec<int> indexes;
-    this->SetUpIndexes(elindex_domain, indexes);
-    fCoefToGradSol.SetDoFIndexes(indexes);
+    TPZVec<int> dof_indexes;
+    this->SetUpIndexes(element_indexes, dof_indexes);
+    fCoefToGradSol.SetDoFIndexes(dof_indexes);
 
-    TPZVec<int> coloredindexes;
+    TPZVec<int> colored_element_indexes;
     int ncolor;
-    this->ColoredIndexes(elindex_domain, indexes, coloredindexes, ncolor);
-    fCoefToGradSol.SetColorIndexes(coloredindexes);
+    
+    this->ColoredIndexes(element_indexes, dof_indexes, colored_element_indexes, ncolor);
+    fCoefToGradSol.SetColorIndexes(colored_element_indexes);
     fCoefToGradSol.SetNColors(ncolor);
 
     AssembleBoundaryData(boundary_matids);
@@ -297,8 +298,9 @@ void TPZElastoPlasticIntPointsStructMatrix::AssembleBoundaryData(std::set<int> &
     str.Assemble(fSparseMatrixLinear, fRhsLinear, guiInterface);
 }
 
-void TPZElastoPlasticIntPointsStructMatrix::GetDomainElements(TPZStack<int> &elindex_domain, std::set<int> &boundary_matids) {
+void TPZElastoPlasticIntPointsStructMatrix::GetDomainElements(TPZVec<int> &element_indexes, std::set<int> &boundary_matids) {
     boundary_matids.clear();
+    TPZStack<int> el_indexes_loc;
     int dim = fMesh->Dimension();
     for (int64_t i = 0; i < fMesh->NElements(); i++) {
         TPZCompEl *cel = fMesh->Element(i);
@@ -308,15 +310,18 @@ void TPZElastoPlasticIntPointsStructMatrix::GetDomainElements(TPZStack<int> &eli
         int mat_id = gel->MaterialId();
         if(gel->Dimension() == dim){
             fMaterialIds.insert(mat_id);
-            elindex_domain.Push(cel->Index());
+            el_indexes_loc.Push(cel->Index());
         } else {
             boundary_matids.insert(mat_id);
         }
     }
+    element_indexes = el_indexes_loc;
+    
 }
 
-void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZStack<int> &elindex_domain, TPZIrregularBlocksMatrix::IrregularBlocks &blocksData) {
-    int nblocks = elindex_domain.size();
+void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZVec<int> &element_indexes, TPZIrregularBlocksMatrix::IrregularBlocks &blocksData) {
+    
+    int nblocks = element_indexes.size();
 
     blocksData.fNumBlocks = nblocks;
     blocksData.fRowSizes.resize(nblocks);
@@ -337,7 +342,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZStack<in
     int64_t rows = 0;
     int64_t cols = 0;
     for(int iel = 0; iel < nblocks; iel++) {
-        TPZCompEl *cel = fMesh->Element(elindex_domain[iel]);
+        TPZCompEl *cel = fMesh->Element(element_indexes[iel]);
         TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement *>(cel);
         if (!cel_inter) DebugStop();
         TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
@@ -360,9 +365,10 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZStack<in
     }
 
     blocksData.fStorage.resize(blocksData.fMatrixPosition[nblocks]);
-
+    TPZFMatrix<REAL> dphiXY;
+    TPZMaterialData data;
     for (int iel = 0; iel < nblocks; ++iel) {
-        TPZCompEl *cel = fMesh->Element(elindex_domain[iel]);
+        TPZCompEl *cel = fMesh->Element(element_indexes[iel]);
         TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement *>(cel);
         if (!cel_inter) DebugStop();
         TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
@@ -374,8 +380,6 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZStack<in
 
         TPZFMatrix<REAL> elmatrix;
         elmatrix.Resize(row_el, col_el);
-
-        TPZMaterialData data;
         cel_inter->InitMaterialData(data);
 
         for (int64_t ipts = 0; ipts < row_el / dim; ipts++) {
@@ -384,7 +388,6 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZStack<in
             int_rule->Point(ipts, qsi, w);
             cel_inter->ComputeRequiredData(data, qsi);
 
-            TPZFMatrix<REAL> dphiXY;
             data.axes.Transpose();
             data.axes.Multiply(data.dphix, dphiXY);
 
@@ -399,7 +402,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZStack<in
     }
 }
 
-void TPZElastoPlasticIntPointsStructMatrix::SetUpIndexes(TPZStack<int> &elindex_domain, TPZVec<int> & dof_indexes) {
+void TPZElastoPlasticIntPointsStructMatrix::SetUpIndexes(TPZVec<int> &element_indexes, TPZVec<int> & dof_indexes) {
     int64_t nblocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
     int64_t rows = fCoefToGradSol.IrregularBlocksMatrix().Rows();
     int64_t cols = fCoefToGradSol.IrregularBlocksMatrix().Cols();
@@ -411,7 +414,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIndexes(TPZStack<int> &elindex_
     int64_t cont2 = 0;
     int64_t wit = 0;
     for (int iel = 0; iel < nblocks; ++iel) {
-        TPZCompEl *cel = fMesh->Element(elindex_domain[iel]);
+        TPZCompEl *cel = fMesh->Element(element_indexes[iel]);
         TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement *>(cel);
         if (!cel_inter) DebugStop();
         TPZGeoEl * gel = cel->Reference();
@@ -461,7 +464,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIndexes(TPZStack<int> &elindex_
     fLambdaExp.SetWeightVector(weight);
 }
 
-void TPZElastoPlasticIntPointsStructMatrix::ColoredIndexes(TPZStack<int> &elindex_domain, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor) {
+void TPZElastoPlasticIntPointsStructMatrix::ColoredIndexes(TPZVec<int> &element_indexes, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor) {
     int64_t nblocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
     int64_t cols = fCoefToGradSol.IrregularBlocksMatrix().Cols();
 
@@ -475,7 +478,7 @@ void TPZElastoPlasticIntPointsStructMatrix::ColoredIndexes(TPZStack<int> &elinde
     {
         int it = 0;
         needstocontinue = false;
-        for (auto iel : elindex_domain) {
+        for (auto iel : element_indexes) {
             TPZCompEl *cel = fMesh->Element(iel);
             if (!cel || cel->Dimension() != fMesh->Dimension()) continue;
 

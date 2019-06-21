@@ -52,13 +52,13 @@ public:
     void Dep(TPZVec<REAL> &depxx, TPZVec<REAL> &depyy, TPZVec<REAL> &depxy);
 
 private:
-    void GetDomainElements(TPZStack<int> &elindex_domain, std::set<int> &boundary_matids);
+    void GetDomainElements(TPZVec<int> &element_indexes, std::set<int> &boundary_matids);
 
-    void SetUpIrregularBlocksData(TPZStack<int> &elindex_domain, TPZIrregularBlocksMatrix::IrregularBlocks &blocksData);
+    void SetUpIrregularBlocksData(TPZVec<int> &element_indexes, TPZIrregularBlocksMatrix::IrregularBlocks &blocksData);
 
-    void SetUpIndexes(TPZStack<int> &elindex_domain, TPZVec<int> & dof_indexes);
+    void SetUpIndexes(TPZVec<int> &element_indexes, TPZVec<int> & dof_indexes);
 
-    void ColoredIndexes(TPZStack<int> &elindex_domain, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor);
+    void ColoredIndexes(TPZVec<int> &element_indexes, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor);
 
     TPZCoefToGradSol fCoefToGradSol;
 

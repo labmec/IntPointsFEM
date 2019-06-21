@@ -13,8 +13,10 @@
 class TPZIrregularBlocksMatrix : public TPZMatrix<REAL> {
 
 public:
+    
     /** @brief Irregular blocks information */
     struct IrregularBlocks {
+        
         int64_t fNumBlocks; //number of blocks
         TPZVec<REAL> fStorage; // blocks values
         TPZVec<int> fRowSizes; // blocks row sizes
@@ -22,8 +24,8 @@ public:
         TPZVec<int> fMatrixPosition; // blocks start position in fStorage vector
         TPZVec<int> fRowFirstIndex; // blocks first row index
         TPZVec<int> fColFirstIndex; // blocks first column index
-        TPZVec<int> fRowRowPosition;
-        TPZVec<int> fColColPosition;
+        TPZVec<int> fRowRowPosition; // An stride required for Kel construction
+        TPZVec<int> fColColPosition; // An stride required for Kel construction
 
         TPZVec<int> fRowPtr; // vector of the start of every row and the end of the last row plus one (this is for CSR format)
         TPZVec<int> fColInd; // vector of column indices for each non-zero element of the matrix (this is for CSR format)
