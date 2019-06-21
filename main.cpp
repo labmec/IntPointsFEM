@@ -15,13 +15,6 @@
 #include "TRKSolution.h"
 #include "TPZElasticCriterion.h"
 
-#ifdef USING_OMP
-#include "omp.h"
-#endif
-
-#ifdef _OPENMP
-#include "omp.h"
-#endif
 
 /// Gmsh mesh
 TPZGeoMesh * ReadGeometry(std::string geometry_file);
@@ -58,10 +51,6 @@ void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData material, int n_threads,
 void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_material, int npoints, std::ostream &out, bool euler = false);
 
 int main(int argc, char *argv[]) {
-#ifdef USING_OMP
-    int nt = omp_get_max_threads();
-    std::cout << "Using " << nt << " threads.\n" << std::endl;
-#endif
     int pOrder = 2; // Computational mesh order
     bool render_vtk_Q = false;
     
