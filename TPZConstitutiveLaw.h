@@ -10,7 +10,6 @@
 
 #include <stdio.h>
 #include "TPZMatWithMem.h"
-#include "TPZTensor.h"
 #include "pzfmatrix.h"
 
 template <class TMEM>
