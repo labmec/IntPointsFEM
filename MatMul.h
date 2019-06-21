@@ -57,3 +57,17 @@ void MatrixMultiplication(bool trans, int *m, int *n, int *k, REAL *A, int *stri
 		// }
 	}
 }
+
+void SpMV(bool trans, int m, int k, REAL alpha, REAL *csrVal, int *csrRowPtr, int *csrColInd, REAL *B, REAL *C) {
+
+    char transpose;
+    if(trans == false) {
+        transpose = 'N';
+    } else {
+        transpose = 'T';
+
+    }
+    char matdescra[] = {'G',' ',' ','C'};
+    REAL beta = 0.;
+    mkl_dcsrmv(&transpose, &m, &k, &alpha, matdescra , csrVal, &csrColInd[0], &csrRowPtr[0], &csrRowPtr[1], B, &beta, C);
+}

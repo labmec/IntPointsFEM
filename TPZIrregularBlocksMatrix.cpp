@@ -121,33 +121,41 @@ void TPZIrregularBlocksMatrix::MultiplyVector(REAL *A, REAL *res, int opt) {
     TPZVec<int> one(nblocks);
     one.Fill(1);
 
-#ifdef USING_CUDA
     int rows = this->Rows();
     int cols = this->Cols();
 
+#ifdef USING_CUDA
     #ifdef USING_SPARSE
     if(opt == 0) {
-        fCudaCalls->SpMV(0, rows, cols, dBlocksInfo.dStorage.getSize(), 1., dBlocksInfo.dStorage.getData(), dBlocksInfo.dRowPtr.getData(), dBlocksInfo.dColInd.getData(), A, res); 
+        fCudaCalls->SpMV(0, rows, cols, dBlocksInfo.dStorage.getSize(), 1., dBlocksInfo.dStorage.getData(), dBlocksInfo.dRowPtr.getData(), dBlocksInfo.dColInd.getData(), A, res);
     } else {
-        fCudaCalls->SpMV(1, rows, cols, dBlocksInfo.dStorage.getSize(), -1., dBlocksInfo.dStorage.getData(), dBlocksInfo.dRowPtr.getData(), dBlocksInfo.dColInd.getData(), A, res); 
+        fCudaCalls->SpMV(1, rows, cols, dBlocksInfo.dStorage.getSize(), -1., dBlocksInfo.dStorage.getData(), dBlocksInfo.dRowPtr.getData(), dBlocksInfo.dColInd.getData(), A, res);
     }
     #else
     TPZVecGPU<int> dOne(nblocks);
     dOne.set(&one[0], nblocks);
 
     if(opt == 0) {
-        fCudaCalls->Multiply(opt, dBlocksInfo.dRowSizes.getData(), dOne.getData(), dBlocksInfo.dColSizes.getData(), dBlocksInfo.dStorage.getData(), dBlocksInfo.dMatrixPosition.getData(), A, dBlocksInfo.dColFirstIndex.getData(), res, dBlocksInfo.dRowFirstIndex.getData(), 1., nblocks); 
+        fCudaCalls->Multiply(opt, dBlocksInfo.dRowSizes.getData(), dOne.getData(), dBlocksInfo.dColSizes.getData(), dBlocksInfo.dStorage.getData(), dBlocksInfo.dMatrixPosition.getData(), A, dBlocksInfo.dColFirstIndex.getData(), res, dBlocksInfo.dRowFirstIndex.getData(), 1., nblocks);
     } else {
-        fCudaCalls->Multiply(opt, dBlocksInfo.dColSizes.getData(), dOne.getData(), dBlocksInfo.dRowSizes.getData(), dBlocksInfo.dStorage.getData(), dBlocksInfo.dMatrixPosition.getData(), A, dBlocksInfo.dRowFirstIndex.getData(), res, dBlocksInfo.dColFirstIndex.getData(), -1., nblocks); 
+        fCudaCalls->Multiply(opt, dBlocksInfo.dColSizes.getData(), dOne.getData(), dBlocksInfo.dRowSizes.getData(), dBlocksInfo.dStorage.getData(), dBlocksInfo.dMatrixPosition.getData(), A, dBlocksInfo.dRowFirstIndex.getData(), res, dBlocksInfo.dColFirstIndex.getData(), -1., nblocks);
     }
-    #endif 
- #else
+    #endif
+#else
+    #ifdef USING_SPARSE
+    if(opt == 0) {
+        SpMV(0, rows, cols, 1., &fBlocksInfo.fStorage[0], &fBlocksInfo.fRowPtr[0], &fBlocksInfo.fColInd[0], A, res);
+    } else {
+        SpMV(1, rows, cols, -1., &fBlocksInfo.fStorage[0], &fBlocksInfo.fRowPtr[0], &fBlocksInfo.fColInd[0], A, res);
+    }
+
+    #else
     if(opt == 0) {
         MatrixMultiplication(opt, &fBlocksInfo.fRowSizes[0], &one[0], &fBlocksInfo.fColSizes[0], &fBlocksInfo.fStorage[0], &fBlocksInfo.fMatrixPosition[0], A, &fBlocksInfo.fColFirstIndex[0], res, &fBlocksInfo.fRowFirstIndex[0], 1., nblocks);
     } else {
         MatrixMultiplication(opt, &fBlocksInfo.fColSizes[0], &one[0], &fBlocksInfo.fRowSizes[0], &fBlocksInfo.fStorage[0], &fBlocksInfo.fMatrixPosition[0], A, &fBlocksInfo.fRowFirstIndex[0], res, &fBlocksInfo.fColFirstIndex[0], -1., nblocks);
     }
-
+    #endif
 #endif
 }
 
