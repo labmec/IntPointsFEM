@@ -62,7 +62,7 @@ private:
 
     TPZCoefToGradSol fCoefToGradSol;
 
-    TPZConstitutiveLawProcessor fLambdaExp;
+    TPZConstitutiveLawProcessor fConstitutiveLawProcessor;
 
     TPZVerySparseMatrix<STATE> fSparseMatrixLinear; //-> BC data
 

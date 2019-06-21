@@ -11,8 +11,8 @@
 #include "TPZCudaCalls.h"
 #endif
 
-#ifndef INTPOINTSFEM_TPZConstitutiveLawProcessor_H
-#define INTPOINTSFEM_TPZConstitutiveLawProcessor_H
+#ifndef TPZConstitutiveLawProcessor_h
+#define TPZConstitutiveLawProcessor_h
 
 class TPZConstitutiveLawProcessor {
 
@@ -55,6 +55,7 @@ public:
 #endif
 
 private:
+    
     int64_t fNpts;
 
     TPZVec<REAL> fWeight;
@@ -75,4 +76,4 @@ private:
 };
 
 
-#endif //INTPOINTSFEM_TPZConstitutiveLawProcessor_H
+#endif /* TPZConstitutiveLawProcessor_h */
