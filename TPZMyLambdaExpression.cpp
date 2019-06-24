@@ -85,11 +85,15 @@ void TPZMyLambdaExpression::ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZF
 
     int ipts;
 #ifdef USING_TBB
+    #ifdef GET_TIME
     tbb::tick_count t0 = tbb::tick_count::now();
+    #endif
     tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1),[&](size_t ipts)
 #else
+    #ifdef GET_TIME
     Timer timer;
     timer.Start();
+    #endif
     for (ipts = 0; ipts < fNpts; ipts++)
 #endif
     {
@@ -101,11 +105,15 @@ void TPZMyLambdaExpression::ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZF
     }
 #ifdef USING_TBB
     );
+    #ifdef GET_TIME
     tbb::tick_count t1 = tbb::tick_count::now();
-    std::cout << "Elapsed time: " << (t1-t0).seconds() * 1000 << "ms" << std::endl;
+    std::cout << "Elapsed time (ComputeStress): " << (t1-t0).seconds() * 1000 << "ms" << std::endl;
+    #endif
 #else
+    #ifdef GET_TIME
     timer.Stop();
-    std::cout << "Elapsed time: " << timer.ElapsedTime() << timer.Unit() << std::endl;
+    std::cout << "Elapsed time (ComputeStress): " << timer.ElapsedTime() << timer.Unit() << std::endl;
+    #endif
 #endif
 }
 
@@ -115,24 +123,43 @@ void TPZMyLambdaExpression::ComputeStrain(TPZFMatrix<REAL> &sigma, TPZFMatrix<RE
 
     int dim = 2;
 
-    for (int ipts = 0; ipts < fNpts; ipts++) {
+    int ipts;
+#ifdef USING_TBB
+    tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1),[&](size_t ipts)
+#else
+    for (ipts = 0; ipts < fNpts; ipts++)
+#endif
+    {
         elastic_strain(2 * ipts + 0, 0) = 1 / fWeight[ipts] * (1. / E * (sigma(2 * ipts, 0) * (1. - nu * nu) - sigma(2 * ipts + dim * fNpts + 1, 0) * (nu + nu * nu))); //exx
         elastic_strain(2 * ipts + 1, 0) = 1 / fWeight[ipts] * ((1. + nu) / E * sigma(2 * ipts + 1, 0)); //exy
         elastic_strain(2 * ipts + dim * fNpts + 0, 0) = elastic_strain(2 * ipts + 1, 0); //exy
         elastic_strain(2 * ipts + dim * fNpts + 1, 0) = 1 / fWeight[ipts] * (1. / E * (sigma(2 * ipts + dim * fNpts + 1, 0) * (1. - nu * nu) - sigma(2 * ipts, 0) * (nu + nu * nu))); //eyy
     }
+#ifdef USING_TBB
+    );
+#endif
 }
 
 void TPZMyLambdaExpression::SpectralDecomposition(TPZFMatrix<REAL> &sigma_trial, TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &eigenvectors) {
-    REAL maxel;
+
     TPZVec<REAL> interval(2* fNpts);
 
-    for (int64_t ipts = 0; ipts < fNpts; ipts++) {
+    int ipts;
+#ifdef USING_TBB
+    tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1),[&](size_t ipts)
+#else
+    for (ipts = 0; ipts < fNpts; ipts++)
+#endif
+    {
+        REAL maxel;
         Normalize(&sigma_trial(4*ipts, 0), maxel);
         Interval(&sigma_trial(4*ipts, 0), &interval[2*ipts]);
         NewtonIterations(&interval[2*ipts], &sigma_trial(4*ipts, 0), &eigenvalues(3*ipts, 0), maxel);
         Eigenvectors(&sigma_trial(4*ipts, 0), &eigenvalues(3*ipts, 0), &eigenvectors(9*ipts,0),maxel);
     }
+#ifdef USING_TBB
+    );
+#endif
 }
 
 void TPZMyLambdaExpression::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &sigma_projected) {
@@ -142,8 +169,14 @@ void TPZMyLambdaExpression::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatr
     REAL K = fMaterial->GetPlasticModel().fER.K();
     REAL G = fMaterial->GetPlasticModel().fER.G();
 
-    bool check = false;
-    for (int ipts = 0; ipts < fNpts; ipts++) {
+    int ipts;
+#ifdef USING_TBB
+    tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1),[&](size_t ipts)
+#else
+    for (ipts = 0; ipts < fNpts; ipts++)
+#endif
+    {
+        bool check = false;
         fMType(ipts,0) = 0;
         check = PhiPlane(&eigenvalues(3*ipts, 0), &sigma_projected(3*ipts, 0), mc_phi, mc_cohesion); //elastic domain
         if (!check) { //plastic domain
@@ -162,19 +195,30 @@ void TPZMyLambdaExpression::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatr
             }
         }
     }
+#ifdef USING_TBB
+    );
+#endif
 }
 
 void TPZMyLambdaExpression::StressCompleteTensor(TPZFMatrix<REAL> &sigma_projected, TPZFMatrix<REAL> &eigenvectors, TPZFMatrix<REAL> &sigma){
     TPZVec<REAL> weight;
 
     int dim = 2;
-
-    for (int ipts = 0; ipts < fNpts; ipts++) {
+    int ipts;
+#ifdef USING_TBB
+    tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1),[&](size_t ipts)
+#else
+    for (ipts = 0; ipts < fNpts; ipts++)
+#endif
+    {
         sigma(2*ipts + 0,0) = fWeight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 0,0)*eigenvectors(9*ipts + 0,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 3,0)*eigenvectors(9*ipts + 3,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 6,0)*eigenvectors(9*ipts + 6,0));
         sigma(2*ipts + 1,0) = fWeight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 0,0)*eigenvectors(9*ipts + 1,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 3,0)*eigenvectors(9*ipts + 4,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 6,0)*eigenvectors(9*ipts + 7,0));
         sigma(2*ipts + dim * fNpts,0) = sigma(2*ipts + 1,0);
         sigma(2*ipts + dim * fNpts + 1,0) = fWeight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 1,0)*eigenvectors(9*ipts + 1,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 4,0)*eigenvectors(9*ipts + 4,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 7,0)*eigenvectors(9*ipts + 7,0));
     }
+#ifdef USING_TBB
+    );
+#endif
 }
 
 void TPZMyLambdaExpression::ComputeSigma(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &sigma) {

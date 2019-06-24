@@ -86,6 +86,11 @@ if(USING_TBB)
     endif(WIN32)
 endif(USING_TBB)
 
+option(GET_TIME off)
+if(GET_TIME)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGET_TIME")
+endif(GET_TIME)
+
 # Enabling CUDA
 option(USING_CUDA off)
 if(USING_CUDA)
