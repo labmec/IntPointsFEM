@@ -7,8 +7,8 @@
 #include "SigmaProjection.h"
 
 #ifdef USING_TBB
-#include "/home/natalia/tbb-install/include/tbb/parallel_for.h"
-#include "/home/natalia/tbb-install/include/tbb/tick_count.h"
+#include "tbb/parallel_for.h"
+#include "tbb/tick_count.h"
 #endif
 
 #include "Timer.h"
@@ -105,7 +105,7 @@ void TPZMyLambdaExpression::ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZF
     std::cout << "Elapsed time: " << (t1-t0).seconds() * 1000 << "ms" << std::endl;
 #else
     timer.Stop();
-    std::cout << "Elapsed time: " << timer.ElapsedTime() << "ms" << std::endl;
+    std::cout << "Elapsed time: " << timer.ElapsedTime() << timer.Unit() << std::endl;
 #endif
 }
 
