@@ -63,14 +63,14 @@ int main(int argc, char *argv[]) {
     int nt = omp_get_max_threads();
     std::cout << "Using " << nt << " threads.\n" << std::endl;
 #endif
-    int pOrder = 2; // Computational mesh order
+    int pOrder = 1; // Computational mesh order
     bool render_vtk_Q = false;
     
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
     std::string msh_file = source_dir + "/gmsh/wellbore.msh";
     TPZGeoMesh *gmesh = ReadGeometry(msh_file);
-#ifdef PZDEBUG2
+#ifdef PZDEBUG
     PrintGeometry(gmesh);
 #endif
     
