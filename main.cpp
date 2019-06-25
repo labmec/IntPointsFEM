@@ -16,13 +16,6 @@
 #include "TPZElasticCriterion.h"
 #include <time.h>
 
-#ifdef USING_OMP
-#include "omp.h"
-#endif
-
-#ifdef _OPENMP
-#include "omp.h"
-#endif
 
 /// Gmsh mesh
 TPZGeoMesh * ReadGeometry(std::string geometry_file);
@@ -59,11 +52,7 @@ void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData material, int n_threads,
 void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_material, int npoints, std::ostream &out, bool euler = false);
 
 int main(int argc, char *argv[]) {
-#ifdef USING_OMP
-    int nt = omp_get_max_threads();
-    std::cout << "Using " << nt << " threads.\n" << std::endl;
-#endif
-    int pOrder = 1; // Computational mesh order
+    int pOrder = 2; // Computational mesh order
     bool render_vtk_Q = false;
     
 // Generates the geometry
@@ -73,11 +62,11 @@ int main(int argc, char *argv[]) {
 #ifdef PZDEBUG
     PrintGeometry(gmesh);
 #endif
-    
+
 // Creates the computational mesh
 //    TElastoPlasticData wellbore_material = WellboreConfig(); /// NVB this one is for recurrent usage
     TElastoPlasticData wellbore_material = WellboreConfigRK(); /// NVB this one is just for verification purposes
-    
+
     TPZCompMesh *cmesh;
     {
         time_t start,end;
@@ -87,7 +76,7 @@ int main(int argc, char *argv[]) {
         double dif = difftime (end,start);
         std::cout << "Calling CmeshElastoplasticity: Elasped time [sec] = " << dif << std::endl;
     }
-    
+
 
 // Defines the analysis
     int n_threads = 0;
@@ -151,7 +140,7 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
         std::cout << "Calling CreateAssemble and Assemble: Elasped time [sec] = " << dif << std::endl;
     }
 
-    
+
 // //    analysis->Solver().Matrix()->Print("kip = ",std::cout, EMathematicaInput);
     for (int i = 0; i < n_iterations; i++) {
         analysis->Solve();
@@ -186,7 +175,7 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
             double dif = difftime (end,start);
             std::cout << "Calling Assemble: Elasped time [sec] = " << dif << std::endl;
         }
-       
+
     }
 
      if (stop_criterion_Q == false) {
