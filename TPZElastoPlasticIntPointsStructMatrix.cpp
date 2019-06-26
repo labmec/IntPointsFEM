@@ -113,6 +113,8 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 
 void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
 
+    TPZSymetricSpStructMatrix::Assemble(mat, rhs, guiInterface);
+    
     TPZSYsmpMatrix<STATE> &stiff = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
     TPZVec<STATE> &Kg = stiff.A();
     
