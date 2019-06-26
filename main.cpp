@@ -52,7 +52,7 @@ void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData material, int n_threads,
 void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_material, int npoints, std::ostream &out, bool euler = false);
 
 int main(int argc, char *argv[]) {
-    int pOrder = 2; // Computational mesh order
+    int pOrder = 1; // Computational mesh order
     bool render_vtk_Q = false;
     
 // Generates the geometry
@@ -131,6 +131,9 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
 
     analysis->Solution().Zero();
     TPZFMatrix<REAL> du(analysis->Solution()), delta_du;
+    analysis->Solution()(0,0) = 0.01;
+    analysis->Solution()(1,0) = 0.01;
+    analysis->LoadSolution();
     {
         time_t start,end;
         time (&start);
