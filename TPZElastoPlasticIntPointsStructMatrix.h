@@ -36,8 +36,6 @@ public:
     // need help
     TPZMatrix<STATE> *CreateAssemble(TPZFMatrix<STATE> &rhs, TPZAutoPointer<TPZGuiInterface> guiInterface);
 
-    void AssembleBoundaryData(std::set<int> &boundary_matids);
-
     void SetUpDataStructure();
 
     void Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface);
@@ -52,13 +50,22 @@ public:
     void Dep(TPZVec<REAL> &depxx, TPZVec<REAL> &depyy, TPZVec<REAL> &depxy);
 
 private:
-    void GetDomainElements(TPZVec<int> &element_indexes, std::set<int> &boundary_matids);
+    
+    void ComputeDomainElementIndexes(TPZVec<int> &element_indexes);
+    
+    void ClassifyMaterialsByDimension();
+    
+    void AssembleBoundaryData();
 
     void SetUpIrregularBlocksData(TPZVec<int> &element_indexes, TPZIrregularBlocksMatrix::IrregularBlocks &blocksData);
 
     void SetUpIndexes(TPZVec<int> &element_indexes, TPZVec<int> & dof_indexes);
 
     void ColoredIndexes(TPZVec<int> &element_indexes, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor);
+    
+    int fDimension;
+    
+    std::set<int> fBCMaterialIds;
 
     TPZCoefToGradSol fCoefToGradSol;
 

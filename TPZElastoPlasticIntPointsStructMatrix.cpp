@@ -10,8 +10,12 @@
 #endif
 
 
-TPZElastoPlasticIntPointsStructMatrix::TPZElastoPlasticIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZSymetricSpStructMatrix(cmesh), fConstitutiveLawProcessor(), fSparseMatrixLinear(), fRhsLinear(), fCoefToGradSol() {
+TPZElastoPlasticIntPointsStructMatrix::TPZElastoPlasticIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZSymetricSpStructMatrix(cmesh), fConstitutiveLawProcessor(), fSparseMatrixLinear(), fRhsLinear(), fCoefToGradSol(), fDimension(0) {
 
+    if (!cmesh->Reference()->Dimension()) {
+        DebugStop();
+    }
+    fDimension = cmesh->Reference()->Dimension();
 }
 
 TPZElastoPlasticIntPointsStructMatrix::~TPZElastoPlasticIntPointsStructMatrix() {
@@ -76,8 +80,9 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     }
     
     TPZVec<int> element_indexes;
-    std::set<int> boundary_matids;
-    this->GetDomainElements(element_indexes, boundary_matids);
+    ComputeDomainElementIndexes(element_indexes);
+    
+    ClassifyMaterialsByDimension();
 
     TPZIrregularBlocksMatrix::IrregularBlocks blocksData;
     this->SetUpIrregularBlocksData(element_indexes, blocksData);
@@ -99,7 +104,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     fCoefToGradSol.SetColorIndexes(colored_element_indexes);
     fCoefToGradSol.SetNColors(ncolor);
 
-    AssembleBoundaryData(boundary_matids);
+    AssembleBoundaryData();
 
 #ifdef USING_CUDA
     std::cout << "Transfering data to GPU..." << std::endl;
@@ -113,7 +118,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 
 void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
 
-    TPZSymetricSpStructMatrix::Assemble(mat, rhs, guiInterface);
+//    TPZSymetricSpStructMatrix::Assemble(mat, rhs, guiInterface);
     
     TPZSYsmpMatrix<STATE> &stiff = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
     TPZVec<STATE> &Kg = stiff.A();
@@ -284,15 +289,16 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TP
     fCoefToGradSol.Multiply(fMesh->Solution(), delta_strain);
     fConstitutiveLawProcessor.ComputeSigma(delta_strain, sigma);
     fCoefToGradSol.MultiplyTranspose(sigma, rhs);
+    
 #endif
     rhs += fRhsLinear;
 }
 
-void TPZElastoPlasticIntPointsStructMatrix::AssembleBoundaryData(std::set<int> &boundary_matids) {
+void TPZElastoPlasticIntPointsStructMatrix::AssembleBoundaryData() {
+    
     int64_t neq = fMesh->NEquations();
-
     TPZStructMatrix str(fMesh);
-    str.SetMaterialIds(boundary_matids);
+    str.SetMaterialIds(fBCMaterialIds);
     TPZAutoPointer<TPZGuiInterface> guiInterface;
     fRhsLinear.Resize(neq, 1);
     fRhsLinear.Zero();
@@ -300,29 +306,36 @@ void TPZElastoPlasticIntPointsStructMatrix::AssembleBoundaryData(std::set<int> &
     str.Assemble(fSparseMatrixLinear, fRhsLinear, guiInterface);
 }
 
-void TPZElastoPlasticIntPointsStructMatrix::GetDomainElements(TPZVec<int> &element_indexes, std::set<int> &boundary_matids) {
-    boundary_matids.clear();
+void TPZElastoPlasticIntPointsStructMatrix::ComputeDomainElementIndexes(TPZVec<int> &element_indexes) {
+    
     TPZStack<int> el_indexes_loc;
-    int dim = fMesh->Dimension();
     for (int64_t i = 0; i < fMesh->NElements(); i++) {
         TPZCompEl *cel = fMesh->Element(i);
         if (!cel) continue;
         TPZGeoEl *gel = cel->Reference();
         if (!gel) continue;
-        int mat_id = gel->MaterialId();
-        if(gel->Dimension() == dim){
-            fMaterialIds.insert(mat_id);
+        if(gel->Dimension() == fDimension){
             el_indexes_loc.Push(cel->Index());
-        } else {
-            boundary_matids.insert(mat_id);
         }
     }
     element_indexes = el_indexes_loc;
+}
+
+void TPZElastoPlasticIntPointsStructMatrix::ClassifyMaterialsByDimension() {
     
+    for (auto material : fMesh->MaterialVec()) {
+        bool domain_material_Q = material.second->Dimension() == fDimension;
+        if (domain_material_Q) {
+            fMaterialIds.insert(material.first);
+        }else{
+            fBCMaterialIds.insert(material.first);
+        }
+    }
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZVec<int> &element_indexes, TPZIrregularBlocksMatrix::IrregularBlocks &blocksData) {
     
+    /// Number of elements
     int nblocks = element_indexes.size();
 
     blocksData.fNumBlocks = nblocks;
@@ -398,13 +411,14 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZVec<int>
                     elmatrix(ipts * dim + idim, inf) = dphiXY(idim, inf);
             }
         }
-        elmatrix.Transpose(); // Using CSR format
+        elmatrix.Transpose();
         TPZFMatrix<REAL> elmatloc(row_el, col_el, &blocksData.fStorage[pos_el], row_el * col_el);
         elmatloc = elmatrix;
     }
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::SetUpIndexes(TPZVec<int> &element_indexes, TPZVec<int> & dof_indexes) {
+    
     int64_t nblocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
     int64_t rows = fCoefToGradSol.IrregularBlocksMatrix().Rows();
     int64_t cols = fCoefToGradSol.IrregularBlocksMatrix().Cols();
