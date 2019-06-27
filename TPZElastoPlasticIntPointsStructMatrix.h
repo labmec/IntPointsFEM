@@ -51,6 +51,8 @@ public:
 
 private:
     
+    int StressRateVectorSize();
+    
     void ComputeDomainElementIndexes(TPZVec<int> &element_indexes);
     
     void ClassifyMaterialsByDimension();
@@ -65,7 +67,6 @@ private:
     
     int fDimension;
     
-    std::set<int> fBCMaterialIds;
 
     TPZCoefToGradSol fCoefToGradSol;
 
@@ -74,6 +75,8 @@ private:
     TPZVerySparseMatrix<STATE> fSparseMatrixLinear; //-> BC data
 
     TPZFMatrix<STATE> fRhsLinear; //-> BC data
+    
+    std::set<int> fBCMaterialIds;
     
     std::unordered_map<int64_t,std::unordered_map<int64_t,int64_t>> m_i_j_to_sequence;
     

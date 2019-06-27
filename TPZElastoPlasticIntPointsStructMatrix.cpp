@@ -4,13 +4,14 @@
 #include "pzmetis.h"
 #include "TPZConstitutiveLawProcessor.h"
 #include "TPZElasticCriterion.h"
+#include "pzbndcond.h"
 
 #ifdef USING_MKL
 #include <mkl.h>
 #endif
 
 
-TPZElastoPlasticIntPointsStructMatrix::TPZElastoPlasticIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZSymetricSpStructMatrix(cmesh), fConstitutiveLawProcessor(), fSparseMatrixLinear(), fRhsLinear(), fCoefToGradSol(), fDimension(0) {
+TPZElastoPlasticIntPointsStructMatrix::TPZElastoPlasticIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZSymetricSpStructMatrix(cmesh), fConstitutiveLawProcessor(), fSparseMatrixLinear(), fRhsLinear(), fCoefToGradSol(), fBCMaterialIds() {
 
     if (!cmesh->Reference()->Dimension()) {
         DebugStop();
@@ -165,7 +166,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 #endif
     
     /// implement OptV2
-    if (1) {
+    if (0) {
 
         /// Serial
         for (int iel = 0; iel < n_vols; iel++) {
@@ -232,22 +233,46 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 //        }
 //    }
     
-    auto it_end = fSparseMatrixLinear.MapEnd();
-
-    for (auto it = fSparseMatrixLinear.MapBegin(); it!=it_end; it++) {
-        int64_t row = it->first.first;
-        int64_t col = it->first.second;
-        STATE val = it->second;
-#ifdef AssemblyInKgVec_Q
-        Kg[m_i_j_to_sequence[row][col]] += val;
-#else
-        STATE vol_val = mat.GetVal(row, col);
-        vol_val += val;
-        mat.PutVal(row, col, vol_val);
-#endif
-    }
+//    auto it_end = fSparseMatrixLinear.MapEnd();
+//
+//    for (auto it = fSparseMatrixLinear.MapBegin(); it!=it_end; it++) {
+//        int64_t row = it->first.first;
+//        int64_t col = it->first.second;
+//        STATE val = it->second;
+//#ifdef AssemblyInKgVec_Q
+//        Kg[m_i_j_to_sequence[row][col]] += val;
+//#else
+//        STATE vol_val = mat.GetVal(row, col);
+//        vol_val += val;
+//        mat.PutVal(row, col, vol_val);
+//#endif
+//    }
 
     Assemble(rhs,guiInterface);
+}
+
+int TPZElastoPlasticIntPointsStructMatrix::StressRateVectorSize(){
+    
+    switch (fDimension) {
+        case 1:{
+            return 1;
+        }
+        break;
+        case 2:{
+            return 3;
+        }
+            break;
+        case 3:{
+            return 6;
+        }
+            break;
+        default:
+        {
+            DebugStop();
+            return 0;
+        }
+        break;
+    }
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface){
@@ -324,7 +349,8 @@ void TPZElastoPlasticIntPointsStructMatrix::ComputeDomainElementIndexes(TPZVec<i
 void TPZElastoPlasticIntPointsStructMatrix::ClassifyMaterialsByDimension() {
     
     for (auto material : fMesh->MaterialVec()) {
-        bool domain_material_Q = material.second->Dimension() == fDimension;
+        TPZBndCond * bc_mat = dynamic_cast<TPZBndCond *>(material.second);
+        bool domain_material_Q = !bc_mat;
         if (domain_material_Q) {
             fMaterialIds.insert(material.first);
         }else{
@@ -353,67 +379,106 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZVec<int>
     blocksData.fColColPosition.resize(nblocks + 1);
     blocksData.fRowRowPosition[0] = 0;
     blocksData.fColColPosition[0] = 0;
-
-    int64_t rows = 0;
-    int64_t cols = 0;
+    
+    // @TODO Candidate for TBB ParallelScan
+    // Example with lambda expression https://www.threadingbuildingblocks.org/docs/help/reference/algorithms/parallel_scan_func.html
     for(int iel = 0; iel < nblocks; iel++) {
+        
         TPZCompEl *cel = fMesh->Element(element_indexes[iel]);
+        
         TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement *>(cel);
         if (!cel_inter) DebugStop();
+#ifdef PZDEBUG
+        int dim = cel->Reference()->Dimension();
+        if (dim !=fDimension) {
+            DebugStop();
+        }
+#endif
+        
         TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
-
         int64_t npts = int_rule->NPoints(); // number of integration points of the element
-        int64_t dim = cel_inter->Dimension(); //dimension of the element
-        int64_t nf = cel_inter->NShapeF(); // number of shape functions of the element
+        int64_t n_el_dof = cel_inter->NShapeF(); // number of shape functions of the element (Element DoF)
 
-        blocksData.fRowSizes[iel] = dim * npts;
-        blocksData.fColSizes[iel] = nf;
+        blocksData.fRowSizes[iel] = StressRateVectorSize() * npts;
+        blocksData.fColSizes[iel] = n_el_dof * fDimension;
+        
         blocksData.fMatrixPosition[iel + 1] = blocksData.fMatrixPosition[iel] + blocksData.fRowSizes[iel] * blocksData.fColSizes[iel];
         blocksData.fRowFirstIndex[iel + 1] =  blocksData.fRowFirstIndex[iel] + blocksData.fRowSizes[iel];
         blocksData.fColFirstIndex[iel + 1] = blocksData.fColFirstIndex[iel] + blocksData.fColSizes[iel];
 
         blocksData.fRowRowPosition[iel + 1] = blocksData.fRowRowPosition[iel] + blocksData.fRowSizes[iel] * blocksData.fRowSizes[iel];
         blocksData.fColColPosition[iel + 1] = blocksData.fColColPosition[iel] + blocksData.fColSizes[iel] * blocksData.fColSizes[iel];
-
-        rows += blocksData.fRowSizes[iel];
-        cols += blocksData.fColSizes[iel];
     }
 
     blocksData.fStorage.resize(blocksData.fMatrixPosition[nblocks]);
-    TPZFMatrix<REAL> dphiXY;
+    
+    
+    
+    TPZFNMatrix<8,REAL> dphiXY;
     TPZMaterialData data;
+    TPZVec<REAL> qsi(fDimension);
+    
+    // @TODO Candidate for TBB ParallelFor
     for (int iel = 0; iel < nblocks; ++iel) {
+        
         TPZCompEl *cel = fMesh->Element(element_indexes[iel]);
+        
+        int sigma_entries_times_npts      = blocksData.fRowSizes[iel];
+        int n_el_dof            = blocksData.fColSizes[iel]/fDimension;
+        int pos_el              = blocksData.fMatrixPosition[iel];
+        
+        
         TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement *>(cel);
         if (!cel_inter) DebugStop();
+        
+#ifdef PZDEBUG
+        int dim = cel->Reference()->Dimension();
+        if (dim !=fDimension) {
+            DebugStop();
+        }
+#endif
+        
         TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
+        
+        int npts = int_rule->NPoints();
+        int n_sigma_entries = StressRateVectorSize();
+        
+#ifdef PZDEBUG
+        if (npts != sigma_entries_times_npts / n_sigma_entries) {
+            DebugStop();
+        }
+#endif
 
-        int row_el = blocksData.fRowSizes[iel];
-        int col_el = blocksData.fColSizes[iel];
-        int pos_el = blocksData.fMatrixPosition[iel];
-        int dim = cel->Dimension();
-
-        TPZFMatrix<REAL> elmatrix;
-        elmatrix.Resize(row_el, col_el);
         cel_inter->InitMaterialData(data);
+        TPZFMatrix<REAL> B_el(npts*n_sigma_entries,n_el_dof * fDimension,0.0);
+        for (int64_t i_pts = 0; i_pts < npts; i_pts++) {
 
-        for (int64_t ipts = 0; ipts < row_el / dim; ipts++) {
-            TPZVec<REAL> qsi(dim);
             REAL w;
-            int_rule->Point(ipts, qsi, w);
+            int_rule->Point(i_pts, qsi, w);
             cel_inter->ComputeRequiredData(data, qsi);
 
             data.axes.Transpose();
             data.axes.Multiply(data.dphix, dphiXY);
 
-            for (int inf = 0; inf < col_el; inf++) {
-                for (int idim = 0; idim < dim; idim++)
-                    elmatrix(ipts * dim + idim, inf) = dphiXY(idim, inf);
+//            dphiXY.Print("b = ",std::cout,EMathematicaInput);
+            
+            for (int j_dim = 0; j_dim < 2; j_dim++){
+                
+                for (int i_dof = 0; i_dof < n_el_dof; i_dof++) {
+                    
+                    REAL val = dphiXY(j_dim, i_dof);
+                    for (int i_sigma_comp = 0; i_sigma_comp < fDimension; i_sigma_comp++){
+
+                        B_el(i_pts * n_sigma_entries + i_sigma_comp + j_dim, i_dof*2 + i_sigma_comp) = val;
+                    }
+                }
             }
+
         }
-        elmatrix.Transpose();
-        TPZFMatrix<REAL> elmatloc(row_el, col_el, &blocksData.fStorage[pos_el], row_el * col_el);
-        elmatloc = elmatrix;
+        B_el.Transpose();
+//        B_el.Print("Bel = ",std::cout,EMathematicaInput);
+        TPZFMatrix<REAL> B_el_loc(npts * n_sigma_entries, n_el_dof * fDimension, &blocksData.fStorage[pos_el], npts * n_sigma_entries * n_el_dof * fDimension);
+        B_el_loc = B_el;
     }
 }
 
@@ -422,15 +487,19 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIndexes(TPZVec<int> &element_in
     int64_t nblocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
     int64_t rows = fCoefToGradSol.IrregularBlocksMatrix().Rows();
     int64_t cols = fCoefToGradSol.IrregularBlocksMatrix().Cols();
+    TPZVec<int> & dof_positions = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColFirstIndex;
 
-    dof_indexes.resize(fMesh->Dimension() * cols);
-    TPZVec<REAL> weight(rows / fMesh->Dimension());
+    dof_indexes.resize(cols);
+    int64_t npts = rows / StressRateVectorSize();
+    TPZVec<REAL> weight(npts);
 
-    int64_t cont1 = 0;
-    int64_t cont2 = 0;
     int64_t wit = 0;
     for (int iel = 0; iel < nblocks; ++iel) {
+        
+        int dof_pos = dof_positions[iel];
         TPZCompEl *cel = fMesh->Element(element_indexes[iel]);
+        
+        
         TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement *>(cel);
         if (!cel_inter) DebugStop();
         TPZGeoEl * gel = cel->Reference();
@@ -438,12 +507,12 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIndexes(TPZVec<int> &element_in
         
         TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
 
-        int64_t npts = int_rule->NPoints(); // number of integration points of the element
+        int64_t el_npts = int_rule->NPoints(); // number of integration points of the element
         int64_t dim = cel_inter->Dimension(); //dimension of the element
 
         TPZFMatrix<REAL> jac,axes, jacinv;
         REAL detjac;
-        for (int64_t ipts = 0; ipts < npts; ipts++) {
+        for (int64_t ipts = 0; ipts < el_npts; ipts++) {
             TPZVec<REAL> qsi(dim);
             REAL w;
             int_rule->Point(ipts, qsi, w);
@@ -453,30 +522,25 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIndexes(TPZVec<int> &element_in
         }
 
         int64_t ncon = cel->NConnects();
+        int i_dof = 0;
         for (int64_t icon = 0; icon < ncon; icon++) {
             int64_t id = cel->ConnectIndex(icon);
             TPZConnect &df = fMesh->ConnectVec()[id];
             int64_t conid = df.SequenceNumber();
             if (df.NElConnected() == 0 || conid < 0 || fMesh->Block().Size(conid) == 0) continue;
-            else {
-                int64_t pos = fMesh->Block().Position(conid);
-                int64_t nsize = fMesh->Block().Size(conid);
-                for (int64_t isize = 0; isize < nsize; isize++) {
-                    if (isize % 2 == 0) {
-                        dof_indexes[cont1] = pos + isize;
-                        cont1++;
-                    } else {
-                        dof_indexes[cont2 + cols] = pos + isize;
-                        cont2++;
-                    }
-                }
+            int64_t pos = fMesh->Block().Position(conid);
+            int64_t nsize = fMesh->Block().Size(conid);
+            for (int64_t isize = 0; isize < nsize; isize++) {
+                dof_indexes[dof_pos+i_dof] = pos + isize;
+                i_dof++;
             }
+            
         }
     }
 
     TPZMaterial *material = fMesh->FindMaterial(1);
     fConstitutiveLawProcessor.SetMaterial(material);
-    fConstitutiveLawProcessor.SetIntPoints(rows / fMesh->Dimension());
+    fConstitutiveLawProcessor.SetIntPoints(npts);
     fConstitutiveLawProcessor.SetWeightVector(weight);
 }
 
@@ -524,7 +588,7 @@ void TPZElastoPlasticIntPointsStructMatrix::ColoredIndexes(TPZVec<int> &element_
     }
 
     ncolor = contcolor;
-    coloredindexes.resize(fMesh->Dimension() * cols);
+    coloredindexes.resize(cols);
     int64_t neq = fMesh->NEquations();
     for (int64_t iel = 0; iel < nblocks; iel++) {
         int64_t elem_col = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColSizes[iel];
@@ -532,7 +596,6 @@ void TPZElastoPlasticIntPointsStructMatrix::ColoredIndexes(TPZVec<int> &element_
 
         for (int64_t icols = 0; icols < elem_col; icols++) {
             coloredindexes[cont_cols + icols] = indexes[cont_cols + icols] + elemcolor[iel]*neq;
-            coloredindexes[cont_cols + cols + icols] = indexes[cont_cols + cols + icols] + elemcolor[iel]*neq;
         }
     }
 }

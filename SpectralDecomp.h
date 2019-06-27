@@ -134,13 +134,13 @@ void Eigenvectors(double *sigma, double *eigenvalues, double *eigenvectors, doub
 
 void Normalize(double *sigma, double &maxel) {
     maxel = sigma[0];
-    for (int i = 1; i < 4; i++) {
+    for (int i = 1; i < 6; i++) {
         if (fabs(sigma[i]) > fabs(maxel)) {
             maxel = sigma[i];
         }
     }
     if(maxel != 0) {
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 6; i++) {
             sigma[i] /= maxel;
         }
     }
@@ -152,16 +152,19 @@ void Interval(double *sigma, double *interval) {
     TPZVec<REAL> upper_vec(3);
 
     //row 1 |sigma_xx sigma_xy 0|
-    lower_vec[0] = sigma[0] - fabs(sigma[3]);
-    upper_vec[0] = sigma[0] + fabs(sigma[3]);
+    REAL row_1 = sigma[_XY_] + sigma[_XZ_];
+    lower_vec[0] = sigma[_XX_] - fabs(row_1);
+    upper_vec[0] = sigma[_XX_] + fabs(row_1);
 
     //row 2 |sigma_xy sigma_yy 0|
-    lower_vec[1] = sigma[1] - fabs(sigma[3]);
-    upper_vec[1] = sigma[1] + fabs(sigma[3]);
+    REAL row_2 = sigma[_XY_] + sigma[_YZ_];
+    lower_vec[1] = sigma[_YY_] - fabs(row_2);
+    upper_vec[1] = sigma[_YY_] + fabs(row_2);
 
     //row 3 |0 0 sigma_zz|
-    lower_vec[2] = sigma[2];
-    upper_vec[2] = sigma[2];
+    REAL row_3 = sigma[_XY_] + sigma[_YZ_];
+    lower_vec[2] = sigma[_ZZ_] - fabs(row_3);
+    upper_vec[2] = sigma[_ZZ_] + fabs(row_3);
 
     interval[0] = upper_vec[0];
     interval[1] = lower_vec[0];

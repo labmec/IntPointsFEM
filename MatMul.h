@@ -34,6 +34,11 @@ void MatrixMultiplication(bool trans, int *m, int *n, int *k, REAL *A, int *stri
 
             transpose = CblasTrans;
         }
+        
+//        for (<#initialization#>; <#condition#>; <#increment#>) {
+//            <#statements#>
+//        }
+        
         cblas_dgemm(CblasRowMajor, transpose, CblasNoTrans, m_i, n_i, k_i, alpha, &A[strideA_i], lda_i,  &B[strideB_i], ldb_i, 0., &C[strideC_i], ldc_i);
 
 //        //            //ROW MAJOR

@@ -30,7 +30,7 @@ public:
 
     void SetIrregularBlocksMatrix(TPZIrregularBlocksMatrix & irregularBlocksMatrix);
 
-    void Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &grad_u);
+    void Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &delta_strain);
 
 #ifdef USING_CUDA
     void Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &grad_u);

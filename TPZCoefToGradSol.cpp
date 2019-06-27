@@ -40,19 +40,19 @@ void TPZCoefToGradSol::Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &grad_u) 
 }
 #endif 
 
-void TPZCoefToGradSol::Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &grad_u) {
-    int dim = 2;
+void TPZCoefToGradSol::Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &delta_strain) {
+
     int64_t rows = fBlockMatrix.Rows();
     int64_t cols = fBlockMatrix.Cols();
 
-    TPZFMatrix<REAL> gather_solution(dim * cols, 1);
-    cblas_dgthr(dim * cols, coef, &gather_solution(0, 0), &fDoFIndexes[0]);
+    TPZFMatrix<REAL> gather_solution(rows, 1);
+    gather_solution.Zero();
+    cblas_dgthr(cols, coef, &gather_solution(0, 0), &fDoFIndexes[0]);
+    
+//    gather_solution.Print("u = ",std::cout,EMathematicaInput);
 
-    grad_u.Resize(dim * rows, 1);
-
-    fBlockMatrix.MultiplyVector(&gather_solution(0,0), &grad_u(0, 0), false);
-    fBlockMatrix.MultiplyVector(&gather_solution(cols,0), &grad_u(rows, 0), false);
-
+    delta_strain.Resize(rows, 1);
+    fBlockMatrix.MultiplyVector(&gather_solution(0,0), &delta_strain(0, 0), false);
 }
 
 #ifdef USING_CUDA

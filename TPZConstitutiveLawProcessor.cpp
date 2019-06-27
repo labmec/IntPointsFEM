@@ -77,11 +77,35 @@ void TPZConstitutiveLawProcessor::PlasticStrain(TPZFMatrix<REAL> &delta_strain, 
     fPlasticStrain = delta_strain - elastic_strain;
 }
 
-void TPZConstitutiveLawProcessor::ComputeStress(TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &sigma) {
+void TPZConstitutiveLawProcessor::De(TPZFMatrix<REAL> & De){
+    
     REAL lambda = fMaterial->GetPlasticModel().fER.Lambda();
-    REAL mu =  fMaterial->GetPlasticModel().fER.Mu();
+    REAL mu = fMaterial->GetPlasticModel().fER.G();
+    
+    De.Zero();
+    
+    De(_XX_, _XX_) += lambda;
+    De(_XX_, _YY_) += lambda;
+    De(_XX_, _ZZ_) += lambda;
+    De(_YY_, _XX_) += lambda;
+    De(_YY_, _YY_) += lambda;
+    De(_YY_, _ZZ_) += lambda;
+    De(_ZZ_, _XX_) += lambda;
+    De(_ZZ_, _YY_) += lambda;
+    De(_ZZ_, _ZZ_) += lambda;
+    
+    int i;
+    for (i = 0; i < 6; i++) De(i, i) += mu;
+    
+    De(_XX_, _XX_) += mu;
+    De(_YY_, _YY_) += mu;
+    De(_ZZ_, _ZZ_) += mu;
+}
 
-    int dim = 2;
+void TPZConstitutiveLawProcessor::ComputeTrialStress(TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &sigma_trial) {
+
+    TPZFNMatrix<36,REAL> De(6,6,0.0);
+    this->De(De);
 
     int ipts;
 #ifdef USING_TBB
@@ -97,11 +121,15 @@ void TPZConstitutiveLawProcessor::ComputeStress(TPZFMatrix<REAL> &elastic_strain
     for (ipts = 0; ipts < fNpts; ipts++)
 #endif
     {
-        //plane strain
-        sigma(4 * ipts, 0) = elastic_strain(2 * ipts, 0) * (lambda + 2. * mu) + elastic_strain(2 * ipts + dim * fNpts + 1, 0) * lambda; // Sigma xx
-        sigma(4 * ipts + 1, 0) = elastic_strain(2 * ipts + dim * fNpts + 1, 0) * (lambda + 2. * mu) + elastic_strain(2 * ipts, 0) * lambda; // Sigma yy
-        sigma(4 * ipts + 2, 0) = lambda * (elastic_strain(2 * ipts, 0) + elastic_strain(2 * ipts + dim * fNpts + 1, 0)); // Sigma zz
-        sigma(4 * ipts + 3, 0) = mu * (elastic_strain(2 * ipts + 1, 0) + elastic_strain(2 * ipts + dim * fNpts, 0)); // Sigma xy
+        TPZFNMatrix<6,REAL> el_delta_strain, el_stress;
+        elastic_strain.GetSub(ipts*6, 0, 6, 1, el_delta_strain);
+        De.Multiply(el_delta_strain, el_stress);
+        sigma_trial.AddSub(ipts*6, 0, el_stress);
+//        //plane strain
+//        sigma(4 * ipts, 0) = elastic_strain(2 * ipts, 0) * (lambda + 2. * mu) + elastic_strain(2 * ipts + dim * fNpts + 1, 0) * lambda; // Sigma xx
+//        sigma(4 * ipts + 1, 0) = elastic_strain(2 * ipts + dim * fNpts + 1, 0) * (lambda + 2. * mu) + elastic_strain(2 * ipts, 0) * lambda; // Sigma yy
+//        sigma(4 * ipts + 2, 0) = lambda * (elastic_strain(2 * ipts, 0) + elastic_strain(2 * ipts + dim * fNpts + 1, 0)); // Sigma zz
+//        sigma(4 * ipts + 3, 0) = mu * (elastic_strain(2 * ipts + 1, 0) + elastic_strain(2 * ipts + dim * fNpts, 0)); // Sigma xy
     }
 #ifdef USING_TBB
     );
@@ -141,9 +169,10 @@ void TPZConstitutiveLawProcessor::ComputeStrain(TPZFMatrix<REAL> &sigma, TPZFMat
 }
 
 void TPZConstitutiveLawProcessor::SpectralDecomposition(TPZFMatrix<REAL> &sigma_trial, TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &eigenvectors) {
-    REAL maxel;
+
     TPZVec<REAL> interval(2* fNpts);
 
+    int n_sigma_comps = 3;
     int ipts;
 #ifdef USING_TBB
     tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1),[&](size_t ipts)
@@ -152,10 +181,10 @@ void TPZConstitutiveLawProcessor::SpectralDecomposition(TPZFMatrix<REAL> &sigma_
 #endif
     {
         REAL maxel;
-        Normalize(&sigma_trial(4*ipts, 0), maxel);
-        Interval(&sigma_trial(4*ipts, 0), &interval[2*ipts]);
-        NewtonIterations(&interval[2*ipts], &sigma_trial(4*ipts, 0), &eigenvalues(3*ipts, 0), maxel);
-        Eigenvectors(&sigma_trial(4*ipts, 0), &eigenvalues(3*ipts, 0), &eigenvectors(9*ipts,0),maxel);
+        Normalize(&sigma_trial(n_sigma_comps*ipts, 0), maxel);
+        Interval(&sigma_trial(n_sigma_comps*ipts, 0), &interval[2*ipts]);
+        NewtonIterations(&interval[2*ipts], &sigma_trial(n_sigma_comps*ipts, 0), &eigenvalues(3*ipts, 0), maxel);
+        Eigenvectors(&sigma_trial(n_sigma_comps*ipts, 0), &eigenvalues(3*ipts, 0), &eigenvectors(9*ipts,0),maxel);
     }
 #ifdef USING_TBB
     );
@@ -203,7 +232,7 @@ void TPZConstitutiveLawProcessor::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TP
 void TPZConstitutiveLawProcessor::StressCompleteTensor(TPZFMatrix<REAL> &sigma_projected, TPZFMatrix<REAL> &eigenvectors, TPZFMatrix<REAL> &sigma){
     TPZVec<REAL> weight;
 
-    int dim = 2;
+    int n_sigma_entries = 3;
     int ipts;
 #ifdef USING_TBB
     tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1),[&](size_t ipts)
@@ -211,10 +240,9 @@ void TPZConstitutiveLawProcessor::StressCompleteTensor(TPZFMatrix<REAL> &sigma_p
     for (ipts = 0; ipts < fNpts; ipts++)
 #endif
     {
-        sigma(2*ipts + 0,0) = fWeight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 0,0)*eigenvectors(9*ipts + 0,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 3,0)*eigenvectors(9*ipts + 3,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 6,0)*eigenvectors(9*ipts + 6,0));
-        sigma(2*ipts + 1,0) = fWeight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 0,0)*eigenvectors(9*ipts + 1,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 3,0)*eigenvectors(9*ipts + 4,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 6,0)*eigenvectors(9*ipts + 7,0));
-        sigma(2*ipts + dim * fNpts,0) = sigma(2*ipts + 1,0);
-        sigma(2*ipts + dim * fNpts + 1,0) = fWeight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 1,0)*eigenvectors(9*ipts + 1,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 4,0)*eigenvectors(9*ipts + 4,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 7,0)*eigenvectors(9*ipts + 7,0));
+        sigma(n_sigma_entries*ipts + 0,0) = fWeight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 0,0)*eigenvectors(9*ipts + 0,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 3,0)*eigenvectors(9*ipts + 3,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 6,0)*eigenvectors(9*ipts + 6,0));
+        sigma(n_sigma_entries*ipts + 1,0) = fWeight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 0,0)*eigenvectors(9*ipts + 1,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 3,0)*eigenvectors(9*ipts + 4,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 6,0)*eigenvectors(9*ipts + 7,0));
+        sigma(n_sigma_entries*ipts + 2, 0) = fWeight[ipts]*(sigma_projected(3*ipts + 0,0)*eigenvectors(9*ipts + 1,0)*eigenvectors(9*ipts + 1,0) + sigma_projected(3*ipts + 1,0)*eigenvectors(9*ipts + 4,0)*eigenvectors(9*ipts + 4,0) + sigma_projected(3*ipts + 2,0)*eigenvectors(9*ipts + 7,0)*eigenvectors(9*ipts + 7,0));
     }
 #ifdef USING_TBB
     );
@@ -222,11 +250,15 @@ void TPZConstitutiveLawProcessor::StressCompleteTensor(TPZFMatrix<REAL> &sigma_p
 }
 
 void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &sigma) {
-    int dim = 2;
 
-    sigma.Resize(dim * dim * fNpts, 1);
 
-    fPlasticStrain.Resize(dim * dim * fNpts, 1);
+    int64_t rows = delta_strain.Rows();
+    int64_t cols = delta_strain.Cols();
+    sigma.Resize(rows,cols);
+
+    // The constitutive law is computing assuming full tensors
+
+    fPlasticStrain.Resize(6*fNpts, 1);
     fPlasticStrain.Zero();
 
     fMType.Resize(fNpts, 1);
@@ -235,23 +267,74 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
     fAlpha.Resize(fNpts, 1);
     fAlpha.Zero();
 
-    TPZFMatrix<REAL> elastic_strain(dim * dim * fNpts, 1, 0.);
-    TPZFMatrix<REAL> sigma_trial(dim * dim * fNpts, 1, 0.);
+    TPZFMatrix<REAL> full_delta_strain(6*fNpts, 1, 0.);
+    TPZFMatrix<REAL> elastic_strain(6*fNpts, 1, 0.);
+    TPZFMatrix<REAL> sigma_trial(6*fNpts, 1, 0.);
     TPZFMatrix<REAL> eigenvalues(3 * fNpts, 1, 0.);
     TPZFMatrix<REAL> eigenvectors(9 * fNpts, 1, 0.);
     TPZFMatrix<REAL> sigma_projected(3 * fNpts, 1, 0.);
+    TPZFMatrix<REAL> full_sigma(6*fNpts, 1, 0.);
 
-    // Compute sigma
-    ElasticStrain(delta_strain, elastic_strain);
-    ComputeStress(elastic_strain, sigma_trial);
-    SpectralDecomposition(sigma_trial, eigenvalues, eigenvectors);
-    ProjectSigma(eigenvalues, sigma_projected);
-    StressCompleteTensor(sigma_projected, eigenvectors, sigma);
+    {
+        // Compute sigma
+        TranslateStrain(delta_strain, full_delta_strain);
+        ElasticStrain(full_delta_strain, elastic_strain);
+        ComputeTrialStress(elastic_strain, sigma_trial);
+        SpectralDecomposition(sigma_trial, eigenvalues, eigenvectors);
+        ProjectSigma(eigenvalues, sigma_projected);
+        StressCompleteTensor(sigma_projected, eigenvectors, full_sigma);
 
 
-    // Update plastic strain
-    ComputeStrain(sigma, elastic_strain);
-    PlasticStrain(delta_strain, elastic_strain);
+        // Update plastic strain
+        ComputeStrain(full_sigma, elastic_strain);
+        PlasticStrain(delta_strain, elastic_strain);
+    }
+    
+    TranslateStress(full_sigma, sigma);
+}
+
+void TPZConstitutiveLawProcessor::TranslateStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &full_delta_strain){
+    
+    int dim = 2;
+    int n_sigma_comps = 3;
+    
+    if (dim == 2) {
+        for (int ipts = 0; ipts < fNpts; ipts++)
+        {
+            TPZFNMatrix<6,REAL> el_delta_strain, el_full_delta_strain(6,1,0.0);
+            delta_strain.GetSub(ipts*n_sigma_comps, 0, n_sigma_comps, 1, el_delta_strain);
+            el_full_delta_strain(_XX_,0) = el_delta_strain(0,0);
+            el_full_delta_strain(_XY_,0) = el_delta_strain(1,0);
+            el_full_delta_strain(_YY_,0) = el_delta_strain(2,0);
+            full_delta_strain.AddSub(ipts*6, 0, el_full_delta_strain);
+            
+        }
+    }else{
+        full_delta_strain = delta_strain;
+    }
+    
+}
+
+void TPZConstitutiveLawProcessor::TranslateStress(TPZFMatrix<REAL> &full_stress, TPZFMatrix<REAL> &stress){
+    
+    int dim = 2;
+    int n_sigma_comps = 3;
+    
+    if (dim == 2) {
+        for (int ipts = 0; ipts < fNpts; ipts++)
+        {
+            TPZFNMatrix<6,REAL> el_full_stress(6,1,0.0), el_stress(3,1,0.0);
+            full_stress.GetSub(ipts*6, 0, 6, 1, el_full_stress);
+            el_stress(0,0) = el_full_stress(_XX_,0);
+            el_stress(1,0) = el_full_stress(_XY_,0);
+            el_stress(2,0) = el_full_stress(_YY_,0);
+            stress.AddSub(ipts*n_sigma_comps, 0, el_stress);
+            
+        }
+    }else{
+        stress = full_stress;
+    }
+    
 }
 
 #ifdef USING_CUDA
