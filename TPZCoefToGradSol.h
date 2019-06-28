@@ -3,6 +3,7 @@
 //
 
 #include "TPZIrregularBlocksMatrix.h"
+#include "TPZConstitutiveLawProcessor.h"
 
 #ifdef USING_CUDA
 #include "TPZVecGPU.h"
@@ -64,7 +65,18 @@ public:
     }
 
     void TransferDataToGPU();
+    
+    void ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZFMatrix<REAL> &rhs);
+    
+    void ComputeConstitutiveMatrix(int64_t point_index, TPZFMatrix<STATE> &De);
+    
+    void ComputeTangetMatrix(int64_t iel, TPZFMatrix<REAL> &K);
 
+    void SetConstitutiveLawProcessor(TPZConstitutiveLawProcessor & processor);
+    
+    TPZConstitutiveLawProcessor & ConstitutiveLawProcessor();
+    
+    
 private:
     
     /// Irregular block matrix containing spatial gradients for scalar basis functions of order k
@@ -79,6 +91,8 @@ private:
     /// Color indexes organized element by element with stride ndof
     TPZVec<int> fColorIndexes; //nedeed to scatter operation
 
+    TPZConstitutiveLawProcessor fConstitutiveLawProcessor;
+    
 #ifdef USING_CUDA
     TPZVecGPU<int> dIndexes;
     TPZVecGPU<int> dIndexesColor;

@@ -11,7 +11,7 @@
 #endif
 
 
-TPZElastoPlasticIntPointsStructMatrix::TPZElastoPlasticIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZSymetricSpStructMatrix(cmesh), fConstitutiveLawProcessor(), fSparseMatrixLinear(), fRhsLinear(), fCoefToGradSol(), fBCMaterialIds() {
+TPZElastoPlasticIntPointsStructMatrix::TPZElastoPlasticIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZSymetricSpStructMatrix(cmesh), fSparseMatrixLinear(), fRhsLinear(), fCoefToGradSol(), fBCMaterialIds() {
 
     if (!cmesh->Reference()->Dimension()) {
         DebugStop();
@@ -26,8 +26,6 @@ TPZStructMatrix * TPZElastoPlasticIntPointsStructMatrix::Clone(){
     return new TPZElastoPlasticIntPointsStructMatrix(*this);
 }
 
-#define AssemblyInKgVec_Q
-
 TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
 
     if(!isBuilt()) {
@@ -38,9 +36,6 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
     TPZVec<int64_t> elgraphindex;
     fMesh->ComputeElGraph(elgraph,elgraphindex,fMaterialIds); // This method seems to be efficient.
     TPZMatrix<STATE> * mat = SetupMatrixData(elgraph, elgraphindex);
-    
-    
-#ifdef AssemblyInKgVec_Q
     
     /// Sparsify global indexes
     // Filling local std::map
@@ -59,7 +54,6 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
         }
         
     }
-#endif
     
     return mat;
 }
@@ -118,94 +112,40 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 
 
 void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
-
-//    TPZSymetricSpStructMatrix::Assemble(mat, rhs, guiInterface);
     
     TPZSYsmpMatrix<STATE> &stiff = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
     TPZVec<STATE> &Kg = stiff.A();
     
     TPZVec<int> &indexes = fCoefToGradSol.DoFIndexes();
     int64_t n_vols = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
-    int64_t n_cols = fCoefToGradSol.IrregularBlocksMatrix().Cols();
     TPZVec<int> & el_n_dofs = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColSizes;
-    TPZVec<int> & mat_indexes = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition;
     TPZVec<int> & cols_first_index = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColFirstIndex;
 
-    TPZVec<REAL> depxx;
-    TPZVec<REAL> depyy;
-    TPZVec<REAL> depxy;
-    Dep(depxx, depyy, depxy); // @TODO:: Requires optimization.
-    
-#ifdef USING_CUDA
-    int nblocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
-    TPZVecGPU<REAL> Kxx(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
-    TPZVecGPU<REAL> Kyy(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
-    TPZVecGPU<REAL> Kxy(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
-    
-    TPZVecGPU<REAL> d_dep(depxx.size());
-    
-    d_dep.set(&depxx[0], depxx.size());
-    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(d_dep.getData(), Kxx.getData());
-    
-    d_dep.set(&depyy[0], depyy.size());
-    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(d_dep.getData(), Kyy.getData());
-    
-    d_dep.set(&depxy[0], depxy.size());
-    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(d_dep.getData(), Kxy.getData());
-#else
-    
-    int nblocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
-    TPZVec<REAL> Kxx(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
-    TPZVec<REAL> Kyy(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
-    TPZVec<REAL> Kxy(fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColColPosition[nblocks]);
-    
-    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(&depxx[0], &Kxx[0]); // @TODO:: Requires optimization.
-    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(&depyy[0], &Kyy[0]);
-    fCoefToGradSol.IrregularBlocksMatrix().KMatrix(&depxy[0], &Kxy[0]);
-    
-#endif
+
     
     /// implement OptV2
-    if (0) {
+    if (1) {
 
         /// Serial
         for (int iel = 0; iel < n_vols; iel++) {
             
             int el_dof = el_n_dofs[iel];
             int pos = cols_first_index[iel];
-            int mat_pos = mat_indexes[iel];
 
+            /// Compute Elementary Matrix.
+            TPZFMatrix<STATE> K;
+            fCoefToGradSol.ComputeTangetMatrix(iel,K);
             for (int i_dof = 0; i_dof < el_dof; i_dof++) {
                 
-                int i_dest_1 = indexes[pos + i_dof];
-                int j_dest_1 = indexes[pos + i_dof + n_cols];
+                int i_dest = indexes[pos + i_dof];
 
                 for (int j_dof = 0; j_dof < el_dof; j_dof++) {
 
-                    int i_dest_2 = indexes[pos + j_dof];
-                    int j_dest_2 = indexes[pos + j_dof + n_cols];
+                    int j_dest = indexes[pos + j_dof];
                     
-                    STATE val_xx = Kxx[mat_pos + i_dof * el_dof + j_dof];
-                    STATE val_yy = Kyy[mat_pos + i_dof * el_dof + j_dof];
-                    STATE val_xy = Kxy[mat_pos + i_dof * el_dof + j_dof];
-                    STATE val_yx = Kxy[mat_pos + i_dof + j_dof * el_dof];
-                    
-#ifdef AssemblyInKgVec_Q
-                    if (i_dest_1 <= i_dest_2) Kg[m_i_j_to_sequence[i_dest_1][i_dest_2]] += val_xx;
-                    if (i_dest_1 <= i_dest_2) Kg[m_i_j_to_sequence[j_dest_1][j_dest_2]] += val_yy;
-                    if (i_dest_1 <= i_dest_2) Kg[m_i_j_to_sequence[i_dest_1][j_dest_2]] += val_xy;
-                    if (i_dest_1 <= i_dest_2) Kg[m_i_j_to_sequence[j_dest_1][i_dest_2]] += val_yx;
-#else
-                    val_xx += stiff.GetVal(i_dest_1, i_dest_2);
-                    val_yy += stiff.GetVal(j_dest_1, j_dest_2);
-                    val_xy += stiff.GetVal(i_dest_1, j_dest_2);
-                    val_yx += stiff.GetVal(j_dest_1, i_dest_2);
-                    
-                    if (i_dest_1 <= i_dest_2) stiff.PutVal(i_dest_1, i_dest_2, val_xx);
-                    if (j_dest_1 <= j_dest_2) stiff.PutVal(j_dest_1, j_dest_2, val_yy);
-                    if (i_dest_1 <= j_dest_2) stiff.PutVal(i_dest_1, j_dest_2, val_xy);
-                    if (j_dest_1 <= i_dest_2) stiff.PutVal(j_dest_1, i_dest_2, val_yx);
-#endif
+                    STATE val = K(i_dof,j_dof);
+                    int64_t  index = m_i_j_to_sequence[i_dest][j_dest];
+                    if (i_dest <= j_dest) Kg[index] += val;
                 }
             }
         }
@@ -233,20 +173,14 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 //        }
 //    }
     
-//    auto it_end = fSparseMatrixLinear.MapEnd();
-//
-//    for (auto it = fSparseMatrixLinear.MapBegin(); it!=it_end; it++) {
-//        int64_t row = it->first.first;
-//        int64_t col = it->first.second;
-//        STATE val = it->second;
-//#ifdef AssemblyInKgVec_Q
-//        Kg[m_i_j_to_sequence[row][col]] += val;
-//#else
-//        STATE vol_val = mat.GetVal(row, col);
-//        vol_val += val;
-//        mat.PutVal(row, col, vol_val);
-//#endif
-//    }
+    auto it_end = fSparseMatrixLinear.MapEnd();
+
+    for (auto it = fSparseMatrixLinear.MapBegin(); it!=it_end; it++) {
+        int64_t row = it->first.first;
+        int64_t col = it->first.second;
+        STATE val = it->second;
+        Kg[m_i_j_to_sequence[row][col]] += val;
+    }
 
     Assemble(rhs,guiInterface);
 }
@@ -284,6 +218,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TP
     int neq = fMesh->NEquations();
 
 #ifdef USING_CUDA
+    
     TPZVecGPU<REAL> solution(neq);
     solution.set(&fMesh->Solution()(0,0), neq);
 
@@ -305,15 +240,13 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TP
 
     fCoefToGradSol.MultiplyTranspose(dsigma, drhs);
     drhs.get(&rhs(0,0), neq);
+    
 #else
-    TPZFMatrix<REAL> delta_strain;
-    TPZFMatrix<REAL> sigma;
+    
+    
     rhs.Resize(neq, 1);
     rhs.Zero();
-
-    fCoefToGradSol.Multiply(fMesh->Solution(), delta_strain);
-    fConstitutiveLawProcessor.ComputeSigma(delta_strain, sigma);
-    fCoefToGradSol.MultiplyTranspose(sigma, rhs);
+    fCoefToGradSol.ResidualIntegration(fMesh->Solution(),rhs);
     
 #endif
     rhs += fRhsLinear;
@@ -539,9 +472,9 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIndexes(TPZVec<int> &element_in
     }
 
     TPZMaterial *material = fMesh->FindMaterial(1);
-    fConstitutiveLawProcessor.SetMaterial(material);
-    fConstitutiveLawProcessor.SetIntPoints(npts);
-    fConstitutiveLawProcessor.SetWeightVector(weight);
+    fCoefToGradSol.ConstitutiveLawProcessor().SetMaterial(material);
+    fCoefToGradSol.ConstitutiveLawProcessor().SetIntPoints(npts);
+    fCoefToGradSol.ConstitutiveLawProcessor().SetWeightVector(weight);
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::ColoredIndexes(TPZVec<int> &element_indexes, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor) {

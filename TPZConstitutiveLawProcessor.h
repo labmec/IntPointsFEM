@@ -60,11 +60,12 @@ public:
     void ComputeSigma(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &sigma);
 #endif
 
+    TPZVec<REAL> fWeight;
+    
 private:
     
     int64_t fNpts;
 
-    TPZVec<REAL> fWeight;
 
     TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse>, TPZElastoPlasticMem> *fMaterial;
 

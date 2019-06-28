@@ -11,7 +11,6 @@
 #include "pzsysmp.h"
 #include "tpzverysparsematrix.h"
 #include "TPZIrregularBlocksMatrix.h"
-#include "TPZConstitutiveLawProcessor.h"
 #include "TPZCoefToGradSol.h"
 #include <unordered_map>
 
@@ -69,8 +68,6 @@ private:
     
 
     TPZCoefToGradSol fCoefToGradSol;
-
-    TPZConstitutiveLawProcessor fConstitutiveLawProcessor;
 
     TPZVerySparseMatrix<STATE> fSparseMatrixLinear; //-> BC data
 

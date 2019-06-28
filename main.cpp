@@ -53,7 +53,7 @@ void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_mate
 
 int main(int argc, char *argv[]) {
     int pOrder = 1; // Computational mesh order
-    bool render_vtk_Q = false;
+    bool render_vtk_Q = true;
     
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
@@ -131,8 +131,8 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
 
     analysis->Solution().Zero();
     TPZFMatrix<REAL> du(analysis->Solution()), delta_du;
-    analysis->Solution()(0,0) = 0.01;
-    analysis->Solution()(1,0) = 0.01;
+//    analysis->Solution()(0,0) = -0.001;
+//    analysis->Solution()(1,0) = -0.001;
     analysis->LoadSolution();
     {
         time_t start,end;
