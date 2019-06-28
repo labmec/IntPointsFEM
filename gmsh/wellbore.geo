@@ -16,8 +16,8 @@ fr = 4.0;
 LargeCBurdenQ = 1;
 
 If(LargeCBurdenQ)
-	nt = 200;
-	nr = 200;
+	nt = 128;
+	nr = 128;
 	radial_progression = 1.01725;
 Else
 	nt = 2;

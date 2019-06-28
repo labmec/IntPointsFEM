@@ -128,13 +128,14 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 
         /// Serial
         for (int iel = 0; iel < n_vols; iel++) {
-            
-            int el_dof = el_n_dofs[iel];
-            int pos = cols_first_index[iel];
 
             /// Compute Elementary Matrix.
             TPZFMatrix<STATE> K;
             fCoefToGradSol.ComputeTangetMatrix(iel,K);
+            
+            int el_dof = el_n_dofs[iel];
+            int pos = cols_first_index[iel];
+
             for (int i_dof = 0; i_dof < el_dof; i_dof++) {
                 
                 int i_dest = indexes[pos + i_dof];
@@ -151,27 +152,6 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
         }
 
     }
-
-    
-//    {
-//        int n_ia = IA.size();
-//        int n_ja = JA.size();
-//        int l = 0;
-//        std::ofstream kg_out("kg.txt");
-//        for (int i = 0; i < n_ia - 1 ; i++) {
-//            int NNZ = IA[i+1] - IA[i];
-//            kg_out << "Row i = " << i << ", NNZ = " << IA[i+1] - IA[i] << " " ;
-//            kg_out << "IA[" << i << "] = " << IA[i] << std::endl;
-//            for (int j = IA[i]; j < NNZ + IA[i]; j++) {
-//                kg_out << "     JA[" << j << "] = " << JA[j] << " " ;
-//                kg_out << "     k " << stiff.GetVal(i, JA[j]) << " and K_g[" << l << "] = " <<  Kg[l] << std::endl;
-//                l++;
-//            }
-//        }
-//        for (int l = 0; l < Kg.size(); l++) {
-//            kg_out << " K_g[" << l << "] = " <<  Kg[l] << std::endl;
-//        }
-//    }
     
     auto it_end = fSparseMatrixLinear.MapEnd();
 
@@ -183,6 +163,9 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     }
 
     Assemble(rhs,guiInterface);
+    
+    int aka = 0;
+    
 }
 
 int TPZElastoPlasticIntPointsStructMatrix::StressRateVectorSize(){

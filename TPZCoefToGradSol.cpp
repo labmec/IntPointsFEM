@@ -163,24 +163,21 @@ void TPZCoefToGradSol::ComputeTangetMatrix(int64_t iel, TPZFMatrix<REAL> &K){
 
     int pos = fBlockMatrix.Blocks().fMatrixPosition[iel];
     TPZFMatrix<STATE> De(3,3);
+    TPZFMatrix<STATE> Bip(n_sigma_comps,el_dofs,0.0);
+    TPZFMatrix<STATE> DeBip;
     int c = 0;
     for (int ip = 0; ip < el_npts; ip++) {
-    
-        TPZFMatrix<STATE> Bip(n_sigma_comps,el_dofs,0.0);
         for (int i = 0; i < n_sigma_comps; i++) {
             for (int j = 0; j < el_dofs; j++) {
-                REAL val  = fBlockMatrix.Blocks().fStorage[pos + c];
-                Bip(i,j) = val;
+                Bip(i,j) = fBlockMatrix.Blocks().fStorage[pos + c];
                 c++;
             }
         }
         
         REAL omega = fConstitutiveLawProcessor.fWeight[first_el_ip + ip];
         ComputeConstitutiveMatrix(ip,De);
-        TPZFMatrix<STATE> DeBip;
         De.Multiply(Bip, DeBip);
-        Bip.Transpose();
-        Bip.MultAdd(DeBip, K, K, omega, 1.0);
+        Bip.MultAdd(DeBip, K, K, omega, 1.0, 1);
     }
 }
 
