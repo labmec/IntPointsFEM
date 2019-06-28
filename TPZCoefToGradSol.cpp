@@ -89,22 +89,21 @@ void TPZCoefToGradSol::MultiplyTranspose(TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL>
 
 
 void TPZCoefToGradSol::MultiplyTranspose(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &res) {
-    int dim = 2;
-    int64_t rows = fBlockMatrix.Rows();
     int64_t cols = fBlockMatrix.Cols();
 
     int64_t ncolor = fNColor;
     int64_t neq = res.Rows();
 
-    TPZFMatrix<REAL> forces(dim * cols, 1);
+    TPZFMatrix<REAL> forces(cols, 1);
     res.Resize(ncolor * neq, 1);
     res.Zero();
 
     fBlockMatrix.MultiplyVector(&sigma(0, 0), &forces(0, 0), true);
-    fBlockMatrix.MultiplyVector(&sigma(rows, 0), &forces(cols, 0), true);
+
+//    forces.Print("F = ",std::cout, EMathematicaInput);
 
     // Assemble forces
-    cblas_dsctr(dim * cols, forces, &fColorIndexes[0], &res(0,0));
+    cblas_dsctr(cols, forces, &fColorIndexes[0], &res(0,0));
 
     int64_t colorassemb = ncolor / 2.;
     while (colorassemb > 0) {

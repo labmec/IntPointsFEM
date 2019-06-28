@@ -2,9 +2,9 @@
 
 void Multiplicity1(double *sigma, double eigenvalue, double *eigenvector) {
     TPZVec<REAL> det(3);
-    det[0] = (sigma[0] - eigenvalue)*(sigma[1] - eigenvalue) - sigma[3]*sigma[3];
-    det[1] = (sigma[0] - eigenvalue)*(sigma[2] - eigenvalue);
-    det[2] = (sigma[1] - eigenvalue)*(sigma[2] - eigenvalue);
+    det[0] = (sigma[_XX_] - eigenvalue) * (sigma[_YY_] - eigenvalue) - sigma[_XY_] * sigma[_XY_];
+    det[1] = (sigma[_XX_] - eigenvalue) * (sigma[_ZZ_] - eigenvalue) - sigma[_XZ_] * sigma[_XZ_];
+    det[2] = (sigma[_YY_] - eigenvalue) * (sigma[_ZZ_] - eigenvalue) - sigma[_YZ_] * sigma[_YZ_];
 
     REAL maxdet = fabs(det[0]);
     for (int i = 1; i < 3; i++) {
@@ -14,21 +14,21 @@ void Multiplicity1(double *sigma, double eigenvalue, double *eigenvector) {
     }
     TPZVec<REAL> v(3);
     if (maxdet == fabs(det[0])) {
-        v[0] = 0;
-        v[1] = 0;
+        v[0] = 1 / det[0] * (-(sigma[_YY_] - eigenvalue) * sigma[_XZ_] + sigma[_XY_] * sigma[_YZ_]);
+        v[1] = 1 / det[0] * (-(sigma[_XX_] - eigenvalue) * sigma[_YZ_] + sigma[_XY_] * sigma[_XZ_]);
         v[2] = 1;
 
     }
     else if (maxdet == fabs(det[1])) {
-        v[0] = 1/det[1]*(-(sigma[2] - eigenvalue)*sigma[3]);
+        v[0] = 1 / det[1] * (-(sigma[_ZZ_] - eigenvalue) * sigma[_XY_] + sigma[_XZ_] * sigma[_YZ_]);
         v[1] = 1;
-        v[2] = 0;
+        v[2] = 1 / det[1] * (-(sigma[_XX_] - eigenvalue) * sigma[_YZ_] + sigma[_XY_] * sigma[_XZ_]);
 
     }
     else {
         v[0] = 1;
-        v[1] = 1/det[2]*(-(sigma[2] - eigenvalue)*sigma[3]);
-        v[2] = 0;
+        v[1] = 1 / det[2] * (-(sigma[_ZZ_] - eigenvalue) * sigma[_XY_] + sigma[_XZ_] * sigma[_YZ_]);
+        v[2] = 1 / det[2] * (-(sigma[_YY_] - eigenvalue) * sigma[_XZ_] + sigma[_XY_] * sigma[_YZ_]);
     }
     REAL norm = sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
     eigenvector[0] = v[0]/norm;
@@ -38,9 +38,9 @@ void Multiplicity1(double *sigma, double eigenvalue, double *eigenvector) {
 
 void Multiplicity2(double *sigma, double eigenvalue, double *eigenvector1, double *eigenvector2) {
     TPZVec<REAL> x(3);
-    x[0] = sigma[0] - eigenvalue;
-    x[1] = sigma[1] - eigenvalue;
-    x[2] = sigma[2] - eigenvalue;
+    x[0] = sigma[_XX_] - eigenvalue;
+    x[1] = sigma[_YY_] - eigenvalue;
+    x[2] = sigma[_ZZ_] - eigenvalue;
 
     REAL maxx = fabs(x[0]);
     for (int i = 1; i < 3; i++) {
@@ -53,33 +53,33 @@ void Multiplicity2(double *sigma, double eigenvalue, double *eigenvector1, doubl
     TPZVec<REAL> v2(3);
 
     if (maxx == fabs(x[0])) {
-        v1[0] = -sigma[3]/x[0];
+        v1[0] = -sigma[_XY_] / x[0];
         v1[1] = 1;
         v1[2] = 0;
 
-        v2[0] = 0;
+        v2[0] = -sigma[_XZ_] / x[0];
         v2[1] = 0;
         v2[2] = 1;
 
     }
     else if (maxx == fabs(x[1])) {
         v1[0] = 1;
-        v1[1] = -sigma[3]/x[1];
+        v1[1] = -sigma[_XY_] / x[1];
         v1[2] = 0;
 
         v2[0] = 0;
-        v2[1] = 0;
+        v2[1] = -sigma[_YZ_] / x[1];
         v2[2] = 1;
 
     }
     else {
         v1[0] = 1;
         v1[1] = 0;
-        v1[2] = 0;
+        v1[2] = -sigma[_XZ_] / x[2];
 
         v2[0] = 0;
         v2[1] = 1;
-        v2[2] = 0;
+        v2[2] = -sigma[_YZ_] / x[2];
 
     }
     REAL norm1 = sqrt(v1[0]*v1[0] + v1[1]*v1[1] + v1[2]*v1[2]);
@@ -95,10 +95,13 @@ void Multiplicity2(double *sigma, double eigenvalue, double *eigenvector1, doubl
 }
 
 void Eigenvectors(double *sigma, double *eigenvalues, double *eigenvectors, double &maxel) {
-    sigma[0]*=maxel;
-    sigma[1]*=maxel;
-    sigma[2]*=maxel;
-    sigma[3]*=maxel;
+    sigma[_XX_]*=maxel;
+    sigma[_YY_]*=maxel;
+    sigma[_ZZ_]*=maxel;
+    sigma[_XY_]*=maxel;
+    sigma[_XZ_]*=maxel;
+    sigma[_YZ_]*=maxel;
+
 
     if ((eigenvalues[0] == eigenvalues[1]) && (eigenvalues[1] == eigenvalues[2])) {
         eigenvectors[0] = 1.;
@@ -191,21 +194,31 @@ void NewtonIterations(double *interval, double *sigma, double *eigenvalues, doub
         x = interval[i];
         it = 0;
 
-        f = sigma[0] * sigma[1] - x * (sigma[0] + sigma[1]) + x * x - sigma[3] * sigma[3];
+        REAL sigmaxy2 = sigma[_XY_]*sigma[_XY_];
+        REAL sigmaxz2 = sigma[_XZ_]*sigma[_XZ_];
+        REAL sigmayz2 = sigma[_YZ_]*sigma[_YZ_];
+
+        f = -x*x*x - sigmaxz2* sigma[_YY_] - sigmaxy2*sigma[_ZZ_] - sigmayz2*sigma[_XX_] + 2* sigma[_XY_]*sigma[_XZ_]*sigma[_YZ_] +
+                sigma[_XX_]*sigma[_YY_]*sigma[_ZZ_] + x*x*(sigma[_XX_] + sigma[_YY_] + sigma[_ZZ_]) + x*(sigmaxy2 + sigmaxz2 + sigmayz2 -
+                sigma[_XX_]*sigma[_YY_] - sigma[_XX_]*sigma[_ZZ_] - sigma[_YY_]*sigma[_ZZ_]);
+
         res = abs(f);
 
         while (it < numiterations && res > tol) {
-            df = -sigma[0] - sigma[1] + 2 * x;
+            df = -3*x*x + sigmaxy2 + sigmaxz2 + sigmayz2 - sigma[_XX_]*sigma[_YY_] - sigma[_XX_]*sigma[_ZZ_] - sigma[_YY_]*sigma[_ZZ_] + 2*x*(sigma[_XX_] + sigma[_YY_] + sigma[_ZZ_]);
 
             x -= f / df;
-            f = sigma[0] * sigma[1] - x * (sigma[0] + sigma[1]) + x * x - sigma[3] * sigma[3];
+            f = -x*x*x - sigmaxz2* sigma[_YY_] - sigmaxy2*sigma[_ZZ_] - sigmayz2*sigma[_XX_] + 2* sigma[_XY_]*sigma[_XZ_]*sigma[_YZ_] +
+                sigma[_XX_]*sigma[_YY_]*sigma[_ZZ_] + x*x*(sigma[_XX_] + sigma[_YY_] + sigma[_ZZ_]) + x*(sigmaxy2 + sigmaxz2 + sigmayz2 -
+                sigma[_XX_]*sigma[_YY_] - sigma[_XX_]*sigma[_ZZ_] - sigma[_YY_]*sigma[_ZZ_]);
+
             res = abs(f);
             it++;
         }
         eigenvalues[i] = x;
 
     }
-    eigenvalues[2] = sigma[0] + sigma[1] + sigma[2] - eigenvalues[0] - eigenvalues[1];
+    eigenvalues[2] = sigma[_XX_] + sigma[_YY_] + sigma[_ZZ_] - eigenvalues[0] - eigenvalues[1];
 
     eigenvalues[0] *= maxel;
     eigenvalues[1] *= maxel;
