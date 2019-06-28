@@ -308,10 +308,10 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZVec<int>
     blocksData.fRowFirstIndex[0] = 0;
     blocksData.fColFirstIndex[0] = 0;
 
-    blocksData.fRowRowPosition.resize(nblocks + 1);
-    blocksData.fColColPosition.resize(nblocks + 1);
-    blocksData.fRowRowPosition[0] = 0;
-    blocksData.fColColPosition[0] = 0;
+//    blocksData.fRowRowPosition.resize(nblocks + 1);
+//    blocksData.fColColPosition.resize(nblocks + 1);
+//    blocksData.fRowRowPosition[0] = 0;
+//    blocksData.fColColPosition[0] = 0;
     
     // @TODO Candidate for TBB ParallelScan
     // Example with lambda expression https://www.threadingbuildingblocks.org/docs/help/reference/algorithms/parallel_scan_func.html
@@ -339,8 +339,8 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZVec<int>
         blocksData.fRowFirstIndex[iel + 1] =  blocksData.fRowFirstIndex[iel] + blocksData.fRowSizes[iel];
         blocksData.fColFirstIndex[iel + 1] = blocksData.fColFirstIndex[iel] + blocksData.fColSizes[iel];
 
-        blocksData.fRowRowPosition[iel + 1] = blocksData.fRowRowPosition[iel] + blocksData.fRowSizes[iel] * blocksData.fRowSizes[iel];
-        blocksData.fColColPosition[iel + 1] = blocksData.fColColPosition[iel] + blocksData.fColSizes[iel] * blocksData.fColSizes[iel];
+//        blocksData.fRowRowPosition[iel + 1] = blocksData.fRowRowPosition[iel] + blocksData.fRowSizes[iel] * blocksData.fRowSizes[iel];
+//        blocksData.fColColPosition[iel + 1] = blocksData.fColColPosition[iel] + blocksData.fColSizes[iel] * blocksData.fColSizes[iel];
     }
 
     blocksData.fStorage.resize(blocksData.fMatrixPosition[nblocks]);
@@ -530,76 +530,5 @@ void TPZElastoPlasticIntPointsStructMatrix::ColoredIndexes(TPZVec<int> &element_
         for (int64_t icols = 0; icols < elem_col; icols++) {
             coloredindexes[cont_cols + icols] = indexes[cont_cols + icols] + elemcolor[iel]*neq;
         }
-    }
-}
-
-void TPZElastoPlasticIntPointsStructMatrix::Dep(TPZVec<REAL> &depxx, TPZVec<REAL> &depyy, TPZVec<REAL> &depxy) {
-    
-    int nblocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
-    int sizedep = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fRowRowPosition[nblocks];
-    // for (int i = 0; i < nblocks; ++i) {
-    //     int rows = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fRowSizes[i];
-    //     sizedep += rows * rows;
-    // }
-
-    depxx.resize(sizedep);
-    depyy.resize(sizedep);
-    depxy.resize(sizedep);
-    depxx.Fill(0.);
-    depyy.Fill(0.);
-    depxy.Fill(0.);
-
-    int depel_pos = 0;
-    for (int iel = 0; iel < fMesh->NElements(); ++iel) {
-        TPZCompEl *cel = fMesh->Element(iel);
-        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement *>(cel);
-        if (!cel_inter) DebugStop();
-        if (cel->Reference()->Dimension() != fMesh->Dimension()) continue;
-        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
-        TPZMaterialData data;
-        cel_inter->InitMaterialData(data);
-
-        TPZMaterial *cel_mat = cel->Material();
-        TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem> *mat = dynamic_cast<TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem> *>(cel_mat);
-
-        int64_t npts = int_rule->NPoints(); // number of integration points of the element
-        int64_t dim = cel_inter->Dimension(); //dimension of the element
-
-        for (int64_t ipts = 0; ipts < npts; ipts++) {
-            TPZVec<REAL> qsi(dim);
-            REAL w;
-            int_rule->Point(ipts, qsi, w);
-            cel_inter->ComputeRequiredData(data, qsi);
-            REAL weight = w * fabs(data.detjac);
-
-            TPZTensor<REAL> deltastrain;
-            TPZTensor<REAL> stress;
-            TPZFMatrix<REAL> dep(6,6);
-            deltastrain.Zero();
-            stress.Zero();
-            dep.Zero();
-            mat->GetPlasticModel().ApplyStrainComputeSigma(deltastrain,stress,&dep);
-
-            int pos1 = depel_pos + ipts * (dim * dim * npts + dim);
-            int pos2 = depel_pos + ipts * (dim * dim * npts + dim) + 1;
-            int pos3 = depel_pos + ipts * (dim * dim * npts + dim) + dim * npts;
-            int pos4 = depel_pos + ipts * (dim * dim * npts + dim) + dim * npts + 1;
-
-            depxx[pos1] = weight * dep.GetVal(_XX_, _XX_);
-            depxx[pos2] = dep.GetVal(_XX_, _XY_) * 0.5;
-            depxx[pos3] = dep.GetVal(_XY_, _XX_);
-            depxx[pos4] = weight * dep.GetVal(_XY_, _XY_) * 0.5;
-
-            depyy[pos1] = weight * dep.GetVal(_XY_, _XY_) * 0.5;
-            depyy[pos2] = dep.GetVal(_XY_, _YY_);
-            depyy[pos3] = dep.GetVal(_YY_, _XY_) * 0.5;
-            depyy[pos4] = weight * dep.GetVal(_YY_, _YY_);
-
-            depxy[pos1] = dep.GetVal(_XX_, _XY_) * 0.5;
-            depxy[pos2] = weight * dep.GetVal(_XX_, _YY_);
-            depxy[pos3] = weight * dep.GetVal(_XY_, _XY_) * 0.5;
-            depxy[pos4] = dep.GetVal(_XY_, _YY_);
-        }
-        depel_pos = depel_pos + (npts * dim) * (npts * dim);
     }
 }

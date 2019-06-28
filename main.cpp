@@ -53,7 +53,7 @@ void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_mate
 
 int main(int argc, char *argv[]) {
     int pOrder = 1; // Computational mesh order
-    bool render_vtk_Q = true;
+    bool render_vtk_Q = false;
     
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
@@ -146,7 +146,15 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
 
 // //    analysis->Solver().Matrix()->Print("kip = ",std::cout, EMathematicaInput);
     for (int i = 0; i < n_iterations; i++) {
-        analysis->Solve();
+        {
+            time_t start,end;
+            time (&start);
+                    analysis->Solve();
+            time (&end);
+            double dif = difftime (end,start);
+            std::cout << "Calling Linear Solve: Elasped time [sec] = " << dif << std::endl;
+        }
+
         delta_du = analysis->Solution();
         du += delta_du;
         analysis->LoadSolution(du);
@@ -535,7 +543,6 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int p_order, TElastoPlasti
 void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_material, int npoints, std::ostream &out, bool euler) {
     REAL rw = 0.1;
     REAL re = 4.0;
-    REAL theta = 0.;
 
     //Initial stress and wellbore pressure
     REAL sigma0 = wellbore_material.BoundaryData()[0].InitialValue();

@@ -46,8 +46,6 @@ public:
         else return false;
     }
 
-    void Dep(TPZVec<REAL> &depxx, TPZVec<REAL> &depyy, TPZVec<REAL> &depxy);
-
 private:
     
     int StressRateVectorSize();

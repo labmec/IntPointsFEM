@@ -24,14 +24,14 @@ public:
         TPZVec<int> fMatrixPosition; // blocks start position in fStorage vector
         TPZVec<int> fRowFirstIndex; // blocks first row index
         TPZVec<int> fColFirstIndex; // blocks first column index
-        TPZVec<int> fRowRowPosition; // An stride required for Kel construction
-        TPZVec<int> fColColPosition; // An stride required for Kel construction
+//        TPZVec<int> fRowRowPosition; // An stride required for Kel construction
+//        TPZVec<int> fColColPosition; // An stride required for Kel construction
 
         TPZVec<int> fRowPtr; // vector of the start of every row and the end of the last row plus one (this is for CSR format)
         TPZVec<int> fColInd; // vector of column indices for each non-zero element of the matrix (this is for CSR format)
-        TPZVec<int> fRowRowPtr;
-        TPZVec<int> fRowRowInd;
-        TPZVec<int> fColColPtr;
+//        TPZVec<int> fRowRowPtr;
+//        TPZVec<int> fRowRowInd;
+//        TPZVec<int> fColColPtr;
     };
 
 
@@ -84,8 +84,6 @@ public:
     TPZIrregularBlocksMatrix &operator=(const TPZIrregularBlocksMatrix &copy);
 
     void MultiplyVector(REAL *A, REAL *res, int opt);
-
-    void KMatrix(REAL *A, REAL *res);
 
     /** @brief Set method */
     void SetBlocks(struct IrregularBlocks & blocks) {

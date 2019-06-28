@@ -177,7 +177,6 @@ void TPZConstitutiveLawProcessor::SpectralDecomposition(TPZFMatrix<REAL> &sigma_
 
     TPZVec<REAL> interval(2* fNpts);
 
-    int n_sigma_comps = 3;
     int ipts;
 #ifdef USING_TBB
     tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1),[&](size_t ipts)
@@ -235,7 +234,7 @@ void TPZConstitutiveLawProcessor::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TP
 }
 
 void TPZConstitutiveLawProcessor::StressCompleteTensor(TPZFMatrix<REAL> &sigma_projected, TPZFMatrix<REAL> &eigenvectors, TPZFMatrix<REAL> &sigma){
-    int n_sigma_entries = 3;
+    
     int ipts;
 #ifdef USING_TBB
     tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1),[&](size_t ipts)
