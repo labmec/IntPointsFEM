@@ -32,7 +32,7 @@ public:
         cudaEventCreate(&start);
         cudaEventCreate(&stop);
 #endif
-        time_unit = EMilliseconds;
+        time_unit = ESeconds;
     }
 
     void TimerConfig(WhichUnit unit) {
@@ -96,27 +96,21 @@ public:
     	else if(time_unit == ESeconds) {
     		return time_span/1000000000;
     	}
-    	else {
-    		return time_span/1000000; //default milliseconds
-    	}
 #endif
     }
 
     std::string Unit() {
         if(time_unit == ENanoseconds) {
-            return " ns";
+            return "\tns";
         }
         else if(time_unit == EMicroseconds) {
-            return " us";
+            return "\tus";
         }
         else if(time_unit == EMilliseconds) {
-            return " ms";
+            return "\tms";
         }
         else if(time_unit == ESeconds) {
-            return " s";
-        }
-        else {
-            return " ms"; //default milliseconds
+            return "\ts";
         }
     }
 };
