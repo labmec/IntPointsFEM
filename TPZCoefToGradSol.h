@@ -39,6 +39,8 @@ public:
     void Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &delta_strain);
     
     void MultiplyTranspose(TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL> &res); 
+
+    void TransferDataToGPU();
 #endif
 
     void SetDoFIndexes(TPZVec<int> dof_indexes) {
@@ -64,9 +66,7 @@ public:
     TPZIrregularBlocksMatrix & IrregularBlocksMatrix() {
         return fBlockMatrix;
     }
-
-    void TransferDataToGPU();
-    
+   
     void ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZFMatrix<REAL> &rhs);
     
     void ComputeConstitutiveMatrix(int64_t point_index, TPZFMatrix<STATE> &De);

@@ -283,47 +283,32 @@ void TPZConstitutiveLawProcessor::TranslateStress(TPZFMatrix<REAL> &full_stress,
 
 #ifdef USING_CUDA
 void TPZConstitutiveLawProcessor::ComputeSigma(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &sigma) {
-    // REAL lambda = fMaterial->GetPlasticModel().fER.Lambda();
-    // REAL mu =  fMaterial->GetPlasticModel().fER.Mu();
-    // REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();
-    // REAL mc_psi = fMaterial->GetPlasticModel().fYC.Psi();
-    // REAL mc_cohesion = fMaterial->GetPlasticModel().fYC.Cohesion();
-    // REAL K = fMaterial->GetPlasticModel().fER.K();
-    // REAL G = fMaterial->GetPlasticModel().fER.G();
+    REAL lambda = fMaterial->GetPlasticModel().fER.Lambda();
+    REAL mu =  fMaterial->GetPlasticModel().fER.Mu();
+    REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();
+    REAL mc_psi = fMaterial->GetPlasticModel().fYC.Psi();
+    REAL mc_cohesion = fMaterial->GetPlasticModel().fYC.Cohesion();
 
-    // int dim = 2;
+    int64_t rows = delta_strain.getSize();
+    sigma.resize(rows);
 
-    // sigma.resize(dim * dim * fNpts);
-    // sigma.Zero();
+    dPlasticStrain.resize(6 * fNpts);
+    dPlasticStrain.Zero();
 
-    // TPZVecGPU<REAL> eigenvalues(3 * fNpts);
-    // TPZVecGPU<REAL> eigenvectors(9 * fNpts);
-    // eigenvalues.Zero();
-    // eigenvectors.Zero();
-    // TPZVecGPU<REAL> elastic_strain(dim * dim * fNpts);
-    // TPZVecGPU<REAL> sigma_trial(dim * dim * fNpts);
+    dMType.resize(1 * fNpts);
+    dMType.Zero();
 
-    // TPZVecGPU<REAL> sigma_projected(3 * fNpts);
+    dAlpha.resize(1 * fNpts);
+    dAlpha.Zero();
 
-    // fCudaCalls->ElasticStrain(delta_strain.getData(), elastic_strain.getData(), dim * dim * fNpts);
-    // fCudaCalls->ComputeStress(elastic_strain.getData(), sigma_trial.getData(), fNpts, mu, lambda); 
-    // fCudaCalls->SpectralDecomposition(sigma_trial.getData(), eigenvalues.getData(), eigenvectors.getData(), fNpts); 
-    // fCudaCalls->ProjectSigma(eigenvalues.getData(), sigma_projected.getData(), fNpts, mc_phi, mc_psi, mc_cohesion, K, G);
-    // ERRADO
+    fCudaCalls->ComputeSigma(fNpts, delta_strain.getData(), sigma.getData(), lambda, mu, mc_phi, mc_psi, mc_cohesion, dPlasticStrain.getData(),  dMType.getData(), dAlpha.getData(), dWeight.getData());
 
+}
+#endif
 
-
-    // TPZFMatrix<REAL> sigma_projected(3 * fNpts, 1, 0.);
-
-    // // Compute sigma
-    // ElasticStrain(delta_strain, elastic_strain);
-    // ComputeStress(elastic_strain, sigma_trial);
-    // SpectralDecomposition(sigma_trial, eigenvalues, eigenvectors);
-    // ProjectSigma(eigenvalues, sigma_projected);
-    // StressCompleteTensor(sigma_projected, eigenvectors, sigma);
-
-    // // Update plastic strain
-    // ComputeStrain(sigma, elastic_strain);
-    // PlasticStrain(delta_strain, elastic_strain);
+#ifdef USING_CUDA
+void TPZConstitutiveLawProcessor::TransferDataToGPU() {
+    dWeight.resize(fWeight.size());
+    dWeight.set(&fWeight[0], fWeight.size());
 }
 #endif

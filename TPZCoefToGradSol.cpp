@@ -123,29 +123,34 @@ void TPZCoefToGradSol::ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZFMatr
     Multiply(d_solution, d_delta_strain);
     fConstitutiveLawProcessor.ComputeSigma(d_delta_strain, d_sigma);
     MultiplyTranspose(d_sigma, d_rhs);
-    d_rhs.get(&rhs(0,0), d_rhs.getSize());
+    d_rhs.get(&rhs(0,0), solution.Rows());
+    // rhs.Print("rhsGPU = ", std::cout, EMathematicaInput);
 #else
 
     TPZFMatrix<REAL> delta_strain;
     TPZFMatrix<REAL> sigma;
 
     Multiply(solution, delta_strain);
+    ofstream file("outcpu.txt");
+    delta_strain.Print("deltaCPU = ",file, EMathematicaInput);
     fConstitutiveLawProcessor.ComputeSigma(delta_strain, sigma);
     MultiplyTranspose(sigma, rhs); // Perform Residual integration using a global linear application B
+    // rhs.Print("rhsCPU = ", std::cout, EMathematicaInput);
 #endif
 }
 
-void TPZCoefToGradSol::TransferDataToGPU() {
 #ifdef USING_CUDA
+void TPZCoefToGradSol::TransferDataToGPU() {
     fBlockMatrix.TransferDataToGPU();
+    fConstitutiveLawProcessor.TransferDataToGPU();
 
     dDoFIndexes.resize(fDoFIndexes.size());
     dDoFIndexes.set(&fDoFIndexes[0], fDoFIndexes.size());
 
     dColorIndexes.resize(fColorIndexes.size());
     dColorIndexes.set(&fColorIndexes[0], fColorIndexes.size());
-#endif
 }
+#endif
 
 
 void TPZCoefToGradSol::ComputeConstitutiveMatrix(int64_t point_index, TPZFMatrix<STATE> &De){

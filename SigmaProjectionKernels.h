@@ -207,26 +207,23 @@ __device__ void ReturnMappingApexDevice(REAL *eigenvalues, REAL *sigma_projected
 	}
 }
 
-__global__ void ProjectSigmaKernel(REAL *eigenvalues, REAL *sigma_projected, REAL *m_type, REAL *alpha, int64_t npts, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL K, REAL G) {
-	int ipts = blockIdx.x * blockDim.x + threadIdx.x;
+__device__ void ProjectSigmaDevice(REAL *eigenvalues, REAL *sigma_projected, int m_type, REAL alpha, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL K, REAL G) {
 
 	bool check = false;
-	if (ipts < npts) {
-		m_type[ipts] = 0;
-		check = PhiPlaneDevice(&eigenvalues[3 * ipts], &sigma_projected[3 * ipts], mc_phi, mc_cohesion); //elastic domain
-		if (!check) { //plastic domain
-			m_type[ipts] = 1;
-			check = ReturnMappingMainPlaneDevice(&eigenvalues[3 * ipts], &sigma_projected[3 * ipts], alpha[ipts], mc_phi, mc_psi, mc_cohesion, K, G); //main plane
-			if (!check) { //edges or apex
-				if (((1 - sin(mc_psi)) * eigenvalues[0 + 3 * ipts] - 2. * eigenvalues[1 + 3 * ipts] + (1 + sin(mc_psi)) * eigenvalues[2 + 3 * ipts]) > 0) { // right edge
-					check = ReturnMappingRightEdgeDevice(&eigenvalues[3 * ipts], &sigma_projected[3 * ipts], alpha[ipts], mc_phi, mc_psi, mc_cohesion, K, G);
-				} else { //left edge
-					check = ReturnMappingLeftEdgeDevice(&eigenvalues[3 * ipts], &sigma_projected[3 * ipts], alpha[ipts], mc_phi, mc_psi, mc_cohesion, K, G);
-				}
-				if (!check) { //apex
-					m_type[ipts] = -1;
-					ReturnMappingApexDevice(&eigenvalues[3 * ipts], &sigma_projected[3 * ipts], alpha[ipts], mc_phi, mc_psi, mc_cohesion, K);
-				}
+	m_type = 0;
+	check = PhiPlaneDevice(eigenvalues, sigma_projected, mc_phi, mc_cohesion); //elastic domain
+	if (!check) { //plastic domain
+		m_type = 1;
+		check = ReturnMappingMainPlaneDevice(eigenvalues, sigma_projected, alpha, mc_phi, mc_psi, mc_cohesion, K, G); //main plane
+		if (!check) { //edges or apex
+			if (((1 - sin(mc_psi)) * eigenvalues[0] - 2. * eigenvalues[1] + (1 + sin(mc_psi)) * eigenvalues[2]) > 0) { // right edge
+				check = ReturnMappingRightEdgeDevice(eigenvalues, sigma_projected, alpha, mc_phi, mc_psi, mc_cohesion, K, G);
+			} else { //left edge
+				check = ReturnMappingLeftEdgeDevice(eigenvalues, sigma_projected, alpha, mc_phi, mc_psi, mc_cohesion, K, G);
+			}
+			if (!check) { //apex
+				m_type = -1;
+				ReturnMappingApexDevice(eigenvalues, sigma_projected, alpha, mc_phi, mc_psi, mc_cohesion, K);
 			}
 		}
 	}

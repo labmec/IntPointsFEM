@@ -2,10 +2,8 @@
 #include "pzreal.h"
 #include "pzvec.h"
 
-#include "SpectralDecompKernels.h"
-#include "StressStrainKernels.h"
-#include "SigmaProjectionKernels.h"
 #include "MatMulKernels.h"
+#include "ComputeSigmaKernel.h"
 
 #define NT 512
 
@@ -135,4 +133,13 @@ void TPZCudaCalls::SpMSpM(int opt, int m, int n, int k, int nnzA, REAL *csrValA,
 	if (result != CUSPARSE_STATUS_SUCCESS) {
 		throw std::runtime_error("failed to perform cusparseDcsrgemm");      
 	}	
+}
+
+void TPZCudaCalls::ComputeSigma(int npts, REAL *delta_strain, REAL *sigma, REAL lambda, REAL mu, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL *plastic_strain,  REAL *m_type, REAL *alpha, REAL *weight){
+	int numBlocks = (npts + NT - 1) / NT;
+	ComputeSigmaKernel<<<numBlocks,NT>>> (npts, delta_strain, sigma, lambda, mu, mc_phi, mc_psi, mc_cohesion, plastic_strain, m_type, alpha, weight);
+	cudaDeviceSynchronize();
+	if (cudaGetLastError() != cudaSuccess) {
+		throw std::runtime_error("failed to perform ComputeSigmaKernel");      
+	}
 }

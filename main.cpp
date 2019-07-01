@@ -119,10 +119,6 @@ int main(int argc, char *argv[]) {
 }
 
 void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
-#ifdef USING_CUDA
-    std::cout << "Using CUDA" << std::endl;
-#endif
-
     bool stop_criterion_Q = false;
     REAL norm_res, norm_delta_du;
 
@@ -131,8 +127,8 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
 
     analysis->Solution().Zero();
     TPZFMatrix<REAL> du(analysis->Solution()), delta_du;
-//    analysis->Solution()(0,0) = -0.001;
-//    analysis->Solution()(1,0) = -0.001;
+   // analysis->Solution()(0,0) = -0.001;
+   // analysis->Solution()(1,0) = -0.001;
     analysis->LoadSolution();
     {
         time_t start,end;
@@ -144,55 +140,55 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
     }
 
 
-// // //    analysis->Solver().Matrix()->Print("kip = ",std::cout, EMathematicaInput);
-//     for (int i = 0; i < n_iterations; i++) {
-//         {
-//             time_t start,end;
-//             time (&start);
-//                     analysis->Solve();
-//             time (&end);
-//             double dif = difftime (end,start);
-//             std::cout << "Calling Linear Solve: Elasped time [sec] = " << dif << std::endl;
-//         }
+// //    analysis->Solver().Matrix()->Print("kip = ",std::cout, EMathematicaInput);
+    for (int i = 0; i < n_iterations; i++) {
+        {
+            time_t start,end;
+            time (&start);
+                    analysis->Solve();
+            time (&end);
+            double dif = difftime (end,start);
+            std::cout << "Calling Linear Solve: Elasped time [sec] = " << dif << std::endl;
+        }
 
-//         delta_du = analysis->Solution();
-//         du += delta_du;
-//         analysis->LoadSolution(du);
-//         {
-//             time_t start,end;
-//             time (&start);
-//             analysis->AssembleResidual();
-//             time (&end);
-//             double dif = difftime (end,start);
-//             std::cout << "Calling AssembleResidual: Elasped time [sec] = " << dif << std::endl;
-//         }
-//         norm_delta_du = Norm(delta_du);
-//         norm_res = Norm(analysis->Rhs());
-//         stop_criterion_Q = norm_res < tolerance;
-//         std::cout << "Nonlinear process :: delta_du norm = " << norm_delta_du << std::endl;
-//         std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
-//         if (stop_criterion_Q) {
-//             AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
-//             norm_res = Norm(analysis->Rhs());
-//             std::cout << "Nonlinear process converged with residue norm = " << norm_res << std::endl;
-//             std::cout << "Number of iterations = " << i + 1 << std::endl;
-//             break;
-//         }
-//         {
-//             time_t start,end;
-//             time (&start);
-//             analysis->Assemble();
-//             time (&end);
-//             double dif = difftime (end,start);
-//             std::cout << "Calling Assemble: Elasped time [sec] = " << dif << std::endl;
-//         }
+        delta_du = analysis->Solution();
+        du += delta_du;
+        analysis->LoadSolution(du);
+        {
+            time_t start,end;
+            time (&start);
+            analysis->AssembleResidual();
+            time (&end);
+            double dif = difftime (end,start);
+            std::cout << "Calling AssembleResidual: Elasped time [sec] = " << dif << std::endl;
+        }
+        norm_delta_du = Norm(delta_du);
+        norm_res = Norm(analysis->Rhs());
+        stop_criterion_Q = norm_res < tolerance;
+        std::cout << "Nonlinear process :: delta_du norm = " << norm_delta_du << std::endl;
+        std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
+        if (stop_criterion_Q) {
+            AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
+            norm_res = Norm(analysis->Rhs());
+            std::cout << "Nonlinear process converged with residue norm = " << norm_res << std::endl;
+            std::cout << "Number of iterations = " << i + 1 << std::endl;
+            break;
+        }
+        {
+            time_t start,end;
+            time (&start);
+            analysis->Assemble();
+            time (&end);
+            double dif = difftime (end,start);
+            std::cout << "Calling Assemble: Elasped time [sec] = " << dif << std::endl;
+        }
 
-//     }
+    }
 
-//      if (stop_criterion_Q == false) {
-//          AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
-//          std::cout << "Nonlinear process not converged with residue norm = " << norm_res << std::endl;
-//      }
+     if (stop_criterion_Q == false) {
+         AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
+         std::cout << "Nonlinear process not converged with residue norm = " << norm_res << std::endl;
+     }
 }
 
 TPZAnalysis *Analysis(TPZCompMesh *cmesh, int n_threads) {
