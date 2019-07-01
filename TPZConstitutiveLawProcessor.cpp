@@ -183,19 +183,23 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
 
     // The constitutive law is computing assuming full tensors
 
+    Timer timer;
+    timer.TimeUnit(Timer::EMilliseconds);
+
     int ipts;
 #ifdef USING_TBB
     #ifdef GET_TIME
-    tbb::tick_count t0 = tbb::tick_count::now();
+    timer.TimerOption(Timer::TBBTimer);
+    timer.Start();
     #endif
     tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1),[&](size_t ipts)
 #else
     #ifdef GET_TIME
-    Timer timer;
+    timer.TimerOption(Timer::EChrono);
     timer.Start();
     #endif
     for (ipts = 0; ipts < fNpts; ipts++)
-#endif
+#endif    
     {
         TPZFMatrix<REAL> el_delta_strain(3, 1, 0.);
         TPZFMatrix<REAL> full_delta_strain(6, 1, 0.);
@@ -237,16 +241,12 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
     }
 #ifdef USING_TBB
 );
-    #ifdef GET_TIME
-    tbb::tick_count t1 = tbb::tick_count::now();
-    std::cout << "Elapsed time (ComputeSigma): " << (t1-t0).seconds() << "\ts" << std::endl;
-    #endif
-#else
-    #ifdef GET_TIME
-    timer.Stop();
-    std::cout << "Elapsed time (ComputeSigma): " << timer.ElapsedTime() << timer.Unit() << std::endl;
-    #endif
 #endif
+#ifdef GET_TIME
+timer.Stop();
+std::cout << "Elapsed time (ComputeSigma): " << timer.ElapsedTime() << timer.Unit() << std::endl;
+#endif
+
 }
 
 void TPZConstitutiveLawProcessor::TranslateStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &full_delta_strain){
