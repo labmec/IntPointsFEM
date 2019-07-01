@@ -131,8 +131,6 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
 
     analysis->Solution().Zero();
     TPZFMatrix<REAL> du(analysis->Solution()), delta_du;
-//    analysis->Solution()(0,0) = -0.001;
-//    analysis->Solution()(1,0) = -0.001;
     analysis->LoadSolution();
     {
         time_t start,end;
@@ -143,13 +141,11 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
         std::cout << "Calling CreateAssemble and Assemble: Elasped time [sec] = " << dif << std::endl;
     }
 
-
-// //    analysis->Solver().Matrix()->Print("kip = ",std::cout, EMathematicaInput);
     for (int i = 0; i < n_iterations; i++) {
         {
             time_t start,end;
             time (&start);
-                    analysis->Solve();
+            analysis->Solve();
             time (&end);
             double dif = difftime (end,start);
             std::cout << "Calling Linear Solve: Elasped time [sec] = " << dif << std::endl;

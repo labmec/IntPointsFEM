@@ -3,8 +3,10 @@
 //
 
 #include "TPZConstitutiveLawProcessor.h"
+#include "TPZMaterial.h"
 #include "SpectralDecomp.h"
 #include "SigmaProjection.h"
+#include <functional>
 
 #ifdef USING_TBB
 #include "tbb/parallel_for.h"
@@ -12,8 +14,6 @@
 #endif
 
 #include "Timer.h"
-
-
 
 
 TPZConstitutiveLawProcessor::TPZConstitutiveLawProcessor() : fNpts(-1), fWeight(0), fMaterial(), fPlasticStrain(0,0), fMType(0,0), fAlpha(0,0) {
@@ -181,6 +181,30 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
     fAlpha.Resize(1 * fNpts, 1);
     fAlpha.Zero();
 
+//    auto sum = [](int x, int y) { return x + y; };
+//    cout << sum(5, 2) << endl;
+//    cout << sum(10, 5) << endl;
+
+    int int_var = 42;
+    auto lambda_func = [& int_var](){cout <<
+        "This lambda has a copy of int_var when created: " << int_var << endl;};
+//    lambda_func();
+
+    for(int i = 0; i < 3; i++) {
+        int_var++;
+        lambda_func();
+    }
+    
+    int aka = 0;
+    
+    TPZConstitutiveLaw<TPZ>::Compute
+//    TPZConstitutiveLaw::Com
+    
+//    std::function<void(void) > task, functionToCall;
+//    functionToCall = std::bind(TPZConstitutiveLaw::ComputeFlux, TPZMaterial * mat, int int_point_index, const TPZVec<STATE> & delta_epsilon, TPZVec<STATE> & sigma);
+//    task = ([functionToCall] {
+//    });
+    
     // The constitutive law is computing assuming full tensors
 
     int ipts;
@@ -197,6 +221,8 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
     for (ipts = 0; ipts < fNpts; ipts++)
 #endif
     {
+        
+        
         TPZFMatrix<REAL> el_delta_strain(3, 1, 0.);
         TPZFMatrix<REAL> full_delta_strain(6, 1, 0.);
         TPZFMatrix<REAL> elastic_strain(6, 1, 0.);
@@ -220,12 +246,13 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
             SpectralDecomposition(sigma_trial, eigenvalues, eigenvectors);
             ProjectSigma(eigenvalues, sigma_projected, alpha, mtype);
             StressCompleteTensor(sigma_projected, eigenvectors, full_sigma);
-
+            TranslateStress(full_sigma, el_sigma);
+            
             // Update plastic strain
             ComputeStrain(full_sigma, elastic_strain);
             PlasticStrain(full_delta_strain, elastic_strain, el_plastic_strain);
         }
-        TranslateStress(full_sigma, el_sigma);
+        
         el_sigma(0,0) *= fWeight[ipts];
         el_sigma(1,0) *= fWeight[ipts];
         el_sigma(2,0) *= fWeight[ipts];

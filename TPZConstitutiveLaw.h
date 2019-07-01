@@ -10,18 +10,19 @@
 
 #include <stdio.h>
 #include "TPZMatWithMem.h"
+#include "TPZElastoPlasticMem.h"
 #include "pzfmatrix.h"
 
-template <class TMEM>
+template <class TPZElastoPlasticMem>
 class TPZConstitutiveLaw {
     
 public:
     
     /// Evaluates flux from potential gradient
-    static void ComputeFlux(TPZMatWithMem<TMEM> * mat, int int_point_index, const TPZVec<STATE> & delta_epsilon, TPZVec<STATE> & sigma);
+    static void ComputeFlux(TPZMatWithMem<TPZElastoPlasticMem> * mat, int int_point_index, const TPZVec<STATE> & delta_epsilon, TPZVec<STATE> & sigma);
     
     /// Evaluates flux from potential gradient
-    static void ComputeFluxAndTanget(TPZMatWithMem<TMEM> * mat, int int_point_index, const TPZVec<STATE> & delta_epsilon, TPZVec<STATE> & sigma, TPZFMatrix<STATE> & dep);
+    static void ComputeFluxAndTanget(TPZMatWithMem<TPZElastoPlasticMem> * mat, int int_point_index, const TPZVec<STATE> & delta_epsilon, TPZVec<STATE> & sigma, TPZFMatrix<STATE> & dep);
     
 };
 

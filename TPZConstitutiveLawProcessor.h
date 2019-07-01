@@ -5,6 +5,7 @@
 #include "TPZYCMohrCoulombPV.h"
 #include "TPZElastoPlasticMem.h"
 #include "TPZMatElastoPlastic2D.h"
+#include "TPZConstitutiveLaw.h"
 
 #ifdef USING_CUDA
 #include "TPZVecGPU.h"
