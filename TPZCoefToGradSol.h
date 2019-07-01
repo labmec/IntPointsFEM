@@ -96,7 +96,7 @@ private:
     
 #ifdef USING_CUDA
     TPZVecGPU<int> dDoFIndexes;
-    TPZVecGPU<int> dIndexesColor;
+    TPZVecGPU<int> dColorIndexes;
     TPZCudaCalls fCudaCalls;
 #endif
 

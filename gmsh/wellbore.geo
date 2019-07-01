@@ -13,17 +13,9 @@ Mesh.SecondOrderLinear = 0;
 wr = 0.1;
 fr = 4.0;
 
-LargeCBurdenQ = 1;
-
-If(LargeCBurdenQ)
-	nt = 128;
-	nr = 128;
-	radial_progression = 1.01725;
-Else
-	nt = 2;
-	nr = 3;
-	radial_progression = 10.25;	
-EndIf
+nt = 2;
+nr = 2;
+radial_progression = 1.725;
 
 // center point
 pc = newp; Point(pc) = {0,0,0};
@@ -93,8 +85,8 @@ Transfinite Surface"*";
  EndIf
 
 Physical Surface("Omega") = {the_circle[]};
-Physical Line("bc_wellbore") = {i_circle[]};
-Physical Line("bc_farfield") = {e_circle[]};
+Physical Line("bc_wellbore") = {i_circle[]};  
+Physical Line("bc_farfield") = {e_circle[]};  
 Physical Point("fixed_x") = {fixed_x_points[]};
 Physical Point("fixed_y") = {fixed_y_points[]};
 

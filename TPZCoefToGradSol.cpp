@@ -7,8 +7,8 @@
 
 TPZCoefToGradSol::TPZCoefToGradSol() : fBlockMatrix(0,0), fNColor(-1), fDoFIndexes(0), fColorIndexes(0), fConstitutiveLawProcessor() {
 #ifdef USING_CUDA
-    dIndexes.resize(0);
-    dIndexesColor.resize(0);
+    dDoFIndexes.resize(0);
+    dColorIndexes.resize(0);
 #endif
 }
 
@@ -66,7 +66,7 @@ void TPZCoefToGradSol::MultiplyTranspose(TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL>
     fBlockMatrix.MultiplyVector(&sigma.getData()[0], &forces.getData()[0], true);
 
     // Assemble forces
-    fCudaCalls.ScatterOperation(cols, forces.getData(), res.getData(), dIndexesColor.getData());
+    fCudaCalls.ScatterOperation(cols, forces.getData(), res.getData(), dColorIndexes.getData());
 
     int64_t colorassemb = ncolor / 2.;
     while (colorassemb > 0) {
@@ -111,8 +111,8 @@ void TPZCoefToGradSol::MultiplyTranspose(TPZFMatrix<REAL> &sigma, TPZFMatrix<REA
 void TPZCoefToGradSol::ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZFMatrix<REAL> &rhs)
 {
 #ifdef USING_CUDA
-    TPZVecGPU<REAL> d_solution(neq);
-    d_solution.set(&solution(0,0), neq);
+    TPZVecGPU<REAL> d_solution(solution.Rows());
+    d_solution.set(&solution(0,0), solution.Rows());
 
     TPZVecGPU<REAL> d_delta_strain;
     TPZVecGPU<REAL> d_sigma;
@@ -122,8 +122,8 @@ void TPZCoefToGradSol::ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZFMatr
 
     Multiply(d_solution, d_delta_strain);
     fConstitutiveLawProcessor.ComputeSigma(d_delta_strain, d_sigma);
-    MultiplyTranspose(sigma, drhs);
-    drhs.get(&rhs(0,0), neq);
+    MultiplyTranspose(d_sigma, d_rhs);
+    d_rhs.get(&rhs(0,0), d_rhs.getSize());
 #else
 
     TPZFMatrix<REAL> delta_strain;
@@ -142,8 +142,8 @@ void TPZCoefToGradSol::TransferDataToGPU() {
     dDoFIndexes.resize(fDoFIndexes.size());
     dDoFIndexes.set(&fDoFIndexes[0], fDoFIndexes.size());
 
-    dIndexesColor.resize(fIndexesColor.size());
-    dIndexesColor.set(&fIndexesColor[0], fIndexesColor.size());
+    dColorIndexes.resize(fColorIndexes.size());
+    dColorIndexes.set(&fColorIndexes[0], fColorIndexes.size());
 #endif
 }
 

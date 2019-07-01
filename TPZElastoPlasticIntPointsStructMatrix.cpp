@@ -162,6 +162,8 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
         Kg[m_i_j_to_sequence[row][col]] += val;
     }
 
+    std::cout << "HERE " << std::endl;
+
     Assemble(rhs,guiInterface);
     
     int aka = 0;

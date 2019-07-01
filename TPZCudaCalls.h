@@ -3,11 +3,9 @@
 
 #include "TPZVecGPU.h"
 #include "pzreal.h"
+
 #include <cublas_v2.h>
 #include <cusparse.h>
-
-
-
 
 class TPZCudaCalls {
 public:

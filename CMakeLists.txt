@@ -100,9 +100,10 @@ if(USING_CUDA)
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --default-stream per-thread  -ftz=true -Xcompiler -fopenmp -O3 -w -Wno-deprecated-gpu-targets")
 
     set(CMAKE_CUDA_STANDARD 11)
-    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}; -arch=compute_35 -rdc=true -lcudadevrt)
+#   set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}; -arch=compute_35 -rdc=true -lcudadevrt)
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}; -arch=compute_35)
 
-    set(CUDA_SEPARABLE_COMPILATION ON)
+#    set(CUDA_SEPARABLE_COMPILATION ON)
     
     include_directories(/usr/local/cuda-8.0/include/)
     link_directories(/usr/local/cuda-8.0/lib64/)
@@ -123,7 +124,8 @@ configure_file(path.h.in ${PROJECT_SOURCE_DIR}/path.h @ONLY)
 
 # Create executable and link libraries
 if(USING_CUDA)
-    cuda_add_executable(IntPointsFEM ${main_SRCS})
+#    cuda_add_executable(IntPointsFEM ${main_SRCS})
+    add_executable(IntPointsFEM ${main_SRCS})
     target_link_libraries(IntPointsFEM pz ${PTHREAD_LIB} ${CUDA_cublas_LIBRARY} ${CUDA_cusparse_LIBRARY} ${CUDA_cusolver_LIBRARY} ${CUDA_cublas_device_LIBRARY} ${CUDA_cudadevrt_LIBRARY})
 else()
     add_executable(IntPointsFEM ${main_SRCS})
