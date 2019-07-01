@@ -15,19 +15,19 @@
 #include <mkl.h>
 #endif
 
-#ifndef INTPOINTSFEM_TPZCOEFTOGRADSOL_H
-#define INTPOINTSFEM_TPZCOEFTOGRADSOL_H
+#ifndef INTPOINTSFEM_TPZNUMERICALINTEGRATOR_H
+#define INTPOINTSFEM_TPZNUMERICALINTEGRATOR_H
 
 
-class TPZCoefToGradSol {
+class TPZNumericalIntegrator {
 
 public:
     
-    TPZCoefToGradSol();
+    TPZNumericalIntegrator();
 
-    TPZCoefToGradSol(TPZIrregularBlocksMatrix &irregularBlocksMatrix);
+    TPZNumericalIntegrator(TPZIrregularBlocksMatrix &irregularBlocksMatrix);
 
-    ~TPZCoefToGradSol();
+    ~TPZNumericalIntegrator();
 
     void SetIrregularBlocksMatrix(TPZIrregularBlocksMatrix & irregularBlocksMatrix);
 
@@ -71,7 +71,7 @@ public:
     
     void ComputeConstitutiveMatrix(int64_t point_index, TPZFMatrix<STATE> &De);
     
-    void ComputeTangetMatrix(int64_t iel, TPZFMatrix<REAL> &K);
+    void ComputeTangentMatrix(int64_t iel, TPZFMatrix<REAL> &K);
 
     void SetConstitutiveLawProcessor(TPZConstitutiveLawProcessor & processor);
     
@@ -104,4 +104,4 @@ private:
 };
 
 
-#endif //INTPOINTSFEM_TPZCOEFTOGRADSOL_H
+#endif //INTPOINTSFEM_TPZNUMERICALINTEGRATOR_H

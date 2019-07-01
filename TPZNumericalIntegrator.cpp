@@ -2,30 +2,30 @@
 // Created by natalia on 24/05/19.
 //
 
-#include "TPZCoefToGradSol.h"
+#include "TPZNumericalIntegrator.h"
 #include "pzcmesh.h"
 
-TPZCoefToGradSol::TPZCoefToGradSol() : fBlockMatrix(0,0), fNColor(-1), fDoFIndexes(0), fColorIndexes(0), fConstitutiveLawProcessor() {
+TPZNumericalIntegrator::TPZNumericalIntegrator() : fBlockMatrix(0,0), fNColor(-1), fDoFIndexes(0), fColorIndexes(0), fConstitutiveLawProcessor() {
 #ifdef USING_CUDA
     dDoFIndexes.resize(0);
     dColorIndexes.resize(0);
 #endif
 }
 
-TPZCoefToGradSol::TPZCoefToGradSol(TPZIrregularBlocksMatrix &irregularBlocksMatrix) : fBlockMatrix(0,0), fNColor(-1), fDoFIndexes(0), fColorIndexes(0), fConstitutiveLawProcessor() {
+TPZNumericalIntegrator::TPZNumericalIntegrator(TPZIrregularBlocksMatrix &irregularBlocksMatrix) : fBlockMatrix(0,0), fNColor(-1), fDoFIndexes(0), fColorIndexes(0), fConstitutiveLawProcessor() {
     SetIrregularBlocksMatrix(irregularBlocksMatrix);
 }
 
-TPZCoefToGradSol::~TPZCoefToGradSol() {
+TPZNumericalIntegrator::~TPZNumericalIntegrator() {
 
 }
 
-void TPZCoefToGradSol::SetIrregularBlocksMatrix(TPZIrregularBlocksMatrix & irregularBlocksMatrix) {
+void TPZNumericalIntegrator::SetIrregularBlocksMatrix(TPZIrregularBlocksMatrix & irregularBlocksMatrix) {
     fBlockMatrix = irregularBlocksMatrix;
 }
 
 #ifdef USING_CUDA
-void TPZCoefToGradSol::Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &delta_strain) {
+void TPZNumericalIntegrator::Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &delta_strain) {
 
     int64_t rows = fBlockMatrix.Rows();
     int64_t cols = fBlockMatrix.Cols();
@@ -39,7 +39,7 @@ void TPZCoefToGradSol::Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &delta_st
 }
 #endif 
 
-void TPZCoefToGradSol::Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &delta_strain) {
+void TPZNumericalIntegrator::Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &delta_strain) {
 
     int64_t rows = fBlockMatrix.Rows();
     int64_t cols = fBlockMatrix.Cols();
@@ -53,7 +53,7 @@ void TPZCoefToGradSol::Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &delta_
 }
 
 #ifdef USING_CUDA
-void TPZCoefToGradSol::MultiplyTranspose(TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL> &res) {
+void TPZNumericalIntegrator::MultiplyTranspose(TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL> &res) {
     int64_t cols = fBlockMatrix.Cols();
 
     int64_t ncolor = fNColor;
@@ -81,7 +81,7 @@ void TPZCoefToGradSol::MultiplyTranspose(TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL>
 }
 #endif
 
-void TPZCoefToGradSol::MultiplyTranspose(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &res) {
+void TPZNumericalIntegrator::MultiplyTranspose(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &res) {
     int64_t cols = fBlockMatrix.Cols();
 
     int64_t ncolor = fNColor;
@@ -108,7 +108,7 @@ void TPZCoefToGradSol::MultiplyTranspose(TPZFMatrix<REAL> &sigma, TPZFMatrix<REA
     res.Resize(neq, 1);
 }
 
-void TPZCoefToGradSol::ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZFMatrix<REAL> &rhs)
+void TPZNumericalIntegrator::ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZFMatrix<REAL> &rhs)
 {
 #ifdef USING_CUDA
     TPZVecGPU<REAL> d_solution(solution.Rows());
@@ -140,7 +140,7 @@ void TPZCoefToGradSol::ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZFMatr
 }
 
 #ifdef USING_CUDA
-void TPZCoefToGradSol::TransferDataToGPU() {
+void TPZNumericalIntegrator::TransferDataToGPU() {
     fBlockMatrix.TransferDataToGPU();
     fConstitutiveLawProcessor.TransferDataToGPU();
 
@@ -153,7 +153,7 @@ void TPZCoefToGradSol::TransferDataToGPU() {
 #endif
 
 
-void TPZCoefToGradSol::ComputeConstitutiveMatrix(int64_t point_index, TPZFMatrix<STATE> &De){
+void TPZNumericalIntegrator::ComputeConstitutiveMatrix(int64_t point_index, TPZFMatrix<STATE> &De){
     
     De.Zero();
     REAL lambda = 555.555555555556;
@@ -166,7 +166,7 @@ void TPZCoefToGradSol::ComputeConstitutiveMatrix(int64_t point_index, TPZFMatrix
     De(2,0) = lambda;
 }
 
-void TPZCoefToGradSol::ComputeTangetMatrix(int64_t iel, TPZFMatrix<REAL> &K){
+void TPZNumericalIntegrator::ComputeTangentMatrix(int64_t iel, TPZFMatrix<REAL> &K){
     
     int n_sigma_comps = 3;
     int el_npts = fBlockMatrix.Blocks().fRowSizes[iel]/n_sigma_comps;
@@ -196,10 +196,10 @@ void TPZCoefToGradSol::ComputeTangetMatrix(int64_t iel, TPZFMatrix<REAL> &K){
     }
 }
 
-void TPZCoefToGradSol::SetConstitutiveLawProcessor(TPZConstitutiveLawProcessor & processor){
+void TPZNumericalIntegrator::SetConstitutiveLawProcessor(TPZConstitutiveLawProcessor & processor){
     fConstitutiveLawProcessor = processor;
 }
 
-TPZConstitutiveLawProcessor & TPZCoefToGradSol::ConstitutiveLawProcessor(){
+TPZConstitutiveLawProcessor & TPZNumericalIntegrator::ConstitutiveLawProcessor(){
     return fConstitutiveLawProcessor;
 }
