@@ -121,6 +121,8 @@ void TPZIrregularBlocksMatrix::MultiplyVector(REAL *A, REAL *res, int opt) {
     #endif
 #else
     #ifdef USING_SPARSE
+    int rows = this->Rows();
+    int cols = this->Cols();
     if(opt == 0) {
         SpMV(0, rows, cols, 1., &fBlocksInfo.fStorage[0], &fBlocksInfo.fRowPtr[0], &fBlocksInfo.fColInd[0], A, res);
     } else {

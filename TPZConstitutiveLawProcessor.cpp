@@ -188,16 +188,8 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
 
     int ipts;
 #ifdef USING_TBB
-    #ifdef GET_TIME
-    timer.TimerOption(Timer::ETBBTimer);
-    timer.Start();
-    #endif
     tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1),[&](size_t ipts)
 #else
-    #ifdef GET_TIME
-    timer.TimerOption(Timer::EChrono);
-    timer.Start();
-    #endif
     for (ipts = 0; ipts < fNpts; ipts++)
 #endif    
     {
@@ -216,35 +208,35 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
         int mtype;
 
         delta_strain.GetSub(3 * ipts, 0, 3, 1, el_delta_strain);
-        {
-            // Compute sigma
-            TranslateStrain(el_delta_strain, full_delta_strain);
-            ElasticStrain(el_plastic_strain, full_delta_strain, elastic_strain);
-            ComputeTrialStress(elastic_strain, sigma_trial);
-            SpectralDecomposition(sigma_trial, eigenvalues, eigenvectors);
-            ProjectSigma(eigenvalues, sigma_projected, alpha, mtype);
-            StressCompleteTensor(sigma_projected, eigenvectors, full_sigma);
 
-            // Update plastic strain
-            ComputeStrain(full_sigma, elastic_strain);
-            PlasticStrain(full_delta_strain, elastic_strain, el_plastic_strain);
-        }
+        // Compute sigma
+        TranslateStrain(el_delta_strain, full_delta_strain);
+        ElasticStrain(el_plastic_strain, full_delta_strain, elastic_strain);
+        ComputeTrialStress(elastic_strain, sigma_trial);
+        SpectralDecomposition(sigma_trial, eigenvalues, eigenvectors);
+        ProjectSigma(eigenvalues, sigma_projected, alpha, mtype);
+        StressCompleteTensor(sigma_projected, eigenvectors, full_sigma);
+
+        // Update plastic strain
+        ComputeStrain(full_sigma, elastic_strain);
+        PlasticStrain(full_delta_strain, elastic_strain, el_plastic_strain);
+
+        //Copy to stress vector
         TranslateStress(full_sigma, el_sigma);
         el_sigma(0,0) *= fWeight[ipts];
         el_sigma(1,0) *= fWeight[ipts];
         el_sigma(2,0) *= fWeight[ipts];
         sigma.AddSub(3 * ipts, 0, el_sigma);
 
+        //Copy to PlasticStrain vector
+        fPlasticStrain.AddSub(6 * ipts, 0, el_plastic_strain);
+
+        //Copy to MType and Alpha vectors
         fAlpha(ipts,0) = alpha;
         fMType(ipts,0) = mtype;
-        fPlasticStrain.AddSub(6 * ipts, 0, el_plastic_strain);
     }
 #ifdef USING_TBB
 );
-#endif
-#ifdef GET_TIME
-    timer.Stop();
-    std::cout << "Elapsed time (ComputeSigma): " << timer.ElapsedTime() << timer.Unit() << std::endl;
 #endif
 
 }

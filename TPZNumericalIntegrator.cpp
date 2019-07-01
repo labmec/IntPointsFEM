@@ -4,6 +4,7 @@
 
 #include "TPZNumericalIntegrator.h"
 #include "pzcmesh.h"
+#include "Timer.h"
 
 TPZNumericalIntegrator::TPZNumericalIntegrator() : fBlockMatrix(0,0), fNColor(-1), fDoFIndexes(0), fColorIndexes(0), fConstitutiveLawProcessor() {
 #ifdef USING_CUDA
@@ -131,8 +132,6 @@ void TPZNumericalIntegrator::ResidualIntegration(TPZFMatrix<REAL> & solution ,TP
     TPZFMatrix<REAL> sigma;
 
     Multiply(solution, delta_strain);
-    ofstream file("outcpu.txt");
-    delta_strain.Print("deltaCPU = ",file, EMathematicaInput);
     fConstitutiveLawProcessor.ComputeSigma(delta_strain, sigma);
     MultiplyTranspose(sigma, rhs); // Perform Residual integration using a global linear application B
     // rhs.Print("rhsCPU = ", std::cout, EMathematicaInput);

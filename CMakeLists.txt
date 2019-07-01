@@ -17,7 +17,7 @@ IF (WIN32)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHAVE_STRUCT_TIMESPEC")
     find_package(PZ PATHS "C:/Arquivos de Programas/PZ" REQUIRED NO_DEFAULT_PATH)
 ELSE ()
-    # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -mfma -ffast-math -std=c++11") #ligar -O3
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -mfma -ffast-math -std=c++11") #ligar -O3
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing")#this flag is for preventing errors when casting from double to float
     find_package(PZ REQUIRED)
 ENDIF()
@@ -65,7 +65,7 @@ if(USING_TBB)
             link_libraries(${TBB_LIB})
         endif()
     else()
-        find_file(TBB_HEADER_FILE tbb.h HINTS /usr/local/TBB/*/include/tbb/ NO_DEFAULT_PATH)
+        find_file(TBB_HEADER_FILE tbb.h HINTS /usr/local/TBB/*/include/tbb/ /softwares/intel/tbb/include/tbb/ NO_DEFAULT_PATH)
 
         if(NOT TBB_HEADER_FILE MATCHES "tbb.h")
             set (TBB_HEADER_FILE "" CACHE PATH "Path to 'tbb.h' file")
@@ -77,7 +77,10 @@ if(USING_TBB)
             if(APPLE)
                 set(TBB_LIB ${TBB_ROOT_DIR}/lib/libtbb.dylib)
             else() # Linux
-                set(TBB_LIB ${TBB_ROOT_DIR}/lib/intel64/gcc4.7/libtbb.so)
+                find_file(TBB_LIB_FILE libtbb.so HINTS ${TBB_ROOT_DIR}/lib/intel64/gcc4.7/ ${TBB_ROOT_DIR}/lib/intel64_lin/gcc4.4/ NO_DEFAULT_PATH)
+                get_filename_component(TBB_LIB_DIR ${TBB_LIB_FILE} DIRECTORY)
+                set(TBB_LIB ${TBB_LIB_DIR}/libtbb.so)
+
             endif()
 
             include_directories(${TBB_INCLUDE})

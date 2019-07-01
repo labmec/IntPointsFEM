@@ -5,6 +5,7 @@
 #include "TPZConstitutiveLawProcessor.h"
 #include "TPZElasticCriterion.h"
 #include "pzbndcond.h"
+#include "Timer.h"
 
 #ifdef USING_MKL
 #include <mkl.h>
@@ -102,9 +103,14 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     AssembleBoundaryData();
 
 #ifdef USING_CUDA
+    Timer timer;   
+    timer.TimeUnit(Timer::ESeconds);
+    timer.TimerOption(Timer::ECudaEvent);
+    timer.Start();
     std::cout << "Transfering data to GPU..." << std::endl;
     fIntegrator.TransferDataToGPU();
-    std::cout << "Done!" << std::endl;
+    timer.Stop();
+    std::cout << "Done! It took " <<  timer.ElapsedTime() << timer.Unit() << std::endl;
 #endif
 
 }
