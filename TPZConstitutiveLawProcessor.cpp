@@ -189,7 +189,7 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
     int ipts;
 #ifdef USING_TBB
     #ifdef GET_TIME
-    timer.TimerOption(Timer::TBBTimer);
+    timer.TimerOption(Timer::ETBBTimer);
     timer.Start();
     #endif
     tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1),[&](size_t ipts)
@@ -243,8 +243,8 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
 );
 #endif
 #ifdef GET_TIME
-timer.Stop();
-std::cout << "Elapsed time (ComputeSigma): " << timer.ElapsedTime() << timer.Unit() << std::endl;
+    timer.Stop();
+    std::cout << "Elapsed time (ComputeSigma): " << timer.ElapsedTime() << timer.Unit() << std::endl;
 #endif
 
 }

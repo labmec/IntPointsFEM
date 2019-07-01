@@ -29,7 +29,7 @@ protected:
 #ifdef USING_TBB
     tbb::tick_count                     start_tbb;
     tbb::tick_count                     stop_tbb;
-    tick_count::interval_t              time_span_tbb;
+    REAL                                time_span_tbb;
 #endif
 
     high_resolution_clock::time_point 	start_chrono;
@@ -71,35 +71,35 @@ public:
 
     void Start() {
 #ifdef USING_CUDA
-    	if (timer_option = ECudaEvent) cudaEventRecord(start_cuda);
+    	if (timer_option == ECudaEvent) cudaEventRecord(start_cuda);
 #endif
 
 #ifdef USING_TBB
-        if (timer_option = ETBBTimer) start_tbb = tbb::tick_count::now();
+        if (timer_option == ETBBTimer) start_tbb = tbb::tick_count::now();
 #endif
 
-    	if (timer_option = EChrono) start_chrono = high_resolution_clock::now();
+    	if (timer_option == EChrono) start_chrono = high_resolution_clock::now();
     }
 
     void Stop() {
 #ifdef USING_CUDA
-        if (timer_option = ECudaEvent) {
+        if (timer_option == ECudaEvent) {
             cudaEventRecord(stop_cuda);
             cudaEventSynchronize(stop_cuda);
         }
 #endif
 
 #ifdef USING_TBB
-        if (timer_option = ETBBTimer) stop_tbb = tbb::tick_count::now();
+        if (timer_option == ETBBTimer) stop_tbb = tbb::tick_count::now();
 #endif
 
-    	if (timer_option = EChrono) stop_chrono = high_resolution_clock::now();
+    	if (timer_option == EChrono) stop_chrono = high_resolution_clock::now();
 
     }
 
     REAL ElapsedTime() {
 #ifdef USING_CUDA
-    if (timer_option = ECudaEvent) {
+    if (timer_option == ECudaEvent) {
         cudaEventElapsedTime(&time_span_cuda, start_cuda, stop_cuda);
         if(time_unit == ENanoseconds) {
             return time_span_cuda*1000000;
@@ -116,10 +116,9 @@ public:
     }
 #endif
 
-
 #ifdef USING_TBB
-    if (timer_option = ETBBTimer) {
-        time_span_tbb = operator-(stop_tbb, start_tbb); //Seconds
+    if (timer_option == ETBBTimer) {
+        time_span_tbb = (stop_tbb - start_tbb).seconds();
         if(time_unit == ENanoseconds) {
             return time_span_tbb*1000000000;
         }
@@ -135,7 +134,7 @@ public:
     }
 #endif
 
-    if (timer_option = EChrono) {
+    if (timer_option == EChrono) {
         time_span_chrono = duration_cast<nanoseconds>(stop_chrono - start_chrono).count();
     	if(time_unit == ENanoseconds) {
     		return time_span_chrono;
