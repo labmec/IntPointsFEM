@@ -199,39 +199,10 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TP
     }
 
     int neq = fMesh->NEquations();
-
-#ifdef USING_CUDA
-    
-    TPZVecGPU<REAL> solution(neq);
-    solution.set(&fMesh->Solution()(0,0), neq);
-
-    TPZVecGPU<REAL> dgrad_u;
-    TPZVecGPU<REAL> drhs(neq);
-    rhs.Resize(neq, 1);
-    rhs.Zero();
-
-    fCoefToGradSol.Multiply(solution, dgrad_u);
-
-    TPZFMatrix<REAL> grad_u(dgrad_u.getSize(),1);
-    TPZFMatrix<REAL> sigma;
-    dgrad_u.get(&grad_u(0,0), dgrad_u.getSize());
-
-    fConstitutiveLawProcessor.ComputeSigma(grad_u, sigma);
-
-    TPZVecGPU<REAL> dsigma(sigma.Rows());
-    dsigma.set(&sigma(0,0), sigma.Rows());
-
-    fCoefToGradSol.MultiplyTranspose(dsigma, drhs);
-    drhs.get(&rhs(0,0), neq);
-    
-#else
-    
-    
+  
     rhs.Resize(neq, 1);
     rhs.Zero();
     fCoefToGradSol.ResidualIntegration(fMesh->Solution(),rhs);
-    
-#endif
     rhs += fRhsLinear;
 }
 

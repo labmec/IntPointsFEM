@@ -33,12 +33,13 @@ public:
 
     void Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &delta_strain);
 
+    void MultiplyTranspose(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &res);
+
 #ifdef USING_CUDA
-    void Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &grad_u);
+    void Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &delta_strain);
+    
     void MultiplyTranspose(TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL> &res); 
 #endif
-
-    void MultiplyTranspose(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &res);
 
     void SetDoFIndexes(TPZVec<int> dof_indexes) {
         fDoFIndexes = dof_indexes;
@@ -94,7 +95,7 @@ private:
     TPZConstitutiveLawProcessor fConstitutiveLawProcessor;
     
 #ifdef USING_CUDA
-    TPZVecGPU<int> dIndexes;
+    TPZVecGPU<int> dDoFIndexes;
     TPZVecGPU<int> dIndexesColor;
     TPZCudaCalls fCudaCalls;
 #endif

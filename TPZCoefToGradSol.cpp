@@ -25,18 +25,17 @@ void TPZCoefToGradSol::SetIrregularBlocksMatrix(TPZIrregularBlocksMatrix & irreg
 }
 
 #ifdef USING_CUDA
-void TPZCoefToGradSol::Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &grad_u) {
-    int dim = 2;
+void TPZCoefToGradSol::Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &delta_strain) {
+
     int64_t rows = fBlockMatrix.Rows();
     int64_t cols = fBlockMatrix.Cols();
 
-    TPZVecGPU<REAL> gather_solution(dim * cols);
-    fCudaCalls.GatherOperation(dim * cols, coef.getData(), gather_solution.getData(), dIndexes.getData());
+    TPZVecGPU<REAL> gather_solution(cols);
+    gather_solution.Zero();
+    fCudaCalls.GatherOperation(cols, coef.getData(), gather_solution.getData(), dDoFIndexes.getData());
 
-    grad_u.resize(dim * rows);
-
-    fBlockMatrix.MultiplyVector(&gather_solution.getData()[0], &grad_u.getData()[0], false);
-    fBlockMatrix.MultiplyVector(&gather_solution.getData()[cols], &grad_u.getData()[rows], false);   
+    delta_strain.resize(rows);
+    fBlockMatrix.MultiplyVector(&gather_solution.getData()[0], &delta_strain.getData()[0], false);
 }
 #endif 
 
@@ -45,11 +44,9 @@ void TPZCoefToGradSol::Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &delta_
     int64_t rows = fBlockMatrix.Rows();
     int64_t cols = fBlockMatrix.Cols();
 
-    TPZFMatrix<REAL> gather_solution(rows, 1);
+    TPZFMatrix<REAL> gather_solution(cols, 1);
     gather_solution.Zero();
     cblas_dgthr(cols, coef, &gather_solution(0, 0), &fDoFIndexes[0]);
-    
-//    gather_solution.Print("u = ",std::cout,EMathematicaInput);
 
     delta_strain.Resize(rows, 1);
     fBlockMatrix.MultiplyVector(&gather_solution(0,0), &delta_strain(0, 0), false);
@@ -57,22 +54,19 @@ void TPZCoefToGradSol::Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &delta_
 
 #ifdef USING_CUDA
 void TPZCoefToGradSol::MultiplyTranspose(TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL> &res) {
-    int dim = 2;
-    int64_t rows = fBlockMatrix.Rows();
     int64_t cols = fBlockMatrix.Cols();
 
     int64_t ncolor = fNColor;
     int64_t neq = res.getSize();    
 
-    TPZVecGPU<REAL> forces(dim * cols);
+    TPZVecGPU<REAL> forces(cols);
     res.resize(ncolor * neq);
     res.Zero();
 
     fBlockMatrix.MultiplyVector(&sigma.getData()[0], &forces.getData()[0], true);
-    fBlockMatrix.MultiplyVector(&sigma.getData()[rows], &forces.getData()[cols], true); 
 
     // Assemble forces
-    fCudaCalls.ScatterOperation(dim * cols, forces.getData(), res.getData(), dIndexesColor.getData());
+    fCudaCalls.ScatterOperation(cols, forces.getData(), res.getData(), dIndexesColor.getData());
 
     int64_t colorassemb = ncolor / 2.;
     while (colorassemb > 0) {
@@ -87,15 +81,6 @@ void TPZCoefToGradSol::MultiplyTranspose(TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL>
 }
 #endif
 
-void TPZCoefToGradSol::ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZFMatrix<REAL> &rhs)
-{
-    TPZFMatrix<REAL> delta_strain;
-    TPZFMatrix<REAL> sigma;
-    Multiply(solution, delta_strain);
-    fConstitutiveLawProcessor.ComputeSigma(delta_strain, sigma);
-    MultiplyTranspose(sigma, rhs); // Perform Residual integration using a global linear application B
-}
-
 void TPZCoefToGradSol::MultiplyTranspose(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &res) {
     int64_t cols = fBlockMatrix.Cols();
 
@@ -107,8 +92,6 @@ void TPZCoefToGradSol::MultiplyTranspose(TPZFMatrix<REAL> &sigma, TPZFMatrix<REA
     res.Zero();
 
     fBlockMatrix.MultiplyVector(&sigma(0, 0), &forces(0, 0), true);
-
-//    forces.Print("F = ",std::cout, EMathematicaInput);
 
     // Assemble forces
     cblas_dsctr(cols, forces, &fColorIndexes[0], &res(0,0));
@@ -125,12 +108,39 @@ void TPZCoefToGradSol::MultiplyTranspose(TPZFMatrix<REAL> &sigma, TPZFMatrix<REA
     res.Resize(neq, 1);
 }
 
+void TPZCoefToGradSol::ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZFMatrix<REAL> &rhs)
+{
+#ifdef USING_CUDA
+    TPZVecGPU<REAL> d_solution(neq);
+    d_solution.set(&solution(0,0), neq);
+
+    TPZVecGPU<REAL> d_delta_strain;
+    TPZVecGPU<REAL> d_sigma;
+
+    TPZVecGPU<REAL> d_rhs(rhs.Rows());
+    d_rhs.Zero();
+
+    Multiply(d_solution, d_delta_strain);
+    fConstitutiveLawProcessor.ComputeSigma(d_delta_strain, d_sigma);
+    MultiplyTranspose(sigma, drhs);
+    drhs.get(&rhs(0,0), neq);
+#else
+
+    TPZFMatrix<REAL> delta_strain;
+    TPZFMatrix<REAL> sigma;
+
+    Multiply(solution, delta_strain);
+    fConstitutiveLawProcessor.ComputeSigma(delta_strain, sigma);
+    MultiplyTranspose(sigma, rhs); // Perform Residual integration using a global linear application B
+#endif
+}
+
 void TPZCoefToGradSol::TransferDataToGPU() {
 #ifdef USING_CUDA
     fBlockMatrix.TransferDataToGPU();
 
-    dIndexes.resize(fIndexes.size());
-    dIndexes.set(&fIndexes[0], fIndexes.size());
+    dDoFIndexes.resize(fDoFIndexes.size());
+    dDoFIndexes.set(&fDoFIndexes[0], fDoFIndexes.size());
 
     dIndexesColor.resize(fIndexesColor.size());
     dIndexesColor.set(&fIndexesColor[0], fIndexesColor.size());
