@@ -15,6 +15,7 @@
 #include "TRKSolution.h"
 #include "TPZElasticCriterion.h"
 #include <time.h>
+#include "Timer.h"
 
 
 /// Gmsh mesh
@@ -52,7 +53,7 @@ void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData material, int n_threads,
 void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_material, int npoints, std::ostream &out, bool euler = false);
 
 int main(int argc, char *argv[]) {
-    int pOrder = 1; // Computational mesh order
+    int pOrder = 2; // Computational mesh order
     bool render_vtk_Q = false;
     
 // Generates the geometry
@@ -67,101 +68,88 @@ int main(int argc, char *argv[]) {
 //    TElastoPlasticData wellbore_material = WellboreConfig(); /// NVB this one is for recurrent usage
     TElastoPlasticData wellbore_material = WellboreConfigRK(); /// NVB this one is just for verification purposes
 
+    Timer timer;   
+    timer.TimeUnit(Timer::ESeconds);
+    timer.TimerOption(Timer::EChrono);
+    
     TPZCompMesh *cmesh;
-    {
-        time_t start,end;
-        time (&start);
+    // {
+        timer.Start();
         cmesh = CmeshElastoplasticity(gmesh, pOrder, wellbore_material);
-        time (&end);
-        double dif = difftime (end,start);
-        std::cout << "Calling CmeshElastoplasticity: Elasped time [sec] = " << dif << std::endl;
-    }
+        timer.Stop();
+        std::cout << "Calling CmeshElastoplasticity: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+    // }
 
 
 // Defines the analysis
     int n_threads = 0;
     TPZAnalysis *analysis;
-    {
-        time_t start,end;
-        time (&start);
+    // {
+        timer.Start();
 //        analysis = Analysis(cmesh,n_threads);
         analysis = Analysis_IPFEM(cmesh,n_threads);
-        time (&end);
-        double dif = difftime (end,start);
-        std::cout << "Calling Analysis_IPFEM: Elasped time [sec] = " << dif << std::endl;
-    }
+        timer.Stop();
+        std::cout << "Calling Analysis_IPFEM: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+    // }
     
 // Calculates the solution using Newton method
     int n_iterations = 80;
     REAL tolerance = 1.e-3;
-    {
-        time_t start,end;
-        time (&start);
+    // {
+        timer.Start();
         Solution(analysis, n_iterations, tolerance);
-        time (&end);
-        double dif = difftime (end,start);
-        std::cout << "Calling Solution: Elasped time [sec] = " << dif << std::endl;
-    }
+        timer.Stop();
+        std::cout << "Calling Solution: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+    // }
 
 // Post process
    if (render_vtk_Q) {
        std::string vtk_file = "Approximation.vtk";
-       {
-           time_t start,end;
-           time (&start);
+       // {
+           timer.Start();
            PostProcess(cmesh, wellbore_material, n_threads, vtk_file);
-           time (&end);
-           double dif = difftime (end,start);
-           std::cout << "Calling PostProcess: Elasped time [sec] = " << dif << std::endl;
-       }
+           timer.Stop();
+           std::cout << "Calling PostProcess: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+       // }
    }
     return 0;
 }
 
 void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
-#ifdef USING_CUDA
-    std::cout << "Using CUDA" << std::endl;
-#endif
-
     bool stop_criterion_Q = false;
     REAL norm_res, norm_delta_du;
 
     int neq = analysis->Solution().Rows();
     std::cout  << "Solving a NLS with DOF = " << neq << std::endl;
 
+    Timer timer;   
+    timer.TimeUnit(Timer::ESeconds);
+    timer.TimerOption(Timer::EChrono);
+
     analysis->Solution().Zero();
     TPZFMatrix<REAL> du(analysis->Solution()), delta_du;
-    analysis->LoadSolution();
-    {
-        time_t start,end;
-        time (&start);
-        analysis->Assemble();
-        time (&end);
-        double dif = difftime (end,start);
-        std::cout << "Calling CreateAssemble and Assemble: Elasped time [sec] = " << dif << std::endl;
-    }
+
+    timer.Start();
+    analysis->Assemble();
+    timer.Stop();
+    std::cout << "Calling CreateAssemble and Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
 
     for (int i = 0; i < n_iterations; i++) {
-        {
-            time_t start,end;
-            time (&start);
-            analysis->Solve();
-            time (&end);
-            double dif = difftime (end,start);
-            std::cout << "Calling Linear Solve: Elasped time [sec] = " << dif << std::endl;
-        }
+
+        timer.Start();
+        analysis->Solve();
+        timer.Stop();
+        std::cout << "Calling Linear Solve: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
 
         delta_du = analysis->Solution();
         du += delta_du;
         analysis->LoadSolution(du);
-        {
-            time_t start,end;
-            time (&start);
-            analysis->AssembleResidual();
-            time (&end);
-            double dif = difftime (end,start);
-            std::cout << "Calling AssembleResidual: Elasped time [sec] = " << dif << std::endl;
-        }
+
+        timer.Start();
+        analysis->AssembleResidual();
+        timer.Stop();
+        std::cout << "Calling AssembleResidual: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+
         norm_delta_du = Norm(delta_du);
         norm_res = Norm(analysis->Rhs());
         stop_criterion_Q = norm_res < tolerance;
@@ -174,14 +162,12 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
             std::cout << "Number of iterations = " << i + 1 << std::endl;
             break;
         }
-        {
-            time_t start,end;
-            time (&start);
+        // {
+            timer.Start();
             analysis->Assemble();
-            time (&end);
-            double dif = difftime (end,start);
-            std::cout << "Calling Assemble: Elasped time [sec] = " << dif << std::endl;
-        }
+            timer.Stop();
+            std::cout << "Calling Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+        // }
 
     }
 

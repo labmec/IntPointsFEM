@@ -3,11 +3,9 @@
 
 #include "TPZVecGPU.h"
 #include "pzreal.h"
+
 #include <cublas_v2.h>
 #include <cusparse.h>
-
-
-
 
 class TPZCudaCalls {
 public:
@@ -38,6 +36,8 @@ public:
 	void SpMSpM(int opt, int m, int n, int k, int nnzA, REAL *csrValA, int *csrRowPtrA, int *csrColIndA, int nnzB, REAL *csrValB, int *csrRowPtrB, int *csrColIndB, int nnzC, REAL *csrValC, int *csrRowPtrC);
 
 	void SpMV(int opt, int m, int k, int nnz, REAL alpha, REAL *csrVal, int *csrRowPtr, int *csrColInd, REAL *B, REAL *C); 
+
+	void ComputeSigma(int npts, REAL *delta_strain, REAL *sigma, REAL lambda, REAL mu, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL *plastic_strain,  REAL *m_type, REAL *alpha, REAL *weight);
 
 private:
 	cusparseHandle_t handle_cusparse;

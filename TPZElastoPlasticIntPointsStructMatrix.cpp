@@ -5,13 +5,14 @@
 #include "TPZConstitutiveLawProcessor.h"
 #include "TPZElasticCriterion.h"
 #include "pzbndcond.h"
+#include "Timer.h"
 
 #ifdef USING_MKL
 #include <mkl.h>
 #endif
 
 
-TPZElastoPlasticIntPointsStructMatrix::TPZElastoPlasticIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZSymetricSpStructMatrix(cmesh), fSparseMatrixLinear(), fRhsLinear(), fCoefToGradSol(), fBCMaterialIds() {
+TPZElastoPlasticIntPointsStructMatrix::TPZElastoPlasticIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZSymetricSpStructMatrix(cmesh), fSparseMatrixLinear(), fRhsLinear(), fIntegrator(), fBCMaterialIds() {
 
     if (!cmesh->Reference()->Dimension()) {
         DebugStop();
@@ -86,25 +87,30 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     int64_t cols = blocksData.fColFirstIndex[blocksData.fNumBlocks];
     TPZIrregularBlocksMatrix blocksMatrix(rows, cols);
     blocksMatrix.SetBlocks(blocksData);
-    fCoefToGradSol.SetIrregularBlocksMatrix(blocksMatrix);
+    fIntegrator.SetIrregularBlocksMatrix(blocksMatrix);
 
     TPZVec<int> dof_indexes;
     this->SetUpIndexes(element_indexes, dof_indexes);
-    fCoefToGradSol.SetDoFIndexes(dof_indexes);
+    fIntegrator.SetDoFIndexes(dof_indexes);
 
     TPZVec<int> colored_element_indexes;
     int ncolor;
     
     this->ColoredIndexes(element_indexes, dof_indexes, colored_element_indexes, ncolor);
-    fCoefToGradSol.SetColorIndexes(colored_element_indexes);
-    fCoefToGradSol.SetNColors(ncolor);
+    fIntegrator.SetColorIndexes(colored_element_indexes);
+    fIntegrator.SetNColors(ncolor);
 
     AssembleBoundaryData();
 
 #ifdef USING_CUDA
+    Timer timer;   
+    timer.TimeUnit(Timer::ESeconds);
+    timer.TimerOption(Timer::ECudaEvent);
+    timer.Start();
     std::cout << "Transfering data to GPU..." << std::endl;
-    fCoefToGradSol.TransferDataToGPU();
-    std::cout << "Done!" << std::endl;
+    fIntegrator.TransferDataToGPU();
+    timer.Stop();
+    std::cout << "Done! It took " <<  timer.ElapsedTime() << timer.Unit() << std::endl;
 #endif
 
 }
@@ -116,10 +122,10 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     TPZSYsmpMatrix<STATE> &stiff = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
     TPZVec<STATE> &Kg = stiff.A();
     
-    TPZVec<int> &indexes = fCoefToGradSol.DoFIndexes();
-    int64_t n_vols = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
-    TPZVec<int> & el_n_dofs = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColSizes;
-    TPZVec<int> & cols_first_index = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColFirstIndex;
+    TPZVec<int> &indexes = fIntegrator.DoFIndexes();
+    int64_t n_vols = fIntegrator.IrregularBlocksMatrix().Blocks().fNumBlocks;
+    TPZVec<int> & el_n_dofs = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes;
+    TPZVec<int> & cols_first_index = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex;
 
 
     
@@ -131,7 +137,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 
             /// Compute Elementary Matrix.
             TPZFMatrix<STATE> K;
-            fCoefToGradSol.ComputeTangetMatrix(iel,K);
+            fIntegrator.ComputeTangentMatrix(iel,K);
             
             int el_dof = el_n_dofs[iel];
             int pos = cols_first_index[iel];
@@ -199,39 +205,10 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TP
     }
 
     int neq = fMesh->NEquations();
-
-#ifdef USING_CUDA
-    
-    TPZVecGPU<REAL> solution(neq);
-    solution.set(&fMesh->Solution()(0,0), neq);
-
-    TPZVecGPU<REAL> dgrad_u;
-    TPZVecGPU<REAL> drhs(neq);
+  
     rhs.Resize(neq, 1);
     rhs.Zero();
-
-    fCoefToGradSol.Multiply(solution, dgrad_u);
-
-    TPZFMatrix<REAL> grad_u(dgrad_u.getSize(),1);
-    TPZFMatrix<REAL> sigma;
-    dgrad_u.get(&grad_u(0,0), dgrad_u.getSize());
-
-    fConstitutiveLawProcessor.ComputeSigma(grad_u, sigma);
-
-    TPZVecGPU<REAL> dsigma(sigma.Rows());
-    dsigma.set(&sigma(0,0), sigma.Rows());
-
-    fCoefToGradSol.MultiplyTranspose(dsigma, drhs);
-    drhs.get(&rhs(0,0), neq);
-    
-#else
-    
-    
-    rhs.Resize(neq, 1);
-    rhs.Zero();
-    fCoefToGradSol.ResidualIntegration(fMesh->Solution(),rhs);
-    
-#endif
+    fIntegrator.ResidualIntegration(fMesh->Solution(),rhs);
     rhs += fRhsLinear;
 }
 
@@ -400,10 +377,10 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZVec<int>
 
 void TPZElastoPlasticIntPointsStructMatrix::SetUpIndexes(TPZVec<int> &element_indexes, TPZVec<int> & dof_indexes) {
     
-    int64_t nblocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
-    int64_t rows = fCoefToGradSol.IrregularBlocksMatrix().Rows();
-    int64_t cols = fCoefToGradSol.IrregularBlocksMatrix().Cols();
-    TPZVec<int> & dof_positions = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColFirstIndex;
+    int64_t nblocks = fIntegrator.IrregularBlocksMatrix().Blocks().fNumBlocks;
+    int64_t rows = fIntegrator.IrregularBlocksMatrix().Rows();
+    int64_t cols = fIntegrator.IrregularBlocksMatrix().Cols();
+    TPZVec<int> & dof_positions = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex;
 
     dof_indexes.resize(cols);
     int64_t npts = rows / StressRateVectorSize();
@@ -455,15 +432,15 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIndexes(TPZVec<int> &element_in
     }
 
     TPZMaterial *material = fMesh->FindMaterial(1);
-    fCoefToGradSol.ConstitutiveLawProcessor().SetMaterial(material);
-    fCoefToGradSol.ConstitutiveLawProcessor().SetIntPoints(npts);
-    fCoefToGradSol.ConstitutiveLawProcessor().SetWeightVector(weight);
+    fIntegrator.ConstitutiveLawProcessor().SetMaterial(material);
+    fIntegrator.ConstitutiveLawProcessor().SetIntPoints(npts);
+    fIntegrator.ConstitutiveLawProcessor().SetWeightVector(weight);
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::ColoredIndexes(TPZVec<int> &element_indexes, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor) {
     
-    int64_t nblocks = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fNumBlocks;
-    int64_t cols = fCoefToGradSol.IrregularBlocksMatrix().Cols();
+    int64_t nblocks = fIntegrator.IrregularBlocksMatrix().Blocks().fNumBlocks;
+    int64_t cols = fIntegrator.IrregularBlocksMatrix().Cols();
 
     TPZVec<int64_t> connects_vec(fMesh->NConnects(),0);
     TPZVec<int64_t> elemcolor(nblocks,-1);
@@ -507,8 +484,8 @@ void TPZElastoPlasticIntPointsStructMatrix::ColoredIndexes(TPZVec<int> &element_
     coloredindexes.resize(cols);
     int64_t neq = fMesh->NEquations();
     for (int64_t iel = 0; iel < nblocks; iel++) {
-        int64_t elem_col = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColSizes[iel];
-        int64_t cont_cols = fCoefToGradSol.IrregularBlocksMatrix().Blocks().fColFirstIndex[iel];
+        int64_t elem_col = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes[iel];
+        int64_t cont_cols = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex[iel];
 
         for (int64_t icols = 0; icols < elem_col; icols++) {
             coloredindexes[cont_cols + icols] = indexes[cont_cols + icols] + elemcolor[iel]*neq;

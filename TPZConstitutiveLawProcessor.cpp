@@ -207,19 +207,15 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
     
     // The constitutive law is computing assuming full tensors
 
+    Timer timer;
+    timer.TimeUnit(Timer::EMilliseconds);
+
     int ipts;
 #ifdef USING_TBB
-    #ifdef GET_TIME
-    tbb::tick_count t0 = tbb::tick_count::now();
-    #endif
     tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1),[&](size_t ipts)
 #else
-    #ifdef GET_TIME
-    Timer timer;
-    timer.Start();
-    #endif
     for (ipts = 0; ipts < fNpts; ipts++)
-#endif
+#endif    
     {
         
         
@@ -238,42 +234,37 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
         int mtype;
 
         delta_strain.GetSub(3 * ipts, 0, 3, 1, el_delta_strain);
-        {
-            // Compute sigma
-            TranslateStrain(el_delta_strain, full_delta_strain);
-            ElasticStrain(el_plastic_strain, full_delta_strain, elastic_strain);
-            ComputeTrialStress(elastic_strain, sigma_trial);
-            SpectralDecomposition(sigma_trial, eigenvalues, eigenvectors);
-            ProjectSigma(eigenvalues, sigma_projected, alpha, mtype);
-            StressCompleteTensor(sigma_projected, eigenvectors, full_sigma);
-            TranslateStress(full_sigma, el_sigma);
-            
-            // Update plastic strain
-            ComputeStrain(full_sigma, elastic_strain);
-            PlasticStrain(full_delta_strain, elastic_strain, el_plastic_strain);
-        }
+        // Compute sigma
+        TranslateStrain(el_delta_strain, full_delta_strain);
+        ElasticStrain(el_plastic_strain, full_delta_strain, elastic_strain);
+        ComputeTrialStress(elastic_strain, sigma_trial);
+        SpectralDecomposition(sigma_trial, eigenvalues, eigenvectors);
+        ProjectSigma(eigenvalues, sigma_projected, alpha, mtype);
+        StressCompleteTensor(sigma_projected, eigenvectors, full_sigma);
+
+        // Update plastic strain
+        ComputeStrain(full_sigma, elastic_strain);
+        PlasticStrain(full_delta_strain, elastic_strain, el_plastic_strain);
+
+        //Copy to stress vector
+        TranslateStress(full_sigma, el_sigma);
         
         el_sigma(0,0) *= fWeight[ipts];
         el_sigma(1,0) *= fWeight[ipts];
         el_sigma(2,0) *= fWeight[ipts];
         sigma.AddSub(3 * ipts, 0, el_sigma);
 
+        //Copy to PlasticStrain vector
+        fPlasticStrain.AddSub(6 * ipts, 0, el_plastic_strain);
+
+        //Copy to MType and Alpha vectors
         fAlpha(ipts,0) = alpha;
         fMType(ipts,0) = mtype;
-        fPlasticStrain.AddSub(6 * ipts, 0, el_plastic_strain);
     }
 #ifdef USING_TBB
 );
-    #ifdef GET_TIME
-    tbb::tick_count t1 = tbb::tick_count::now();
-    std::cout << "Elapsed time (ComputeSigma): " << (t1-t0).seconds() << "\ts" << std::endl;
-    #endif
-#else
-    #ifdef GET_TIME
-    timer.Stop();
-    std::cout << "Elapsed time (ComputeSigma): " << timer.ElapsedTime() << timer.Unit() << std::endl;
-    #endif
 #endif
+
 }
 
 void TPZConstitutiveLawProcessor::TranslateStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &full_delta_strain){
@@ -310,47 +301,32 @@ void TPZConstitutiveLawProcessor::TranslateStress(TPZFMatrix<REAL> &full_stress,
 
 #ifdef USING_CUDA
 void TPZConstitutiveLawProcessor::ComputeSigma(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &sigma) {
-    // REAL lambda = fMaterial->GetPlasticModel().fER.Lambda();
-    // REAL mu =  fMaterial->GetPlasticModel().fER.Mu();
-    // REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();
-    // REAL mc_psi = fMaterial->GetPlasticModel().fYC.Psi();
-    // REAL mc_cohesion = fMaterial->GetPlasticModel().fYC.Cohesion();
-    // REAL K = fMaterial->GetPlasticModel().fER.K();
-    // REAL G = fMaterial->GetPlasticModel().fER.G();
+    REAL lambda = fMaterial->GetPlasticModel().fER.Lambda();
+    REAL mu =  fMaterial->GetPlasticModel().fER.Mu();
+    REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();
+    REAL mc_psi = fMaterial->GetPlasticModel().fYC.Psi();
+    REAL mc_cohesion = fMaterial->GetPlasticModel().fYC.Cohesion();
 
-    // int dim = 2;
+    int64_t rows = delta_strain.getSize();
+    sigma.resize(rows);
 
-    // sigma.resize(dim * dim * fNpts);
-    // sigma.Zero();
+    dPlasticStrain.resize(6 * fNpts);
+    dPlasticStrain.Zero();
 
-    // TPZVecGPU<REAL> eigenvalues(3 * fNpts);
-    // TPZVecGPU<REAL> eigenvectors(9 * fNpts);
-    // eigenvalues.Zero();
-    // eigenvectors.Zero();
-    // TPZVecGPU<REAL> elastic_strain(dim * dim * fNpts);
-    // TPZVecGPU<REAL> sigma_trial(dim * dim * fNpts);
+    dMType.resize(1 * fNpts);
+    dMType.Zero();
 
-    // TPZVecGPU<REAL> sigma_projected(3 * fNpts);
+    dAlpha.resize(1 * fNpts);
+    dAlpha.Zero();
 
-    // fCudaCalls->ElasticStrain(delta_strain.getData(), elastic_strain.getData(), dim * dim * fNpts);
-    // fCudaCalls->ComputeStress(elastic_strain.getData(), sigma_trial.getData(), fNpts, mu, lambda); 
-    // fCudaCalls->SpectralDecomposition(sigma_trial.getData(), eigenvalues.getData(), eigenvectors.getData(), fNpts); 
-    // fCudaCalls->ProjectSigma(eigenvalues.getData(), sigma_projected.getData(), fNpts, mc_phi, mc_psi, mc_cohesion, K, G);
-    // ERRADO
+    fCudaCalls->ComputeSigma(fNpts, delta_strain.getData(), sigma.getData(), lambda, mu, mc_phi, mc_psi, mc_cohesion, dPlasticStrain.getData(),  dMType.getData(), dAlpha.getData(), dWeight.getData());
 
+}
+#endif
 
-
-    // TPZFMatrix<REAL> sigma_projected(3 * fNpts, 1, 0.);
-
-    // // Compute sigma
-    // ElasticStrain(delta_strain, elastic_strain);
-    // ComputeStress(elastic_strain, sigma_trial);
-    // SpectralDecomposition(sigma_trial, eigenvalues, eigenvectors);
-    // ProjectSigma(eigenvalues, sigma_projected);
-    // StressCompleteTensor(sigma_projected, eigenvectors, sigma);
-
-    // // Update plastic strain
-    // ComputeStrain(sigma, elastic_strain);
-    // PlasticStrain(delta_strain, elastic_strain);
+#ifdef USING_CUDA
+void TPZConstitutiveLawProcessor::TransferDataToGPU() {
+    dWeight.resize(fWeight.size());
+    dWeight.set(&fWeight[0], fWeight.size());
 }
 #endif

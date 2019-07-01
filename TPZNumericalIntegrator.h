@@ -15,30 +15,33 @@
 #include <mkl.h>
 #endif
 
-#ifndef INTPOINTSFEM_TPZCOEFTOGRADSOL_H
-#define INTPOINTSFEM_TPZCOEFTOGRADSOL_H
+#ifndef INTPOINTSFEM_TPZNUMERICALINTEGRATOR_H
+#define INTPOINTSFEM_TPZNUMERICALINTEGRATOR_H
 
 
-class TPZCoefToGradSol {
+class TPZNumericalIntegrator {
 
 public:
     
-    TPZCoefToGradSol();
+    TPZNumericalIntegrator();
 
-    TPZCoefToGradSol(TPZIrregularBlocksMatrix &irregularBlocksMatrix);
+    TPZNumericalIntegrator(TPZIrregularBlocksMatrix &irregularBlocksMatrix);
 
-    ~TPZCoefToGradSol();
+    ~TPZNumericalIntegrator();
 
     void SetIrregularBlocksMatrix(TPZIrregularBlocksMatrix & irregularBlocksMatrix);
 
     void Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &delta_strain);
 
-#ifdef USING_CUDA
-    void Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &grad_u);
-    void MultiplyTranspose(TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL> &res); 
-#endif
-
     void MultiplyTranspose(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &res);
+
+#ifdef USING_CUDA
+    void Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &delta_strain);
+    
+    void MultiplyTranspose(TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL> &res); 
+
+    void TransferDataToGPU();
+#endif
 
     void SetDoFIndexes(TPZVec<int> dof_indexes) {
         fDoFIndexes = dof_indexes;
@@ -63,14 +66,12 @@ public:
     TPZIrregularBlocksMatrix & IrregularBlocksMatrix() {
         return fBlockMatrix;
     }
-
-    void TransferDataToGPU();
-    
+   
     void ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZFMatrix<REAL> &rhs);
     
     void ComputeConstitutiveMatrix(int64_t point_index, TPZFMatrix<STATE> &De);
     
-    void ComputeTangetMatrix(int64_t iel, TPZFMatrix<REAL> &K);
+    void ComputeTangentMatrix(int64_t iel, TPZFMatrix<REAL> &K);
 
     void SetConstitutiveLawProcessor(TPZConstitutiveLawProcessor & processor);
     
@@ -94,8 +95,8 @@ private:
     TPZConstitutiveLawProcessor fConstitutiveLawProcessor;
     
 #ifdef USING_CUDA
-    TPZVecGPU<int> dIndexes;
-    TPZVecGPU<int> dIndexesColor;
+    TPZVecGPU<int> dDoFIndexes;
+    TPZVecGPU<int> dColorIndexes;
     TPZCudaCalls fCudaCalls;
 #endif
 
@@ -103,4 +104,4 @@ private:
 };
 
 
-#endif //INTPOINTSFEM_TPZCOEFTOGRADSOL_H
+#endif //INTPOINTSFEM_TPZNUMERICALINTEGRATOR_H

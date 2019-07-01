@@ -11,7 +11,7 @@
 #include "pzsysmp.h"
 #include "tpzverysparsematrix.h"
 #include "TPZIrregularBlocksMatrix.h"
-#include "TPZCoefToGradSol.h"
+#include "TPZNumericalIntegrator.h"
 #include <unordered_map>
 
 
@@ -42,7 +42,7 @@ public:
     void Assemble(TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface);
     
     bool isBuilt() {
-        if(fCoefToGradSol.IrregularBlocksMatrix().Rows() != 0) return true;
+        if(fIntegrator.IrregularBlocksMatrix().Rows() != 0) return true;
         else return false;
     }
 
@@ -65,7 +65,7 @@ private:
     int fDimension;
     
 
-    TPZCoefToGradSol fCoefToGradSol;
+    TPZNumericalIntegrator fIntegrator;
 
     TPZVerySparseMatrix<STATE> fSparseMatrixLinear; //-> BC data
 

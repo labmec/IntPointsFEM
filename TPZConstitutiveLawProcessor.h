@@ -59,6 +59,8 @@ public:
 
 #ifdef USING_CUDA
     void ComputeSigma(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &sigma);
+
+    void TransferDataToGPU();
 #endif
 
     TPZVec<REAL> fWeight;
@@ -66,7 +68,6 @@ public:
 private:
     
     int64_t fNpts;
-
 
     TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse>, TPZElastoPlasticMem> *fMaterial;
 
@@ -78,7 +79,12 @@ private:
 
 #ifdef USING_CUDA
     TPZCudaCalls *fCudaCalls;
+
     TPZVecGPU<REAL> dWeight;
+
+    TPZVecGPU<REAL> dPlasticStrain;
+    TPZVecGPU<REAL> dMType;
+    TPZVecGPU<REAL> dAlpha;
 #endif
 
 };
