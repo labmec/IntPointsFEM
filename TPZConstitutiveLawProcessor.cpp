@@ -229,15 +229,14 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
         
         {
             TPZFMatrix<REAL> elastic_strain(6, 1, 0.);
-            TPZFMatrix<REAL> eigenvalues(3, 1, 0.);
             TPZFMatrix<REAL> eigenvectors(9, 1, 0.);
             TPZFMatrix<REAL> sigma_projected(3, 1, 0.);
             
             // Return Mapping components
             ElasticStrain(full_plastic_strain, full_delta_strain, elastic_strain);
             ComputeTrialStress(elastic_strain, full_sigma);
-            SpectralDecomposition(full_sigma, eigenvalues, eigenvectors);
-            ProjectSigma(eigenvalues, sigma_projected, alpha, mtype);
+            SpectralDecomposition(full_sigma, sigma_projected, eigenvectors);
+            ProjectSigma(sigma_projected, sigma_projected, alpha, mtype);
             ReconstructStressTensor(sigma_projected, eigenvectors, full_sigma);
             
             // Update plastic strain
