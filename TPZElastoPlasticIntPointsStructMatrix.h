@@ -74,7 +74,8 @@ private:
     std::set<int> fBCMaterialIds;
     
     // @TODO:: Replace it for a matrix object
-    std::unordered_map<int64_t,std::unordered_map<int64_t,int64_t>> m_i_j_to_sequence;
+//    std::unordered_map<int64_t,std::unordered_map<int64_t,int64_t>> m_i_j_to_sequence;
+    std::vector<std::vector<int64_t>> m_i_j_to_sequence;
     
 };
 
