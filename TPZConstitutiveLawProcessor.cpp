@@ -78,8 +78,8 @@ void TPZConstitutiveLawProcessor::SetMaterial(TPZMaterial *material) {
     fMaterial = dynamic_cast<TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse> , TPZElastoPlasticMem> *>(material);
 }
 
-void TPZConstitutiveLawProcessor::ElasticStrain(TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain) {
-    elastic_strain = delta_strain - plastic_strain;
+void TPZConstitutiveLawProcessor::ElasticStrain(TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &elastic_strain) {
+    elastic_strain -= plastic_strain;
 }
 
 void TPZConstitutiveLawProcessor::PlasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &plastic_strain) {
@@ -211,7 +211,8 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
     
     tbb::parallel_for(size_t(0), size_t(fNpts), size_t(1) , [this, & delta_strain, & sigma] (size_t & ipts) {
         
-        TPZFMatrix<REAL> full_delta_strain(6, 1, 0.);
+//        TPZFMatrix<REAL> full_delta_strain(6, 1, 0.);
+        TPZFMatrix<REAL> elastic_strain(6, 1, 0.);
         TPZFMatrix<REAL> full_sigma(6, 1, 0.);
         TPZFMatrix<REAL> full_plastic_strain(6, 1, 0.);
         TPZFMatrix<REAL> el_tensor(3, 1, 0.);
@@ -222,18 +223,18 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
         //Get from delta strain vector
         delta_strain.GetSub(3 * ipts, 0, 3, 1, el_tensor);
         // Translate
-        TranslateStrain(el_tensor, full_delta_strain);
+        TranslateStrain(el_tensor, elastic_strain);
         
         //Get from plastic strain vector
         fPlasticStrain.GetSub(6 * ipts, 0, 6, 1, full_plastic_strain);
         
         {
-            TPZFMatrix<REAL> elastic_strain(6, 1, 0.);
+
             TPZFMatrix<REAL> eigenvectors(9, 1, 0.);
             TPZFMatrix<REAL> sigma_projected(3, 1, 0.);
             
             // Return Mapping components
-            ElasticStrain(full_plastic_strain, full_delta_strain, elastic_strain);
+            ElasticStrain(full_plastic_strain, elastic_strain);
             ComputeTrialStress(elastic_strain, full_sigma);
             SpectralDecomposition(full_sigma, sigma_projected, eigenvectors);
             ProjectSigma(sigma_projected, sigma_projected, alpha, mtype);
@@ -241,7 +242,7 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
             
             // Update plastic strain
             ComputeStrain(full_sigma, elastic_strain);
-            PlasticStrain(full_delta_strain, elastic_strain, full_plastic_strain);
+            PlasticStrain(elastic_strain, elastic_strain, full_plastic_strain);
         }
         
         //Copy to stress vector

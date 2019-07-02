@@ -34,7 +34,7 @@ public:
 
     void SetMaterial(TPZMaterial *material);
 
-    void ElasticStrain(TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain);
+    void ElasticStrain(TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &elastic_strain);
 
     void TranslateStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &full_delta_strain);
     
