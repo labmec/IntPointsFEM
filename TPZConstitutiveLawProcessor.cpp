@@ -211,7 +211,6 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
     
     tbb::parallel_for(size_t(0), size_t(fNpts), size_t(1) , [this, & delta_strain, & sigma] (size_t & ipts) {
         
-//        TPZFMatrix<REAL> full_delta_strain(6, 1, 0.);
         TPZFMatrix<REAL> elastic_strain(6, 1, 0.);
         TPZFMatrix<REAL> full_sigma(6, 1, 0.);
         TPZFMatrix<REAL> full_plastic_strain(6, 1, 0.);
