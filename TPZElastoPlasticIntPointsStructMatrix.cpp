@@ -156,7 +156,6 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
                     
                     STATE val = K(i_dof,j_dof);
                     int64_t  index = m_i_j_to_sequence[i_dest][j_dest];
-                    std::cout << index << std::endl;
                     if (i_dest <= j_dest) Kg[index] += val;
                 }
             }
