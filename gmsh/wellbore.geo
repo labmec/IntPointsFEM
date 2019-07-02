@@ -13,7 +13,7 @@ Mesh.SecondOrderLinear = 0;
 wr = 0.1;
 fr = 4.0;
 
-LargeCBurdenQ = 1;
+LargeCBurdenQ = 0;
 
 If(LargeCBurdenQ)
 	nt = 256;
