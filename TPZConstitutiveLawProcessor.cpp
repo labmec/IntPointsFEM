@@ -183,16 +183,6 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
     int64_t cols = delta_strain.Cols();
     sigma.Resize(rows,cols);
 
-//    { /// Example of lambda expression.
-//        int int_var = 42;
-//        auto lambda_func = [& int_var](){cout <<
-//            "This lambda has a copy of int_var when created: " << int_var << endl;};
-//        for(int i = 0; i < 3; i++) {
-//            int_var++;
-//            lambda_func();
-//        }
-//    }
-
     TPZMatWithMem<TPZElastoPlasticMem> * mat = dynamic_cast<TPZMatWithMem<TPZElastoPlasticMem> *>(fMaterial);
 
     
@@ -240,15 +230,15 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
         
         {
             TPZFMatrix<REAL> elastic_strain(6, 1, 0.);
-            TPZFMatrix<REAL> sigma_trial(6, 1, 0.);
+//            TPZFMatrix<REAL> sigma_trial(6, 1, 0.);
             TPZFMatrix<REAL> eigenvalues(3, 1, 0.);
             TPZFMatrix<REAL> eigenvectors(9, 1, 0.);
             TPZFMatrix<REAL> sigma_projected(3, 1, 0.);
             
             // Return Mapping components
             ElasticStrain(full_plastic_strain, full_delta_strain, elastic_strain);
-            ComputeTrialStress(elastic_strain, sigma_trial);
-            SpectralDecomposition(sigma_trial, eigenvalues, eigenvectors);
+            ComputeTrialStress(elastic_strain, full_sigma);
+            SpectralDecomposition(full_sigma, eigenvalues, eigenvectors);
             ProjectSigma(eigenvalues, sigma_projected, alpha, mtype);
             ReconstructStressTensor(sigma_projected, eigenvectors, full_sigma);
             
@@ -368,8 +358,6 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
 void TPZConstitutiveLawProcessor::TranslateStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &full_delta_strain){
     
     int dim = 2;
-    int n_sigma_comps = 3;
-    
     if (dim == 2) {
             full_delta_strain.Resize(6,1);
             full_delta_strain.Zero();
@@ -385,8 +373,6 @@ void TPZConstitutiveLawProcessor::TranslateStrain(TPZFMatrix<REAL> &delta_strain
 void TPZConstitutiveLawProcessor::TranslateStress(TPZFMatrix<REAL> &full_stress, TPZFMatrix<REAL> &stress){
     
     int dim = 2;
-    int n_sigma_comps = 3;
-    
     if (dim == 2) {
             stress(0,0) =  full_stress(_XX_,0);
             stress(1,0) =  full_stress(_XY_,0);
