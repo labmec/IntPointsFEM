@@ -183,9 +183,6 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
 
     // The constitutive law is computing assuming full tensors
 
-    Timer timer;
-    timer.TimeUnit(Timer::EMilliseconds);
-
     int ipts;
 #ifdef USING_TBB
     tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1),[&](size_t ipts)

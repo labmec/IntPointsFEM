@@ -17,6 +17,11 @@
 #include <time.h>
 #include "Timer.h"
 
+#ifdef USING_TBB
+#include "tbb/task_scheduler_init.h"
+tbb::task_scheduler_init init(tbb::task_scheduler_init::automatic); //max number of threads
+#endif
+
 
 /// Gmsh mesh
 TPZGeoMesh * ReadGeometry(std::string geometry_file);
@@ -86,7 +91,7 @@ int main(int argc, char *argv[]) {
     TPZAnalysis *analysis;
     // {
         timer.Start();
-//        analysis = Analysis(cmesh,n_threads);
+       // analysis = Analysis(cmesh,n_threads);
         analysis = Analysis_IPFEM(cmesh,n_threads);
         timer.Stop();
         std::cout << "Calling Analysis_IPFEM: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
