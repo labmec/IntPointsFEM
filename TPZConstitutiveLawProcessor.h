@@ -5,7 +5,6 @@
 #include "TPZYCMohrCoulombPV.h"
 #include "TPZElastoPlasticMem.h"
 #include "TPZMatElastoPlastic2D.h"
-#include "TPZConstitutiveLaw.h"
 
 #ifdef USING_CUDA
 #include "TPZVecGPU.h"
@@ -29,7 +28,7 @@ public:
 
     TPZConstitutiveLawProcessor &operator=(const TPZConstitutiveLawProcessor &copy);
 
-    void SetIntPoints(int64_t npts);
+    void SetUpDataByIntPoints(int64_t npts);
 
     void SetWeightVector(TPZVec<REAL> weight);
 

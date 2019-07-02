@@ -24,7 +24,7 @@ TPZConstitutiveLawProcessor::TPZConstitutiveLawProcessor() : fNpts(-1), fWeight(
 }
 
 TPZConstitutiveLawProcessor::TPZConstitutiveLawProcessor(int npts, TPZVec<REAL> weight, TPZMaterial *material) : fNpts(-1), fWeight(0), fMaterial(), fPlasticStrain(0,0), fMType(0,0), fAlpha(0,0) {
-    SetIntPoints(npts);
+    SetUpDataByIntPoints(npts);
     SetWeightVector(weight);
     SetMaterial(material);
 }
@@ -57,8 +57,17 @@ TPZConstitutiveLawProcessor &TPZConstitutiveLawProcessor::operator=(const TPZCon
     return *this;
 }
 
-void TPZConstitutiveLawProcessor::SetIntPoints(int64_t npts) {
+void TPZConstitutiveLawProcessor::SetUpDataByIntPoints(int64_t npts) {
     fNpts = npts;
+    
+    fPlasticStrain.Resize(6 * fNpts, 1);
+    fPlasticStrain.Zero();
+    
+    fMType.Resize(1 * fNpts, 1);
+    fMType.Zero();
+    
+    fAlpha.Resize(1 * fNpts, 1);
+    fAlpha.Zero();
 }
 
 void TPZConstitutiveLawProcessor::SetWeightVector(TPZVec<REAL> weight) {
@@ -174,16 +183,6 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
     int64_t cols = delta_strain.Cols();
     sigma.Resize(rows,cols);
 
-    fPlasticStrain.Resize(6 * fNpts, 1);
-    fPlasticStrain.Zero();
-
-    fMType.Resize(1 * fNpts, 1);
-    fMType.Zero();
-
-    fAlpha.Resize(1 * fNpts, 1);
-    fAlpha.Zero();
-
-
 //    { /// Example of lambda expression.
 //        int int_var = 42;
 //        auto lambda_func = [& int_var](){cout <<
@@ -194,9 +193,33 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
 //        }
 //    }
 
-    
     TPZMatWithMem<TPZElastoPlasticMem> * mat = dynamic_cast<TPZMatWithMem<TPZElastoPlasticMem> *>(fMaterial);
-    auto EvaluateFlux = [this] (int ipts, REAL & alpha, int & mtype, TPZFMatrix<REAL> & delta_eps, TPZFMatrix<REAL> & plastic_strain,  TPZFMatrix<REAL> & sigma, TPZMatWithMem<TPZElastoPlasticMem> * mat)
+
+    
+    // Lambda expression to populate plastic strain vector
+    auto FillPlasticStrain = [this] (int ipts, TPZMatWithMem<TPZElastoPlasticMem> * mat)
+    {
+ 
+        
+    };
+    
+    int ipts;
+#ifdef USING_TBB
+    tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1),[&](size_t ipts)
+#else
+     for (ipts = 0; ipts < fNpts; ipts++)
+#endif
+      {
+          FillPlasticStrain(ipts,mat);
+      }
+#ifdef USING_TBB
+);
+#endif
+
+    
+    
+    // Lambda for evaluate flux, this is supposed to be implemented in GPU
+    auto EvaluateFlux = [this] (int & ipts, REAL & alpha, int & mtype, TPZFMatrix<REAL> & delta_eps, TPZFMatrix<REAL> & plastic_strain,  TPZFMatrix<REAL> & sigma)
     {
         TPZFMatrix<REAL> el_delta_strain(3, 1, 0.);
         TPZFMatrix<REAL> elastic_strain(6, 1, 0.);
@@ -219,7 +242,6 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
     };
     
     // The constitutive law is computing assuming full tensors
-    int ipts;
 #ifdef USING_TBB
     tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1),[&](size_t ipts)
 #else
@@ -245,7 +267,7 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
         fPlasticStrain.GetSub(6 * ipts, 0, 6, 1, full_plastic_strain);
         
         // Compute sigma at integration point
-        EvaluateFlux(ipts,alpha, mtype, full_delta_strain, full_plastic_strain, full_sigma, mat);
+        EvaluateFlux(ipts,alpha, mtype, full_delta_strain, full_plastic_strain, full_sigma);
 
         //Copy to stress vector
         TranslateStress(full_sigma, el_sigma);
@@ -262,6 +284,27 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
         fAlpha(ipts,0) = alpha;
         fMType(ipts,0) = mtype;
     }
+#ifdef USING_TBB
+);
+#endif
+    
+    
+    // Lambda expression to update memory
+    auto UpdateElastoPlasticState = [this] (int ipts, TPZMatWithMem<TPZElastoPlasticMem> * mat)
+    {
+        
+        
+    };
+    
+#ifdef USING_TBB
+    tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1),[&](size_t ipts)
+#else
+      for (ipts = 0; ipts < fNpts; ipts++)
+#endif
+      {
+          UpdateElastoPlasticState(ipts,mat);
+          
+      }
 #ifdef USING_TBB
 );
 #endif

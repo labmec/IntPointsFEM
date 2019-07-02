@@ -138,25 +138,33 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     TPZVec<int> & el_n_dofs = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes;
     TPZVec<int> & cols_first_index = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex;
     
-    /// implement OptV2
-    if (1) {
 
-        /// Serial
-        for (int iel = 0; iel < n_vols; iel++) {
-
+    
+    /// Serial by color
+    int n_colors = m_first_color_index.size()-1;
+    for (int ic = 0; ic < n_colors; ic++) {
+        int i;
+#ifdef USING_TBB
+        tbb::parallel_for(size_t(m_first_color_index[ic]),size_t(m_first_color_index[ic+1]),size_t(1),[&](size_t i)
+#else
+        for (i = m_first_color_index[ic]; i < m_first_color_index[ic+1]; i++)
+#endif
+        {
+            int iel = m_el_color_indexes[i];
+            
             /// Compute Elementary Matrix.
             TPZFMatrix<STATE> K;
             fIntegrator.ComputeTangentMatrix(iel,K);
             
             int el_dof = el_n_dofs[iel];
             int pos = cols_first_index[iel];
-
+            
             for (int i_dof = 0; i_dof < el_dof; i_dof++) {
                 
                 int64_t i_dest = indexes[pos + i_dof];
-
+                
                 for (int j_dof = 0; j_dof < el_dof; j_dof++) {
-
+                    
                     int64_t j_dest = indexes[pos + j_dof];
                     STATE val = K(i_dof,j_dof);
                     
@@ -167,8 +175,11 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
                 }
             }
         }
-
+#ifdef USING_TBB
+        );
+#endif
     }
+
     
     auto it_end = fSparseMatrixLinear.MapEnd();
     for (auto it = fSparseMatrixLinear.MapBegin(); it!=it_end; it++) {
@@ -440,7 +451,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIndexes(TPZVec<int> &element_in
 
     TPZMaterial *material = fMesh->FindMaterial(1);
     fIntegrator.ConstitutiveLawProcessor().SetMaterial(material);
-    fIntegrator.ConstitutiveLawProcessor().SetIntPoints(npts);
+    fIntegrator.ConstitutiveLawProcessor().SetUpDataByIntPoints(npts);
     fIntegrator.ConstitutiveLawProcessor().SetWeightVector(weight);
 }
 
@@ -498,4 +509,33 @@ void TPZElastoPlasticIntPointsStructMatrix::ColoredIndexes(TPZVec<int> &element_
             coloredindexes[cont_cols + icols] = indexes[cont_cols + icols] + elemcolor[iel]*neq;
         }
     }
+    
+
+    
+    std::map<int64_t, std::vector<int64_t> > color_map;
+    for (int64_t iel = 0; iel < nblocks; iel++) {
+        color_map[elemcolor[iel]].push_back(iel);
+    }
+    
+    if (contcolor != color_map.size()) {
+        DebugStop();
+    }
+    
+    m_el_color_indexes.resize(nblocks);
+    m_first_color_index.resize(color_map.size()+1);
+    
+    int c_color = 0;
+
+    m_first_color_index[c_color] = 0;
+    for (auto color_data : color_map) {
+        int n_el_per_color = color_data.second.size();
+        int iel = m_first_color_index[c_color];
+        for (int i = 0; i < n_el_per_color ; i++) {
+            m_el_color_indexes[iel] = color_data.second[i];
+            iel++;
+        }
+        c_color++;
+        m_first_color_index[c_color] = n_el_per_color + m_first_color_index[c_color-1];
+    }
+    
 }
