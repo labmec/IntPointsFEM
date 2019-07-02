@@ -196,7 +196,7 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
 
     
     TPZMatWithMem<TPZElastoPlasticMem> * mat = dynamic_cast<TPZMatWithMem<TPZElastoPlasticMem> *>(fMaterial);
-    auto EvaluateFlux = [this] (int ipts, REAL & alpha, int & mtype, TPZFMatrix<REAL> & delta_eps, TPZFMatrix<REAL> & sigma, TPZMatWithMem<TPZElastoPlasticMem> * mat)
+    auto EvaluateFlux = [this] (int ipts, REAL & alpha, int & mtype, TPZFMatrix<REAL> & delta_eps, TPZFMatrix<REAL> & plastic_strain,  TPZFMatrix<REAL> & sigma, TPZMatWithMem<TPZElastoPlasticMem> * mat)
     {
         TPZFMatrix<REAL> el_delta_strain(3, 1, 0.);
         TPZFMatrix<REAL> elastic_strain(6, 1, 0.);
@@ -204,10 +204,9 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
         TPZFMatrix<REAL> eigenvalues(3, 1, 0.);
         TPZFMatrix<REAL> eigenvectors(9, 1, 0.);
         TPZFMatrix<REAL> sigma_projected(3, 1, 0.);
-        TPZFMatrix<REAL> el_plastic_strain(6, 1, 0.);
         
         // Return Mapping components
-        ElasticStrain(el_plastic_strain, delta_eps, elastic_strain);
+        ElasticStrain(plastic_strain, delta_eps, elastic_strain);
         ComputeTrialStress(elastic_strain, sigma_trial);
         SpectralDecomposition(sigma_trial, eigenvalues, eigenvectors);
         ProjectSigma(eigenvalues, sigma_projected, alpha, mtype);
@@ -215,7 +214,7 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
         
         // Update plastic strain
         ComputeStrain(sigma, elastic_strain);
-        PlasticStrain(delta_eps, elastic_strain, el_plastic_strain);
+        PlasticStrain(delta_eps, elastic_strain, plastic_strain);
         
     };
     
@@ -228,20 +227,25 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
 #endif    
     {
         
-        
         TPZFMatrix<REAL> full_delta_strain(6, 1, 0.);
         TPZFMatrix<REAL> full_sigma(6, 1, 0.);
+        TPZFMatrix<REAL> full_plastic_strain(6, 1, 0.);
         TPZFMatrix<REAL> el_sigma(3, 1, 0.);
 
         REAL alpha;
         int mtype;
 
+        //Get from delta strain vector
         TPZFMatrix<REAL> el_delta_strain(3, 1, 0.);
         delta_strain.GetSub(3 * ipts, 0, 3, 1, el_delta_strain);
-        // Compute sigma
+        // Translate
         TranslateStrain(el_delta_strain, full_delta_strain);
         
-        EvaluateFlux(ipts,alpha, mtype, full_delta_strain,full_sigma,mat);
+        //Get from plastic strain vector
+        fPlasticStrain.GetSub(6 * ipts, 0, 6, 1, full_plastic_strain);
+        
+        // Compute sigma at integration point
+        EvaluateFlux(ipts,alpha, mtype, full_delta_strain, full_plastic_strain, full_sigma, mat);
 
         //Copy to stress vector
         TranslateStress(full_sigma, el_sigma);
@@ -251,8 +255,8 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
         el_sigma(2,0) *= fWeight[ipts];
         sigma.AddSub(3 * ipts, 0, el_sigma);
 
-//        //Copy to PlasticStrain vector
-//        fPlasticStrain.AddSub(6 * ipts, 0, el_plastic_strain);
+        //Copy to plastic strain vector
+        fPlasticStrain.AddSub(6 * ipts, 0, full_plastic_strain);
 
         //Copy to MType and Alpha vectors
         fAlpha(ipts,0) = alpha;

@@ -178,10 +178,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
         stiff.PutVal(row, col, val);
     }
 
-    Assemble(rhs,guiInterface);
-    
-    int aka = 0;
-    
+    Assemble(rhs,guiInterface);    
 }
 
 int TPZElastoPlasticIntPointsStructMatrix::StressRateVectorSize(){
