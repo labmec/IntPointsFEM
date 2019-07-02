@@ -3,7 +3,7 @@
 //
 
 #include "TPZConstitutiveLawProcessor.h"
-#include "TPZMaterial.h"
+#include "TPZMatWithMem.h"
 #include "SpectralDecomp.h"
 #include "SigmaProjection.h"
 #include <functional>
@@ -197,13 +197,12 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
     
     int aka = 0;
     
-    TPZConstitutiveLaw<TPZ>::Compute
 //    TPZConstitutiveLaw::Com
     
-//    std::function<void(void) > task, functionToCall;
-//    functionToCall = std::bind(TPZConstitutiveLaw::ComputeFlux, TPZMaterial * mat, int int_point_index, const TPZVec<STATE> & delta_epsilon, TPZVec<STATE> & sigma);
-//    task = ([functionToCall] {
-//    });
+    std::function<void(void) > task, func_being_called;
+    func_being_called = std::bind(TPZConstitutiveLaw<TPZElastoPlasticMem>::ComputeFlux, TPZMaterial * mat, int int_point_index, const TPZVec<STATE> & delta_epsilon, TPZVec<STATE> & sigma);
+    task = ([func_being_called] {
+    });
     
     // The constitutive law is computing assuming full tensors
 
