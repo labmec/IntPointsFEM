@@ -45,23 +45,13 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
     TPZVec<int64_t> &JA = stiff->JA();
 
     {
-        int64_t n_ia = IA.size()-1;
-        for (int () = 0; () < ; ++()) {
-            
-        }
-        int64_t max_ja = JA[JA.size()-1];
-        
-        m_i_j_to_sequence.resize(n_ia);
-        for (int i = 0; i < n_ia; i++) {
-            m_i_j_to_sequence[i].resize(max_ja);
-        }
-    }
-
-    {
         int64_t n_ia = IA.size();
+        int64_t max_j = JA[IA[n_ia - 1] - 1];
+        m_i_j_to_sequence.resize(n_ia-1);
         int64_t l = 0;
         for (int64_t i = 0; i < n_ia - 1 ; i++) {
             int NNZ = IA[i+1] - IA[i];
+            m_i_j_to_sequence[i].resize(max_j,-1);
             for (int64_t j = IA[i]; j < NNZ + IA[i]; j++) {
                 m_i_j_to_sequence[i][JA[j]] = l;
                 l++;
@@ -175,12 +165,11 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     }
     
     auto it_end = fSparseMatrixLinear.MapEnd();
-
     for (auto it = fSparseMatrixLinear.MapBegin(); it!=it_end; it++) {
         int64_t row = it->first.first;
         int64_t col = it->first.second;
-        STATE val = it->second;
-        Kg[m_i_j_to_sequence[row][col]] += val;
+        STATE val = it->second + stiff.GetVal(row, col);
+        stiff.PutVal(row, col, val);
     }
 
     Assemble(rhs,guiInterface);
