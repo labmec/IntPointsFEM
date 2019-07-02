@@ -18,6 +18,8 @@ TPZElastoPlasticIntPointsStructMatrix::TPZElastoPlasticIntPointsStructMatrix(TPZ
         DebugStop();
     }
     fDimension = cmesh->Reference()->Dimension();
+    m_IA_to_sequence.clear();
+    m_JA_to_sequence.clear();
 }
 
 TPZElastoPlasticIntPointsStructMatrix::~TPZElastoPlasticIntPointsStructMatrix() {
@@ -41,22 +43,31 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
     /// Sparsify global indexes
     // Filling local std::map
     TPZSYsmpMatrix<STATE> *stiff = dynamic_cast<TPZSYsmpMatrix<STATE> *> (mat);
-    TPZVec<int64_t> &IA = stiff->IA();
-    TPZVec<int64_t> &JA = stiff->JA();
-    {
-        int64_t n_ia = IA.size();
-        int64_t l = 0;
-        for (int64_t i = 0; i < n_ia - 1 ; i++) {
-            int NNZ = IA[i+1] - IA[i];
-            for (int64_t j = IA[i]; j < NNZ + IA[i]; j++) {
-                m_i_j_to_sequence[i][JA[j]] = l;
-                l++;
-            }
-        }
-        
-    }
+    m_IA_to_sequence = stiff->IA();
+    m_JA_to_sequence = stiff->JA();
+
     
     return mat;
+}
+
+int64_t TPZElastoPlasticIntPointsStructMatrix::me(int64_t & i_dest, int64_t & j_dest){
+        
+    // Get the matrix entry at (row,col) without bound checking
+    int64_t row(i_dest),col(j_dest);
+    if (i_dest > j_dest) {
+        int64_t temp = i_dest;
+        row = col;
+        col = temp;
+    }
+    for(int ic=m_IA_to_sequence[row] ; ic < m_IA_to_sequence[row+1]; ic++ ) {
+        if ( m_JA_to_sequence[ic] == col )
+        {
+            return ic;
+        }
+    }
+    return 0;
+    
+    
 }
 
 TPZMatrix<STATE> *TPZElastoPlasticIntPointsStructMatrix::CreateAssemble(TPZFMatrix<STATE> &rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
@@ -126,8 +137,6 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     int64_t n_vols = fIntegrator.IrregularBlocksMatrix().Blocks().fNumBlocks;
     TPZVec<int> & el_n_dofs = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes;
     TPZVec<int> & cols_first_index = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex;
-
-
     
     /// implement OptV2
     if (1) {
@@ -144,15 +153,17 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 
             for (int i_dof = 0; i_dof < el_dof; i_dof++) {
                 
-                int i_dest = indexes[pos + i_dof];
+                int64_t i_dest = indexes[pos + i_dof];
 
                 for (int j_dof = 0; j_dof < el_dof; j_dof++) {
 
-                    int j_dest = indexes[pos + j_dof];
-                    
+                    int64_t j_dest = indexes[pos + j_dof];
                     STATE val = K(i_dof,j_dof);
-                    int64_t  index = m_i_j_to_sequence[i_dest][j_dest];
-                    if (i_dest <= j_dest) Kg[index] += val;
+                    
+                    if (i_dest <= j_dest) {
+                        int64_t  index = me(i_dest,j_dest);
+                        Kg[index] += val;
+                    }
                 }
             }
         }
@@ -160,12 +171,11 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     }
     
     auto it_end = fSparseMatrixLinear.MapEnd();
-
     for (auto it = fSparseMatrixLinear.MapBegin(); it!=it_end; it++) {
         int64_t row = it->first.first;
         int64_t col = it->first.second;
-        STATE val = it->second;
-        Kg[m_i_j_to_sequence[row][col]] += val;
+        STATE val = it->second + stiff.GetVal(row, col);
+        stiff.PutVal(row, col, val);
     }
 
     Assemble(rhs,guiInterface);
