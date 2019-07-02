@@ -134,7 +134,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     TPZVec<STATE> &Kg = stiff.A();
     
     TPZVec<int> &indexes = fIntegrator.DoFIndexes();
-    int64_t n_vols = fIntegrator.IrregularBlocksMatrix().Blocks().fNumBlocks;
+//    int64_t n_vols = fIntegrator.IrregularBlocksMatrix().Blocks().fNumBlocks;
     TPZVec<int> & el_n_dofs = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes;
     TPZVec<int> & cols_first_index = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex;
     
@@ -143,11 +143,11 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     /// Serial by color
     int n_colors = m_first_color_index.size()-1;
     for (int ic = 0; ic < n_colors; ic++) {
-        int i;
+
 #ifdef USING_TBB
         tbb::parallel_for(size_t(m_first_color_index[ic]),size_t(m_first_color_index[ic+1]),size_t(1),[&](size_t i)
 #else
-        for (i = m_first_color_index[ic]; i < m_first_color_index[ic+1]; i++)
+        for (int i = m_first_color_index[ic]; i < m_first_color_index[ic+1]; i++)
 #endif
         {
             int iel = m_el_color_indexes[i];
@@ -235,6 +235,7 @@ void TPZElastoPlasticIntPointsStructMatrix::AssembleBoundaryData() {
     int64_t neq = fMesh->NEquations();
     TPZStructMatrix str(fMesh);
     str.SetMaterialIds(fBCMaterialIds);
+    str.SetNumThreads(fNumThreads);
     TPZAutoPointer<TPZGuiInterface> guiInterface;
     fRhsLinear.Resize(neq, 1);
     fRhsLinear.Zero();

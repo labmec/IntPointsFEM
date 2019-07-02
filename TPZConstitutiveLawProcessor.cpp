@@ -238,8 +238,6 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
         //Get from plastic strain vector
         fPlasticStrain.GetSub(6 * ipts, 0, 6, 1, full_plastic_strain);
         
-        //        // Compute sigma at integration point
-        //        EvaluateFlux(ipts,alpha, mtype, full_delta_strain, full_plastic_strain, full_sigma);
         {
             TPZFMatrix<REAL> elastic_strain(6, 1, 0.);
             TPZFMatrix<REAL> sigma_trial(6, 1, 0.);
