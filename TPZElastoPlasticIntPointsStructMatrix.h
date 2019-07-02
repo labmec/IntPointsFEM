@@ -64,7 +64,8 @@ private:
     
     int fDimension;
     
-
+    int64_t me(int64_t & i_dest, int64_t & j_dest);
+    
     TPZNumericalIntegrator fIntegrator;
 
     TPZVerySparseMatrix<STATE> fSparseMatrixLinear; //-> BC data
@@ -73,9 +74,9 @@ private:
     
     std::set<int> fBCMaterialIds;
     
-    // @TODO:: Replace it for a matrix object
-//    std::unordered_map<int64_t,std::unordered_map<int64_t,int64_t>> m_i_j_to_sequence;
-    std::vector<std::vector<int64_t>> m_i_j_to_sequence;
+    TPZVec<int64_t> m_IA_to_sequence;
+    
+    TPZVec<int64_t> m_JA_to_sequence;
     
 };
 
