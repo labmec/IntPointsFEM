@@ -19,7 +19,6 @@
 
 #ifdef USING_TBB
 #include "tbb/task_scheduler_init.h"
-tbb::task_scheduler_init init(tbb::task_scheduler_init::automatic); //max number of threads
 #endif
 
 
@@ -89,6 +88,13 @@ int main(int argc, char *argv[]) {
 
 // Defines the analysis
     int n_threads = 24;
+    
+#ifdef USING_TBB
+#include "tbb/task_scheduler_init.h"
+//    tbb::task_scheduler_init init(tbb::task_scheduler_init::automatic); //max number of threads
+    tbb::task_scheduler_init init(n_threads); //max number of threads
+#endif
+    
     TPZAnalysis *analysis;
     // {
         timer.Start();
