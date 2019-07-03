@@ -68,6 +68,19 @@ void TPZConstitutiveLawProcessor::SetUpDataByIntPoints(int64_t npts) {
     
     fAlpha.Resize(1 * fNpts, 1);
     fAlpha.Zero();
+
+    #ifdef USING_CUDA
+
+    dPlasticStrain.resize(6 * fNpts);
+    dPlasticStrain.Zero();
+
+    dMType.resize(1 * fNpts);
+    dMType.Zero();
+
+    dAlpha.resize(1 * fNpts);
+    dAlpha.Zero();
+
+    #endif
 }
 
 void TPZConstitutiveLawProcessor::SetWeightVector(TPZVec<REAL> weight) {
@@ -391,14 +404,7 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZVecGPU<REAL> &delta_strain, TP
     int64_t rows = delta_strain.getSize();
     sigma.resize(rows);
 
-    dPlasticStrain.resize(6 * fNpts);
-    dPlasticStrain.Zero();
 
-    dMType.resize(1 * fNpts);
-    dMType.Zero();
-
-    dAlpha.resize(1 * fNpts);
-    dAlpha.Zero();
 
     fCudaCalls->ComputeSigma(fNpts, delta_strain.getData(), sigma.getData(), lambda, mu, mc_phi, mc_psi, mc_cohesion, dPlasticStrain.getData(),  dMType.getData(), dAlpha.getData(), dWeight.getData());
 
