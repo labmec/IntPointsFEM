@@ -74,6 +74,19 @@ void TPZConstitutiveLawProcessor::SetUpDataByIntPoints(int64_t npts) {
     
     fAlpha.Resize(1 * fNpts, 1);
     fAlpha.Zero();
+
+    #ifdef USING_CUDA
+
+    dPlasticStrain.resize(6 * fNpts);
+    dPlasticStrain.Zero();
+
+    dMType.resize(1 * fNpts);
+    dMType.Zero();
+
+    dAlpha.resize(1 * fNpts);
+    dAlpha.Zero();
+
+    #endif
 }
 
 void TPZConstitutiveLawProcessor::SetWeightVector(TPZVec<REAL> weight) {
@@ -191,16 +204,18 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> & glob_delta_str
 
     // Variables required for lambda's capture block
     TPZMatWithMem<TPZElastoPlasticMem> * mat = dynamic_cast<TPZMatWithMem<TPZElastoPlasticMem> *>(fMaterial);
-    TPZFNMatrix<6,REAL> strain(6, 1, 0.);
-    TPZFNMatrix<6,REAL> elastic_strain(6, 1, 0.);
-    TPZFNMatrix<6,REAL> sigma(6, 1, 0.);
-    TPZFNMatrix<6,REAL> plastic_strain(6, 1, 0.);
-    TPZFNMatrix<3,REAL> aux_tensor(3, 1, 0.);
+
     
     // The constitutive law is computing assuming full tensors
 #ifdef USING_TBB
     
-    tbb::parallel_for(size_t(0), size_t(fNpts), size_t(1) , [this, mat, & glob_delta_strain, & glob_sigma, & strain, & elastic_strain, & plastic_strain, & sigma, & aux_tensor] (size_t & ipts) {
+    tbb::parallel_for(size_t(0), size_t(fNpts), size_t(1) , [this, mat, & glob_delta_strain, & glob_sigma] (size_t & ipts) {
+        
+        TPZFNMatrix<6,REAL> strain(6, 1, 0.);
+        TPZFNMatrix<6,REAL> elastic_strain(6, 1, 0.);
+        TPZFNMatrix<6,REAL> sigma(6, 1, 0.);
+        TPZFNMatrix<6,REAL> plastic_strain(6, 1, 0.);
+        TPZFNMatrix<3,REAL> aux_tensor(3, 1, 0.);
         
         REAL alpha;
         int mtype;
@@ -253,10 +268,17 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> & glob_delta_str
 );
 #else
     
+    TPZFNMatrix<6,REAL> strain(6, 1, 0.);
+    TPZFNMatrix<6,REAL> elastic_strain(6, 1, 0.);
+    TPZFNMatrix<6,REAL> sigma(6, 1, 0.);
+    TPZFNMatrix<6,REAL> plastic_strain(6, 1, 0.);
+    TPZFNMatrix<3,REAL> aux_tensor(3, 1, 0.);
+    
     // Lambda for evaluate flux, this is supposed to be implemented in GPU
     auto EvaluateFlux = [this, mat, & glob_delta_strain, & glob_sigma, & strain, & elastic_strain, & plastic_strain, & sigma, & aux_tensor] (int & ipts)
     {
         
+    
         REAL alpha;
         int mtype;
         
@@ -317,8 +339,13 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> & glob_delta_str
     
     
     if (mat->GetUpdateMem()) {
+        
 #ifdef USING_TBB
-        tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1), [this, mat, & strain, & plastic_strain, & sigma] (size_t & ipts){
+        tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1), [this, mat] (size_t & ipts){
+            
+            TPZFNMatrix<6,REAL> strain(6, 1, 0.);
+            TPZFNMatrix<6,REAL> plastic_strain(6, 1, 0.);
+            TPZFNMatrix<6,REAL> sigma(6, 1, 0.);
             
             TPZElastoPlasticMem & memory = mat->MemItem(ipts);
             fSigma.GetSub(6 * ipts, 0, 6, 1, sigma);
@@ -397,14 +424,7 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZVecGPU<REAL> &delta_strain, TP
     int64_t rows = delta_strain.getSize();
     sigma.resize(rows);
 
-    dPlasticStrain.resize(6 * fNpts);
-    dPlasticStrain.Zero();
 
-    dMType.resize(1 * fNpts);
-    dMType.Zero();
-
-    dAlpha.resize(1 * fNpts);
-    dAlpha.Zero();
 
     fCudaCalls->ComputeSigma(fNpts, delta_strain.getData(), sigma.getData(), lambda, mu, mc_phi, mc_psi, mc_cohesion, dPlasticStrain.getData(),  dMType.getData(), dAlpha.getData(), dWeight.getData());
 
