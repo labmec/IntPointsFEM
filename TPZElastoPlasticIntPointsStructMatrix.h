@@ -46,6 +46,10 @@ public:
         else return false;
     }
 
+#ifdef USING_CUDA
+    void TransferDataToGPU();
+#endif
+
 private:
     
     int StressRateVectorSize();
@@ -81,6 +85,16 @@ private:
     std::vector<int64_t> m_el_color_indexes;
     
     std::vector<int64_t> m_first_color_index;
+
+    #ifdef USING_CUDA
+    TPZCudaCalls fCudaCalls;
+
+    TPZVecGPU<int64_t> d_IA_to_sequence;
+    
+    TPZVecGPU<int64_t> d_JA_to_sequence;
+    
+    TPZVecGPU<int64_t> d_el_color_indexes;
+    #endif
     
 };
 

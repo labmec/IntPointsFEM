@@ -62,6 +62,11 @@ public:
     void SetNColors(int ncolor) {
         fNColor = ncolor;
     }
+#ifdef USING_CUDA
+    TPZVecGPU<int> & DoFIndexesDev() {
+        return dDoFIndexes;
+    }
+#endif
 
     TPZIrregularBlocksMatrix & IrregularBlocksMatrix() {
         return fBlockMatrix;

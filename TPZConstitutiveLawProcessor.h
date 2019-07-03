@@ -30,7 +30,17 @@ public:
 
     void SetUpDataByIntPoints(int64_t npts);
 
-    void SetWeightVector(TPZVec<REAL> weight);
+    void SetWeightVector(TPZVec<REAL> &weight);
+
+    TPZVec<REAL> &WeightVector() {
+        return fWeight;
+    }
+
+#ifdef USING_CUDA
+    TPZVecGPU<REAL> &WeightVectorDev() {
+        return dWeight;
+    }
+#endif
 
     void SetMaterial(TPZMaterial *material);
 

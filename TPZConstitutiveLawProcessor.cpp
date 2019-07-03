@@ -83,7 +83,7 @@ void TPZConstitutiveLawProcessor::SetUpDataByIntPoints(int64_t npts) {
     #endif
 }
 
-void TPZConstitutiveLawProcessor::SetWeightVector(TPZVec<REAL> weight) {
+void TPZConstitutiveLawProcessor::SetWeightVector(TPZVec<REAL> &weight) {
     fWeight = weight;
 }
 

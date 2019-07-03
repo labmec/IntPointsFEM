@@ -106,7 +106,7 @@ if(USING_CUDA)
 #   set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}; -arch=compute_35 -rdc=true -lcudadevrt)
     set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}; -arch=compute_35)
 
-#    set(CUDA_SEPARABLE_COMPILATION ON)
+    set(CUDA_SEPARABLE_COMPILATION ON)
     
     include_directories(/usr/local/cuda-8.0/include/)
     link_directories(/usr/local/cuda-8.0/lib64/)

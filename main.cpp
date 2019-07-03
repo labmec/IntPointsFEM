@@ -58,13 +58,13 @@ void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData material, int n_threads,
 void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_material, int npoints, std::ostream &out, bool euler = false);
 
 int main(int argc, char *argv[]) {
-    int pOrder = 2; // Computational mesh order
+    int pOrder = 1; // Computational mesh order
     bool render_vtk_Q = false;
     
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
-    std::string msh_file = source_dir + "/gmsh/wellbore.msh";
-   // std::string msh_file = source_dir + "/gmsh/wellbore-coarse.msh";
+    // std::string msh_file = source_dir + "/gmsh/wellbore.msh";
+   std::string msh_file = source_dir + "/gmsh/wellbore-coarse.msh";
     TPZGeoMesh *gmesh = ReadGeometry(msh_file);
 #ifdef PZDEBUG
     PrintGeometry(gmesh);

@@ -20,6 +20,12 @@ TPZElastoPlasticIntPointsStructMatrix::TPZElastoPlasticIntPointsStructMatrix(TPZ
     fDimension = cmesh->Reference()->Dimension();
     m_IA_to_sequence.clear();
     m_JA_to_sequence.clear();
+
+    #ifdef USING_CUDA
+    d_IA_to_sequence.resize(0);    
+    d_JA_to_sequence.resize(0);     
+    d_el_color_indexes.resize(0); 
+    #endif
 }
 
 TPZElastoPlasticIntPointsStructMatrix::~TPZElastoPlasticIntPointsStructMatrix() {
@@ -46,9 +52,33 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
     m_IA_to_sequence = stiff->IA();
     m_JA_to_sequence = stiff->JA();
 
-    
+#ifdef USING_CUDA
+    Timer timer;   
+    timer.TimeUnit(Timer::ESeconds);
+    timer.TimerOption(Timer::ECudaEvent);
+    timer.Start();
+    std::cout << "Transfering data to GPU..." << std::endl;
+    fIntegrator.TransferDataToGPU();
+    this->TransferDataToGPU();
+    timer.Stop();
+    std::cout << "Done! It took " <<  timer.ElapsedTime() << timer.Unit() << std::endl;
+#endif
+  
     return mat;
 }
+
+#ifdef USING_CUDA
+void TPZElastoPlasticIntPointsStructMatrix::TransferDataToGPU() {
+    d_IA_to_sequence.resize(m_IA_to_sequence.size());
+    d_IA_to_sequence.set(&m_IA_to_sequence[0], m_IA_to_sequence.size());
+
+    d_JA_to_sequence.resize(m_JA_to_sequence.size());
+    d_JA_to_sequence.set(&m_JA_to_sequence[0], m_JA_to_sequence.size());
+
+    d_el_color_indexes.resize(m_el_color_indexes.size());
+    d_el_color_indexes.set(&m_el_color_indexes[0], m_el_color_indexes.size());
+}
+#endif
 
 int64_t TPZElastoPlasticIntPointsStructMatrix::me(int64_t & i_dest, int64_t & j_dest){
         
@@ -112,18 +142,6 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     fIntegrator.SetNColors(ncolor);
 
     AssembleBoundaryData();
-
-#ifdef USING_CUDA
-    Timer timer;   
-    timer.TimeUnit(Timer::ESeconds);
-    timer.TimerOption(Timer::ECudaEvent);
-    timer.Start();
-    std::cout << "Transfering data to GPU..." << std::endl;
-    fIntegrator.TransferDataToGPU();
-    timer.Stop();
-    std::cout << "Done! It took " <<  timer.ElapsedTime() << timer.Unit() << std::endl;
-#endif
-
 }
 
 
@@ -179,6 +197,24 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
         );
 #endif
     }
+
+#ifdef USING_CUDA
+    int NNZ = stiff.A().size();
+    TPZVecGPU<REAL> d_Kg(NNZ);
+    d_Kg.set(&stiff.A()[0], NNZ);
+    d_Kg.Zero();
+
+    for (int ic = 0; ic < 1; ic++) {
+        int first = m_first_color_index[ic];
+        int last = m_first_color_index[ic + 1];
+        fCudaCalls.MatrixAssemble(d_Kg.getData(), first, last, &d_el_color_indexes.getData()[first], fIntegrator.ConstitutiveLawProcessor().WeightVectorDev().getData(), 
+                                    fIntegrator.DoFIndexesDev().getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dStorage.getData(),
+                                    fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowSizes.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColSizes.getData(),
+                                    fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowFirstIndex.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColFirstIndex.getData(),
+                                    fIntegrator.IrregularBlocksMatrix().BlocksDev().dMatrixPosition.getData(), d_IA_to_sequence.getData(), d_JA_to_sequence.getData());
+    }
+
+#endif
 
     
     auto it_end = fSparseMatrixLinear.MapEnd();

@@ -36,6 +36,7 @@ void TPZNumericalIntegrator::Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &de
     fCudaCalls.GatherOperation(cols, coef.getData(), gather_solution.getData(), dDoFIndexes.getData());
 
     delta_strain.resize(rows);
+    delta_strain.Zero();
     fBlockMatrix.MultiplyVector(&gather_solution.getData()[0], &delta_strain.getData()[0], false);
 }
 #endif 
@@ -61,6 +62,7 @@ void TPZNumericalIntegrator::MultiplyTranspose(TPZVecGPU<REAL> &sigma, TPZVecGPU
     int64_t neq = res.getSize();    
 
     TPZVecGPU<REAL> forces(cols);
+    forces.Zero();
     res.resize(ncolor * neq);
     res.Zero();
 
