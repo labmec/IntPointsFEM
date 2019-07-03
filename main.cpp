@@ -92,8 +92,8 @@ int main(int argc, char *argv[]) {
     TPZAnalysis *analysis;
     // {
         timer.Start();
-        analysis = Analysis(cmesh,n_threads);
-//        analysis = Analysis_IPFEM(cmesh,n_threads);
+//        analysis = Analysis(cmesh,n_threads);
+        analysis = Analysis_IPFEM(cmesh,n_threads);
         timer.Stop();
         std::cout << "Calling Analysis_IPFEM: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
     // }
