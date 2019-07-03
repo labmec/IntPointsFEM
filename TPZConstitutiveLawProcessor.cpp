@@ -279,52 +279,46 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, T
     // Lambda for evaluate flux, this is supposed to be implemented in GPU
     auto EvaluateFlux = [this] (int & ipts, TPZFMatrix<REAL> & delta_strain, TPZFMatrix<REAL> & sigma)
     {
-        TPZFMatrix<REAL> full_delta_strain(6, 1, 0.);
+       TPZFMatrix<REAL> elastic_strain(6, 1, 0.);
         TPZFMatrix<REAL> full_sigma(6, 1, 0.);
         TPZFMatrix<REAL> full_plastic_strain(6, 1, 0.);
-        TPZFMatrix<REAL> el_sigma(3, 1, 0.);
+        TPZFMatrix<REAL> el_tensor(3, 1, 0.);
         
         REAL alpha;
         int mtype;
         
         //Get from delta strain vector
-        TPZFMatrix<REAL> el_delta_strain(3, 1, 0.);
-        delta_strain.GetSub(3 * ipts, 0, 3, 1, el_delta_strain);
+        delta_strain.GetSub(3 * ipts, 0, 3, 1, el_tensor);
         // Translate
-        TranslateStrain(el_delta_strain, full_delta_strain);
+        TranslateStrain(el_tensor, elastic_strain);
         
         //Get from plastic strain vector
         fPlasticStrain.GetSub(6 * ipts, 0, 6, 1, full_plastic_strain);
         
-        //        // Compute sigma at integration point
-        //        EvaluateFlux(ipts,alpha, mtype, full_delta_strain, full_plastic_strain, full_sigma);
         {
-            TPZFMatrix<REAL> el_delta_strain(3, 1, 0.);
-            TPZFMatrix<REAL> elastic_strain(6, 1, 0.);
-            TPZFMatrix<REAL> sigma_trial(6, 1, 0.);
-            TPZFMatrix<REAL> eigenvalues(3, 1, 0.);
+
             TPZFMatrix<REAL> eigenvectors(9, 1, 0.);
             TPZFMatrix<REAL> sigma_projected(3, 1, 0.);
             
             // Return Mapping components
-            ElasticStrain(full_plastic_strain, full_delta_strain, elastic_strain);
-            ComputeTrialStress(elastic_strain, sigma_trial);
-            SpectralDecomposition(sigma_trial, eigenvalues, eigenvectors);
-            ProjectSigma(eigenvalues, sigma_projected, alpha, mtype);
+            ElasticStrain(full_plastic_strain, elastic_strain);
+            ComputeTrialStress(elastic_strain, full_sigma);
+            SpectralDecomposition(full_sigma, sigma_projected, eigenvectors);
+            ProjectSigma(sigma_projected, sigma_projected, alpha, mtype);
             ReconstructStressTensor(sigma_projected, eigenvectors, full_sigma);
             
             // Update plastic strain
             ComputeStrain(full_sigma, elastic_strain);
-            PlasticStrain(full_delta_strain, elastic_strain, full_plastic_strain);
+            PlasticStrain(elastic_strain, elastic_strain, full_plastic_strain);
         }
         
         //Copy to stress vector
-        TranslateStress(full_sigma, el_sigma);
+        TranslateStress(full_sigma, el_tensor);
         
-        el_sigma(0,0) *= fWeight[ipts];
-        el_sigma(1,0) *= fWeight[ipts];
-        el_sigma(2,0) *= fWeight[ipts];
-        sigma.AddSub(3 * ipts, 0, el_sigma);
+        el_tensor(0,0) *= fWeight[ipts];
+        el_tensor(1,0) *= fWeight[ipts];
+        el_tensor(2,0) *= fWeight[ipts];
+        sigma.AddSub(3 * ipts, 0, el_tensor);
         
         //Copy to plastic strain vector
         fPlasticStrain.AddSub(6 * ipts, 0, full_plastic_strain);
