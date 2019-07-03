@@ -59,7 +59,7 @@ void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_mate
 
 int main(int argc, char *argv[]) {
     int pOrder = 2; // Computational mesh order
-    bool render_vtk_Q = false;
+    bool render_vtk_Q = true;
     
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;

@@ -20,8 +20,8 @@ If(LargeCBurdenQ)
 	nr = 128;
 	radial_progression = 1.01725;
 Else
-	nt = 2;
-	nr = 3;
+	nt = 4;
+	nr = 4;
 	radial_progression = 10.25;	
 EndIf
 

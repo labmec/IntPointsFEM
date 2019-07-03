@@ -34,9 +34,9 @@ public:
 
     void SetMaterial(TPZMaterial *material);
 
-    void ElasticStrain(TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &elastic_strain);
+    void ElasticStrain(TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> & strain ,TPZFMatrix<REAL> &elastic_strain);
 
-    void TranslateStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &full_delta_strain);
+    void ComposeStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &full_delta_strain);
     
     void TranslateStress(TPZFMatrix<REAL> &full_stress, TPZFMatrix<REAL> &stress);
     
@@ -50,9 +50,9 @@ public:
 
     void ComputeStrain(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &elastic_strain);
 
-    void PlasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &plastic_strain);
+    void PlasticStrain(TPZFMatrix<REAL> &strain, TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &plastic_strain);
 
-    void ComputeSigma(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &sigma);
+    void ComputeSigma(TPZFMatrix<REAL> & glob_delta_strain, TPZFMatrix<REAL> & glob_sigma);
     
     void De(TPZFMatrix<REAL> & De);
 
@@ -70,6 +70,10 @@ private:
 
     TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse>, TPZElastoPlasticMem> *fMaterial;
 
+    TPZFMatrix<REAL> fSigma;
+    
+    TPZFMatrix<REAL> fStrain;
+    
     TPZFMatrix<REAL> fPlasticStrain;
 
     TPZFMatrix<REAL> fMType;
