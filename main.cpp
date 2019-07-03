@@ -100,7 +100,7 @@ int main(int argc, char *argv[]) {
     
 // Calculates the solution using Newton method
     int n_iterations = 80;
-    REAL tolerance = 1.e-3;
+    REAL tolerance = 1.e-4;
     // {
         timer.Start();
         Solution(analysis, n_iterations, tolerance);
