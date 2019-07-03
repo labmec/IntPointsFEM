@@ -59,7 +59,7 @@ void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_mate
 
 int main(int argc, char *argv[]) {
     int pOrder = 2; // Computational mesh order
-    bool render_vtk_Q = true;
+    bool render_vtk_Q = false;
     
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
@@ -92,8 +92,8 @@ int main(int argc, char *argv[]) {
     TPZAnalysis *analysis;
     // {
         timer.Start();
-       // analysis = Analysis(cmesh,n_threads);
-        analysis = Analysis_IPFEM(cmesh,n_threads);
+        analysis = Analysis(cmesh,n_threads);
+//        analysis = Analysis_IPFEM(cmesh,n_threads);
         timer.Stop();
         std::cout << "Calling Analysis_IPFEM: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
     // }
@@ -158,9 +158,9 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
 
         norm_delta_du = Norm(delta_du);
         norm_res = Norm(analysis->Rhs());
-        stop_criterion_Q = norm_res < tolerance & norm_delta_du < tolerance;
-        std::cout << "Nonlinear process :: delta_du norm = " << norm_delta_du << std::endl;
-        std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
+        stop_criterion_Q = norm_res < tolerance;// & norm_delta_du < tolerance;
+        std::cout << "Nonlinear process : delta_du norm = " << norm_delta_du << std::endl;
+        std::cout << "Nonlinear process : residue norm = " << norm_res << std::endl;
         if (stop_criterion_Q) {
             AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
             norm_res = Norm(analysis->Rhs());
@@ -168,12 +168,12 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
             std::cout << "Number of iterations = " << i + 1 << std::endl;
             break;
         }
-        // {
-            timer.Start();
-            analysis->Assemble();
-            timer.Stop();
-            std::cout << "Calling Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
-        // }
+//        // {
+//            timer.Start();
+//            analysis->Assemble();
+//            timer.Stop();
+//            std::cout << "Calling Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+//        // }
 
     }
 
@@ -298,7 +298,7 @@ TElastoPlasticData WellboreConfigRK(){
 
     /// Elastic verification -> true
     /// ElastoPlastic verification -> false
-    bool is_elastic_Q = true;
+    bool is_elastic_Q = false;
 
     TPZElasticResponse LER;
     REAL Ey = 2000.0;
