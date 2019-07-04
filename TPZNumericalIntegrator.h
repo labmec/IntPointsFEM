@@ -66,6 +66,8 @@ public:
     TPZVecGPU<int> & DoFIndexesDev() {
         return dDoFIndexes;
     }
+
+    void ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZVecGPU<REAL> &rhs);
 #endif
 
     TPZIrregularBlocksMatrix & IrregularBlocksMatrix() {

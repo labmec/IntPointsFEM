@@ -111,25 +111,7 @@ void TPZNumericalIntegrator::MultiplyTranspose(TPZFMatrix<REAL> &sigma, TPZFMatr
     res.Resize(neq, 1);
 }
 
-void TPZNumericalIntegrator::ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZFMatrix<REAL> &rhs)
-{
-#ifdef USING_CUDA
-    TPZVecGPU<REAL> d_solution(solution.Rows());
-    d_solution.set(&solution(0,0), solution.Rows());
-
-    TPZVecGPU<REAL> d_delta_strain;
-    TPZVecGPU<REAL> d_sigma;
-
-    TPZVecGPU<REAL> d_rhs(rhs.Rows());
-    d_rhs.Zero();
-
-    Multiply(d_solution, d_delta_strain);
-    fConstitutiveLawProcessor.ComputeSigma(d_delta_strain, d_sigma);
-    MultiplyTranspose(d_sigma, d_rhs);
-    d_rhs.get(&rhs(0,0), solution.Rows());
-    // rhs.Print("rhsGPU = ", std::cout, EMathematicaInput);
-#else
-
+void TPZNumericalIntegrator::ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZFMatrix<REAL> &rhs) {
     TPZFMatrix<REAL> delta_strain;
     TPZFMatrix<REAL> sigma;
 
@@ -137,8 +119,22 @@ void TPZNumericalIntegrator::ResidualIntegration(TPZFMatrix<REAL> & solution ,TP
     fConstitutiveLawProcessor.ComputeSigma(delta_strain, sigma);
     MultiplyTranspose(sigma, rhs); // Perform Residual integration using a global linear application B
     // rhs.Print("rhsCPU = ", std::cout, EMathematicaInput);
-#endif
 }
+
+#ifdef USING_CUDA
+void TPZNumericalIntegrator::ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZVecGPU<REAL> &rhs) {
+
+    TPZVecGPU<REAL> d_solution(solution.Rows());
+    d_solution.set(&solution(0,0), solution.Rows());
+
+    TPZVecGPU<REAL> d_delta_strain;
+    TPZVecGPU<REAL> d_sigma;
+
+    Multiply(d_solution, d_delta_strain);
+    fConstitutiveLawProcessor.ComputeSigma(d_delta_strain, d_sigma);
+    MultiplyTranspose(d_sigma, rhs);
+}
+#endif
 
 #ifdef USING_CUDA
 void TPZNumericalIntegrator::TransferDataToGPU() {

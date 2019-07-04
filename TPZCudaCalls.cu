@@ -153,10 +153,12 @@ void TPZCudaCalls::ComputeSigma(int npts, REAL *delta_strain, REAL *sigma, REAL 
 }
 
 void TPZCudaCalls::MatrixAssemble(REAL *Kg, int first_el, int last_el, int64_t *el_color_index, REAL *weight, int *dof_indexes,
-						REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int64_t *ia_to_sequence, int64_t *ja_to_sequence) {
+						REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int64_t *ia_to_sequence, int64_t *ja_to_sequence,
+						int64_t *ia_to_sequence_linear, int64_t *ja_to_sequence_linear, REAL *KgLinear) {
 	int nel = last_el - first_el;
 	int numBlocks = (nel + NT - 1) / NT;
-	MatrixAssembleKernel<<<numBlocks,NT>>> (nel, Kg, first_el, el_color_index, weight, dof_indexes, storage, rowsizes, colsizes, rowfirstindex, colfirstindex, matrixposition, ia_to_sequence, ja_to_sequence);
+	MatrixAssembleKernel<<<numBlocks,NT>>> (nel, Kg, first_el, el_color_index, weight, dof_indexes, storage, rowsizes, colsizes, rowfirstindex, colfirstindex, matrixposition, 
+											ia_to_sequence, ja_to_sequence, ia_to_sequence_linear, ja_to_sequence_linear, KgLinear);
 	cudaDeviceSynchronize();
 	cudaError_t error = cudaGetLastError();
 	if (error != cudaSuccess) {

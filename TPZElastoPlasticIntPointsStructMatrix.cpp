@@ -75,8 +75,20 @@ void TPZElastoPlasticIntPointsStructMatrix::TransferDataToGPU() {
     d_JA_to_sequence.resize(m_JA_to_sequence.size());
     d_JA_to_sequence.set(&m_JA_to_sequence[0], m_JA_to_sequence.size());
 
+    d_IA_to_sequence_linear.resize(m_IA_to_sequence_linear.size());
+    d_IA_to_sequence_linear.set(&m_IA_to_sequence_linear[0], m_IA_to_sequence_linear.size());
+
+    d_JA_to_sequence_linear.resize(m_JA_to_sequence_linear.size());
+    d_JA_to_sequence_linear.set(&m_JA_to_sequence_linear[0], m_JA_to_sequence_linear.size());
+
     d_el_color_indexes.resize(m_el_color_indexes.size());
     d_el_color_indexes.set(&m_el_color_indexes[0], m_el_color_indexes.size());
+
+    d_KgLinear.resize(fSparseMatrixLinear->A().size());
+    d_KgLinear.set(&fSparseMatrixLinear->A()[0], fSparseMatrixLinear->A().size());
+
+    d_RhsLinear.resize(fRhsLinear.Rows());
+    d_RhsLinear.set(&fRhsLinear(0,0), fRhsLinear.Rows());
 }
 #endif
 
@@ -167,7 +179,8 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
             fIntegrator.DoFIndexesDev().getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dStorage.getData(),
             fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowSizes.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColSizes.getData(),
             fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowFirstIndex.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColFirstIndex.getData(),
-            fIntegrator.IrregularBlocksMatrix().BlocksDev().dMatrixPosition.getData(), d_IA_to_sequence.getData(), d_JA_to_sequence.getData());
+            fIntegrator.IrregularBlocksMatrix().BlocksDev().dMatrixPosition.getData(), d_IA_to_sequence.getData(), d_JA_to_sequence.getData(), 
+            d_IA_to_sequence_linear.getData(), d_JA_to_sequence_linear.getData(), d_KgLinear.getData());
     }
     d_Kg.get(&Kg[0], NNZ);
 #else
@@ -241,17 +254,21 @@ int TPZElastoPlasticIntPointsStructMatrix::StressRateVectorSize(){
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface){
-
-    if(!isBuilt()) {
-        this->SetUpDataStructure();
-    }
-
     int neq = fMesh->NEquations();
-  
+
     rhs.Resize(neq, 1);
-    rhs.Zero();
+    rhs.Zero();  
+#ifdef USING_CUDA
+    TPZVecGPU<REAL> d_rhs(rhs.Rows());
+    d_rhs.Zero();
+    fIntegrator.ResidualIntegration(fMesh->Solution(),d_rhs);
+    fCudaCalls.DaxpyOperation(neq, 1., d_RhsLinear.getData(), d_rhs.getData());
+    d_rhs.get(&rhs(0,0), neq);
+#else
     fIntegrator.ResidualIntegration(fMesh->Solution(),rhs);
     rhs += fRhsLinear;
+#endif
+
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::AssembleBoundaryData() {

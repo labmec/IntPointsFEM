@@ -40,7 +40,7 @@ __device__ void ComputeTangentMatrixDevice(int el_npts, int el_dofs, REAL *stora
     // free(DeBip);
 }
 
-__device__ int64_t me(int64_t & i_dest, int64_t & j_dest, int64_t *ia_to_sequence, int64_t *ja_to_sequence){
+__device__ int64_t me(int64_t *ia_to_sequence, int64_t *ja_to_sequence, int64_t & i_dest, int64_t & j_dest) {
         
     // Get the matrix entry at (row,col) without bound checking
     int64_t row(i_dest),col(j_dest);
@@ -59,7 +59,8 @@ __device__ int64_t me(int64_t & i_dest, int64_t & j_dest, int64_t *ia_to_sequenc
 }
 
 __global__ void MatrixAssembleKernel(int nel, REAL *Kg, int first_el, int64_t *el_color_index, REAL *weight, int *dof_indexes, 
-	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int64_t *ia_to_sequence, int64_t *ja_to_sequence) {
+	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int64_t *ia_to_sequence, int64_t *ja_to_sequence,
+    int64_t *ia_to_sequence_linear, int64_t *ja_to_sequence_linear, REAL *KgLinear) {
 
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -93,8 +94,10 @@ __global__ void MatrixAssembleKernel(int nel, REAL *Kg, int first_el, int64_t *e
 				int64_t j_dest = dof_indexes[colpos + j_dof];
 				STATE val = K[i_dof * el_dofs + j_dof];
 				if (i_dest <= j_dest) {
-					int64_t  index = me(i_dest,j_dest, ia_to_sequence, ja_to_sequence);
-					Kg[index] += val;
+                    int64_t  index = me(ia_to_sequence, ja_to_sequence, i_dest, j_dest);
+                    int64_t  index_linear = me(ia_to_sequence_linear, ja_to_sequence_linear, i_dest, j_dest);
+                    STATE val_linear = KgLinear[index_linear];
+                    Kg[index] += val + val_linear;
 				}
 			}
 		}			

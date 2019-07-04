@@ -96,8 +96,18 @@ private:
     TPZVecGPU<int64_t> d_IA_to_sequence;
     
     TPZVecGPU<int64_t> d_JA_to_sequence;
+
+    TPZVecGPU<int64_t> d_IA_to_sequence_linear;
+    
+    TPZVecGPU<int64_t> d_JA_to_sequence_linear;
     
     TPZVecGPU<int64_t> d_el_color_indexes;
+
+    TPZVecGPU<REAL> d_KgLinear;
+
+    TPZVecGPU<REAL> d_RhsLinear;
+
+
     #endif
     
 };
