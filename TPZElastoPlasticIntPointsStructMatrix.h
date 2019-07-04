@@ -72,7 +72,7 @@ private:
     
     TPZNumericalIntegrator fIntegrator;
 
-    TPZVerySparseMatrix<STATE> fSparseMatrixLinear; //-> BC data
+    TPZSYsmpMatrix<STATE> *fSparseMatrixLinear; //-> BC data
 
     TPZFMatrix<STATE> fRhsLinear; //-> BC data
     

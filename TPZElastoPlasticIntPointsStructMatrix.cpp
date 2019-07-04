@@ -213,15 +213,12 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 #endif
     }
 #endif
-    
-    auto it_end = fSparseMatrixLinear.MapEnd();
-    for (auto it = fSparseMatrixLinear.MapBegin(); it!=it_end; it++) {
-        int64_t row = it->first.first;
-        int64_t col = it->first.second;
-        STATE val = it->second + stiff.GetVal(row, col);
-        stiff.PutVal(row, col, val);
+    for (int i = 0; i < stiff.Rows(); ++i) {
+        for (int j = 0; j < stiff.Cols(); ++j) {
+            STATE val = stiff.GetVal(i, j) + fSparseMatrixLinear->GetVal(i, j);
+            stiff.PutVal(i, j, val);
+        }
     }
-
     Assemble(rhs,guiInterface);    
 }
 
@@ -272,8 +269,14 @@ void TPZElastoPlasticIntPointsStructMatrix::AssembleBoundaryData() {
     TPZAutoPointer<TPZGuiInterface> guiInterface;
     fRhsLinear.Resize(neq, 1);
     fRhsLinear.Zero();
-    fSparseMatrixLinear.Resize(neq, neq);
-    str.Assemble(fSparseMatrixLinear, fRhsLinear, guiInterface);
+
+    TPZStack<int64_t> elgraph;
+    TPZVec<int64_t> elgraphindex;
+    fMesh->ComputeElGraph(elgraph,elgraphindex,fBCMaterialIds); // This method seems to be efficient.
+    TPZMatrix<STATE> * mat = SetupMatrixData(elgraph, elgraphindex);
+    fSparseMatrixLinear = dynamic_cast<TPZSYsmpMatrix<STATE> *> (mat);
+
+    str.Assemble(*fSparseMatrixLinear, fRhsLinear, guiInterface);
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::ComputeDomainElementIndexes(TPZVec<int> &element_indexes) {
