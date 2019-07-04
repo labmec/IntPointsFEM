@@ -80,8 +80,7 @@ void TPZElastoPlasticIntPointsStructMatrix::TransferDataToGPU() {
 }
 #endif
 
-int64_t TPZElastoPlasticIntPointsStructMatrix::me(int64_t & i_dest, int64_t & j_dest){
-        
+int64_t TPZElastoPlasticIntPointsStructMatrix::me(TPZVec<int64_t> &IA, TPZVec<int64_t> &JA, int64_t & i_dest, int64_t & j_dest) {
     // Get the matrix entry at (row,col) without bound checking
     int64_t row(i_dest),col(j_dest);
     if (i_dest > j_dest) {
@@ -89,15 +88,13 @@ int64_t TPZElastoPlasticIntPointsStructMatrix::me(int64_t & i_dest, int64_t & j_
         row = col;
         col = temp;
     }
-    for(int ic=m_IA_to_sequence[row] ; ic < m_IA_to_sequence[row+1]; ic++ ) {
-        if ( m_JA_to_sequence[ic] == col )
+    for(int ic=IA[row] ; ic < IA[row+1]; ic++ ) {
+        if ( JA[ic] == col )
         {
             return ic;
         }
     }
     return 0;
-    
-    
 }
 
 TPZMatrix<STATE> *TPZElastoPlasticIntPointsStructMatrix::CreateAssemble(TPZFMatrix<STATE> &rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
@@ -202,8 +199,10 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
                         STATE val = K(i_dof,j_dof);
 
                         if (i_dest <= j_dest) {
-                            int64_t  index = me(i_dest,j_dest);
-                            Kg[index] += val;
+                            int64_t  index = me(m_IA_to_sequence, m_JA_to_sequence, i_dest, j_dest);
+                            int64_t  index_linear = me(m_IA_to_sequence_linear, m_JA_to_sequence_linear, i_dest, j_dest);
+                            STATE val_linear = fSparseMatrixLinear->A()[index_linear];
+                            Kg[index] += val + val_linear;
                         }
                     }
                 }
@@ -213,12 +212,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 #endif
     }
 #endif
-    for (int i = 0; i < stiff.Rows(); ++i) {
-        for (int j = 0; j < stiff.Cols(); ++j) {
-            STATE val = stiff.GetVal(i, j) + fSparseMatrixLinear->GetVal(i, j);
-            stiff.PutVal(i, j, val);
-        }
-    }
+
     Assemble(rhs,guiInterface);    
 }
 
@@ -277,6 +271,9 @@ void TPZElastoPlasticIntPointsStructMatrix::AssembleBoundaryData() {
     fSparseMatrixLinear = dynamic_cast<TPZSYsmpMatrix<STATE> *> (mat);
 
     str.Assemble(*fSparseMatrixLinear, fRhsLinear, guiInterface);
+
+    m_IA_to_sequence_linear = fSparseMatrixLinear->IA();
+    m_JA_to_sequence_linear = fSparseMatrixLinear->JA();
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::ComputeDomainElementIndexes(TPZVec<int> &element_indexes) {

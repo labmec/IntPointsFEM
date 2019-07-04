@@ -63,8 +63,8 @@ int main(int argc, char *argv[]) {
     
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
-    std::string msh_file = source_dir + "/gmsh/wellbore.msh";
-   // std::string msh_file = source_dir + "/gmsh/wellbore-coarse.msh";
+//    std::string msh_file = source_dir + "/gmsh/wellbore.msh";
+    std::string msh_file = source_dir + "/gmsh/wellbore-coarse.msh";
     TPZGeoMesh *gmesh = ReadGeometry(msh_file);
 #ifdef PZDEBUG
     PrintGeometry(gmesh);
@@ -88,7 +88,7 @@ int main(int argc, char *argv[]) {
 
 
 // Defines the analysis
-    int n_threads = 24;
+    int n_threads = 0;
     TPZAnalysis *analysis;
     // {
         timer.Start();
