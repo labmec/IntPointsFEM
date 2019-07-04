@@ -7,7 +7,7 @@
 #include "MatrixAssembleKernel.h"
 
 
-#define NT 512
+#define NT 256
 
 TPZCudaCalls::TPZCudaCalls() {
 	cusparse_h = false;
@@ -25,11 +25,14 @@ TPZCudaCalls::~TPZCudaCalls() {
 
 void TPZCudaCalls::Multiply(bool trans, int *m, int *n, int *k, REAL *A, int *strideA, 
 	REAL *B, int *strideB,  REAL *C, int *strideC, REAL alpha, int nmatrices) {
-
-	MatrixMultiplicationKernel<<<nmatrices,1>>> (trans, m, n, k, A, strideA, B, strideB, C, strideC, alpha, nmatrices);
+	int numBlocks = (nmatrices + NT - 1) / NT;
+	MatrixMultiplicationKernel<<<numBlocks,NT>>> (trans, m, n, k, A, strideA, B, strideB, C, strideC, alpha, nmatrices);
 	cudaDeviceSynchronize();
-	if (cudaGetLastError() != cudaSuccess) {
-		throw std::runtime_error("failed to perform MatrixMultiplicationKernel");      
+	cudaError_t error = cudaGetLastError();
+	if (error != cudaSuccess) {
+		std::string error_string = cudaGetErrorString(error);
+		std::string error_message = "failed to perform MatrixMultiplicationKernel: " + error_string;
+		throw std::runtime_error(error_message);      
 	}
 
 }
@@ -141,8 +144,11 @@ void TPZCudaCalls::ComputeSigma(int npts, REAL *delta_strain, REAL *sigma, REAL 
 	int numBlocks = (npts + NT - 1) / NT;
 	ComputeSigmaKernel<<<numBlocks,NT>>> (npts, delta_strain, sigma, lambda, mu, mc_phi, mc_psi, mc_cohesion, plastic_strain, m_type, alpha, weight);
 	cudaDeviceSynchronize();
-	if (cudaGetLastError() != cudaSuccess) {
-		throw std::runtime_error("failed to perform ComputeSigmaKernel");      
+	cudaError_t error = cudaGetLastError();
+	if (error != cudaSuccess) {
+		std::string error_string = cudaGetErrorString(error);
+		std::string error_message = "failed to perform ComputeSigmaKernel: " + error_string;
+		throw std::runtime_error(error_message);      
 	}
 }
 
@@ -150,11 +156,13 @@ void TPZCudaCalls::MatrixAssemble(REAL *Kg, int first_el, int last_el, int64_t *
 						REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int64_t *ia_to_sequence, int64_t *ja_to_sequence) {
 	int nel = last_el - first_el;
 	int numBlocks = (nel + NT - 1) / NT;
-	std::cout << nel << std::endl;
-	MatrixAssembleKernel<<<nel,1>>> (nel, Kg, first_el, el_color_index, weight, dof_indexes, storage, rowsizes, colsizes, rowfirstindex, colfirstindex, matrixposition, ia_to_sequence, ja_to_sequence);
+	MatrixAssembleKernel<<<numBlocks,NT>>> (nel, Kg, first_el, el_color_index, weight, dof_indexes, storage, rowsizes, colsizes, rowfirstindex, colfirstindex, matrixposition, ia_to_sequence, ja_to_sequence);
 	cudaDeviceSynchronize();
-	if (cudaGetLastError() != cudaSuccess) {
-		throw std::runtime_error("failed to perform MatrixAssembleKernel");      
+	cudaError_t error = cudaGetLastError();
+	if (error != cudaSuccess) {
+		std::string error_string = cudaGetErrorString(error);
+		std::string error_message = "failed to perform MatrixAssembleKernel: " + error_string;
+		throw std::runtime_error(error_message);      
 	}
 
 

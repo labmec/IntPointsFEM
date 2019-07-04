@@ -100,11 +100,11 @@ if(USING_CUDA)
     find_package(CUDA REQUIRED)
     enable_language(CXX CUDA)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSING_CUDA")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --default-stream per-thread  -ftz=true -Xcompiler -fopenmp -O3 -w -Wno-deprecated-gpu-targets")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --default-stream per-thread  -ftz=true -Xcompiler -O3 -w -Wno-deprecated-gpu-targets")
 
     set(CMAKE_CUDA_STANDARD 11)
 #   set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}; -arch=compute_35 -rdc=true -lcudadevrt)
-    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}; -arch=compute_35)
+    set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -arch=compute_35 --ptxas-options=-v --use_fast_math")
 
     set(CUDA_SEPARABLE_COMPILATION ON)
     

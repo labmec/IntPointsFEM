@@ -15,13 +15,12 @@ TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix() : TPZMatrix<REAL>(), fBlock
     #ifdef USING_SPARSE
     dBlocksInfo.dRowPtr.resize(0);
     dBlocksInfo.dColInd.resize(0);
-    #else
+    #endif
     dBlocksInfo.dRowSizes.resize(0);
     dBlocksInfo.dColSizes.resize(0);
     dBlocksInfo.dRowFirstIndex.resize(0);
     dBlocksInfo.dColFirstIndex.resize(0);
     dBlocksInfo.dMatrixPosition.resize(0);
-    #endif
 
     fCudaCalls = new TPZCudaCalls();
 #endif
@@ -44,13 +43,12 @@ TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix(const int64_t rows,const int6
     #ifdef USING_SPARSE
     dBlocksInfo.dRowPtr.resize(0);
     dBlocksInfo.dColInd.resize(0);
-    #else
+    #endif
     dBlocksInfo.dRowSizes.resize(0);
     dBlocksInfo.dColSizes.resize(0);
     dBlocksInfo.dRowFirstIndex.resize(0);
     dBlocksInfo.dColFirstIndex.resize(0);
     dBlocksInfo.dMatrixPosition.resize(0);
-    #endif
 
     fCudaCalls = new TPZCudaCalls();
 #endif
@@ -151,7 +149,7 @@ void TPZIrregularBlocksMatrix::TransferDataToGPU() {
 
     dBlocksInfo.dColInd.resize(fBlocksInfo.fColInd.size());
     dBlocksInfo.dColInd.set(&fBlocksInfo.fColInd[0], fBlocksInfo.fColInd.size());
-    #else
+    #endif
     dBlocksInfo.dRowSizes.resize(fBlocksInfo.fRowSizes.size());
     dBlocksInfo.dRowSizes.set(&fBlocksInfo.fRowSizes[0], fBlocksInfo.fRowSizes.size());
 
@@ -166,7 +164,7 @@ void TPZIrregularBlocksMatrix::TransferDataToGPU() {
 
     dBlocksInfo.dColFirstIndex.resize(fBlocksInfo.fColFirstIndex.size());
     dBlocksInfo.dColFirstIndex.set(&fBlocksInfo.fColFirstIndex[0], fBlocksInfo.fColFirstIndex.size());
-    #endif
+
 }
 #endif
 

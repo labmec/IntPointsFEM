@@ -63,7 +63,7 @@ __device__ void MultAddDevice (bool trans, int m, int n, int k, REAL *A, REAL *B
 
 __global__ void MatrixMultiplicationKernel (bool trans, int *m, int *n, int *k, REAL *A, int *strideA, REAL *B, int *strideB, REAL *C, int *strideC, REAL alpha, int nmatrices) {
 
-	int imatrix = blockIdx.x;
+	int imatrix = blockIdx.x * blockDim.x + threadIdx.x;
 
 	if (imatrix < nmatrices) {
 		int m_i = m[imatrix];

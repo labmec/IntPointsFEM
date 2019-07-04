@@ -152,70 +152,67 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     TPZVec<STATE> &Kg = stiff.A();
     
     TPZVec<int> &indexes = fIntegrator.DoFIndexes();
-//    int64_t n_vols = fIntegrator.IrregularBlocksMatrix().Blocks().fNumBlocks;
     TPZVec<int> & el_n_dofs = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes;
     TPZVec<int> & cols_first_index = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex;
-    
+       
 
-    
-    /// Serial by color
-    int n_colors = m_first_color_index.size()-1;
-    for (int ic = 0; ic < n_colors; ic++) {
-
-#ifdef USING_TBB
-        tbb::parallel_for(size_t(m_first_color_index[ic]),size_t(m_first_color_index[ic+1]),size_t(1),[&](size_t i)
-#else
-        for (int i = m_first_color_index[ic]; i < m_first_color_index[ic+1]; i++)
-#endif
-        {
-            int iel = m_el_color_indexes[i];
-            
-            /// Compute Elementary Matrix.
-            TPZFMatrix<STATE> K;
-            fIntegrator.ComputeTangentMatrix(iel,K);
-            
-            int el_dof = el_n_dofs[iel];
-            int pos = cols_first_index[iel];
-            
-            for (int i_dof = 0; i_dof < el_dof; i_dof++) {
-                
-                int64_t i_dest = indexes[pos + i_dof];
-                
-                for (int j_dof = 0; j_dof < el_dof; j_dof++) {
-                    
-                    int64_t j_dest = indexes[pos + j_dof];
-                    STATE val = K(i_dof,j_dof);
-                    
-                    if (i_dest <= j_dest) {
-                        int64_t  index = me(i_dest,j_dest);
-                        Kg[index] += val;
-                    }
-                }
-            }
-        }
-#ifdef USING_TBB
-        );
-#endif
-    }
-
-#ifdef USING_CUDA
+#if USING_CUDA
     int NNZ = stiff.A().size();
     TPZVecGPU<REAL> d_Kg(NNZ);
     d_Kg.set(&stiff.A()[0], NNZ);
     d_Kg.Zero();
 
-    for (int ic = 0; ic < 1; ic++) {
+    int n_colors = m_first_color_index.size()-1;
+    for (int ic = 0; ic < n_colors; ic++) {
         int first = m_first_color_index[ic];
         int last = m_first_color_index[ic + 1];
         fCudaCalls.MatrixAssemble(d_Kg.getData(), first, last, &d_el_color_indexes.getData()[first], fIntegrator.ConstitutiveLawProcessor().WeightVectorDev().getData(), 
-                                    fIntegrator.DoFIndexesDev().getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dStorage.getData(),
-                                    fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowSizes.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColSizes.getData(),
-                                    fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowFirstIndex.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColFirstIndex.getData(),
-                                    fIntegrator.IrregularBlocksMatrix().BlocksDev().dMatrixPosition.getData(), d_IA_to_sequence.getData(), d_JA_to_sequence.getData());
+            fIntegrator.DoFIndexesDev().getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dStorage.getData(),
+            fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowSizes.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColSizes.getData(),
+            fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowFirstIndex.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColFirstIndex.getData(),
+            fIntegrator.IrregularBlocksMatrix().BlocksDev().dMatrixPosition.getData(), d_IA_to_sequence.getData(), d_JA_to_sequence.getData());
     }
-
+    d_Kg.get(&Kg[0], NNZ);
+#else
+    /// Serial by color
+    int n_colors = m_first_color_index.size()-1;
+    for (int ic = 0; ic < n_colors; ic++) {
+#ifdef USING_TBB
+        tbb::parallel_for(size_t(m_first_color_index[ic]),size_t(m_first_color_index[ic+1]),size_t(1),[&](size_t i)
+#else
+            for (int i = m_first_color_index[ic]; i < m_first_color_index[ic+1]; i++)
 #endif
+            {
+                int iel = m_el_color_indexes[i];
 
+            /// Compute Elementary Matrix.
+                TPZFMatrix<STATE> K;
+                fIntegrator.ComputeTangentMatrix(iel,K);
+
+                int el_dof = el_n_dofs[iel];
+                int pos = cols_first_index[iel];
+
+                for (int i_dof = 0; i_dof < el_dof; i_dof++) {
+
+                    int64_t i_dest = indexes[pos + i_dof];
+
+                    for (int j_dof = 0; j_dof < el_dof; j_dof++) {
+
+                        int64_t j_dest = indexes[pos + j_dof];
+                        STATE val = K(i_dof,j_dof);
+
+                        if (i_dest <= j_dest) {
+                            int64_t  index = me(i_dest,j_dest);
+                            Kg[index] += val;
+                        }
+                    }
+                }
+            }
+#ifdef USING_TBB
+            );
+#endif
+    }
+#endif
     
     auto it_end = fSparseMatrixLinear.MapEnd();
     for (auto it = fSparseMatrixLinear.MapBegin(); it!=it_end; it++) {

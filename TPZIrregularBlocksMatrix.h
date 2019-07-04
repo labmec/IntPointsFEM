@@ -35,13 +35,12 @@ public:
 #ifdef USING_SPARSE
     TPZVecGPU<int> dRowPtr; // vector of the start of every row and the end of the last row plus one (this is for CSR format)
     TPZVecGPU<int> dColInd; // vector of column indices for each non-zero element of the matrix (this is for CSR format)
-#else
+#endif
     TPZVecGPU<int> dRowSizes; // blocks row sizes
     TPZVecGPU<int> dColSizes; // blocks columns sizes
     TPZVecGPU<int> dMatrixPosition; // blocks start position in fStorage vector
     TPZVecGPU<int> dRowFirstIndex; // blocks first row index
     TPZVecGPU<int> dColFirstIndex; // blocks first column index
-#endif
     };
 #endif
 
