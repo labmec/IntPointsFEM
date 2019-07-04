@@ -6,6 +6,7 @@
 
 #include <cublas_v2.h>
 #include <cusparse.h>
+#include <cusolverSp.h>
 
 
 class TPZCudaCalls {
@@ -22,6 +23,8 @@ public:
 		cusparse_h = copy.cusparse_h;
 		handle_cublas = copy.handle_cublas;
 		cublas_h = copy.cublas_h;
+		// handle_cusolver = copy.handle_cusolver;
+		// cusolver_h = copy.cusolver_h;
 
 		return *this;
 	}
@@ -41,8 +44,12 @@ public:
 	void ComputeSigma(int npts, REAL *delta_strain, REAL *sigma, REAL lambda, REAL mu, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL *plastic_strain,  REAL *m_type, REAL *alpha, REAL *weight);
 
 	void MatrixAssemble(REAL *K, int first_el, int last_el, int64_t *el_color_index, REAL *weight, int *dof_indexes,
-						REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int64_t *ia_to_sequence, int64_t *ja_to_sequence,
-						int64_t *ia_to_sequence_linear, int64_t *ja_to_sequence_linear, REAL *KgLinear);
+		REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int64_t *ia_to_sequence, int64_t *ja_to_sequence,
+		int64_t *ia_to_sequence_linear, int64_t *ja_to_sequence_linear, REAL *KgLinear);
+
+	void Solve(int n, int nnzA, REAL *csrValA, int64_t *csrRowPtrA, int64_t *csrColIndA, REAL *b, REAL *x);
+
+	void Teste();
 
 private:
 	cusparseHandle_t handle_cusparse;
@@ -50,6 +57,9 @@ private:
 	
 	cublasHandle_t handle_cublas;
 	bool cublas_h;
+
+	cusolverSpHandle_t handle_cusolver;
+	bool cusolver_h;
 
 };
 #endif

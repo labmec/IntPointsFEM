@@ -182,7 +182,23 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
             fIntegrator.IrregularBlocksMatrix().BlocksDev().dMatrixPosition.getData(), d_IA_to_sequence.getData(), d_JA_to_sequence.getData(), 
             d_IA_to_sequence_linear.getData(), d_JA_to_sequence_linear.getData(), d_KgLinear.getData());
     }
-    d_Kg.get(&Kg[0], NNZ);
+
+    int neq = fMesh->NEquations();
+    TPZVecGPU<REAL> d_rhs(neq);
+    d_rhs.Zero();
+    fIntegrator.ResidualIntegration(fMesh->Solution(),d_rhs);
+    fCudaCalls.DaxpyOperation(neq, 1., d_RhsLinear.getData(), d_rhs.getData());
+
+    TPZVecGPU<REAL> d_solution(neq);
+    d_solution.Zero();
+
+    std::cout << "entrou" << std::endl;
+    fCudaCalls.Solve(neq, NNZ, d_Kg.getData(), d_IA_to_sequence.getData(), d_JA_to_sequence.getData(), d_rhs.getData(), d_solution.getData()); 
+    // fCudaCalls.Teste();
+    std::cout << "saiu" << std::endl;
+
+    d_Kg.get(&Kg[0], NNZ); // back to CPU
+    d_rhs.get(&rhs(0,0), neq); //back to CPU
 #else
     /// Serial by color
     int n_colors = m_first_color_index.size()-1;
@@ -225,6 +241,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 #endif
     }
 #endif
+    std::cout << Kg << std::endl;
 
     Assemble(rhs,guiInterface);    
 }
@@ -263,7 +280,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TP
     d_rhs.Zero();
     fIntegrator.ResidualIntegration(fMesh->Solution(),d_rhs);
     fCudaCalls.DaxpyOperation(neq, 1., d_RhsLinear.getData(), d_rhs.getData());
-    d_rhs.get(&rhs(0,0), neq);
+    d_rhs.get(&rhs(0,0), neq); //back to CPU
 #else
     fIntegrator.ResidualIntegration(fMesh->Solution(),rhs);
     rhs += fRhsLinear;
