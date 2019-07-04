@@ -64,8 +64,10 @@ public:
 
     ~Timer() {
 #ifdef USING_CUDA
-    	cudaEventDestroy(start_cuda);
-		cudaEventDestroy(stop_cuda);
+        if (timer_option == ECudaEvent) {
+            cudaEventDestroy(start_cuda);
+            cudaEventDestroy(stop_cuda);
+        }
 #endif
     }
 
