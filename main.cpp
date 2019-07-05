@@ -63,8 +63,8 @@ int main(int argc, char *argv[]) {
     
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
-//    std::string msh_file = source_dir + "/gmsh/wellbore.msh";
-    std::string msh_file = source_dir + "/gmsh/wellbore-coarse.msh";
+   std::string msh_file = source_dir + "/gmsh/wellbore.msh";
+    // std::string msh_file = source_dir + "/gmsh/wellbore-coarse.msh";
     TPZGeoMesh *gmesh = ReadGeometry(msh_file);
 #ifdef PZDEBUG
     PrintGeometry(gmesh);
@@ -147,7 +147,7 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
         timer.Stop();
         std::cout << "Calling Linear Solve: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
 
-        delta_du = analysis->Solution();
+        delta_du = analysis->Mesh()->Solution();
         du += delta_du;
         analysis->LoadSolution(du);
 

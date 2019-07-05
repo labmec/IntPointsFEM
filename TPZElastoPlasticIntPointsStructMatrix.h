@@ -107,7 +107,9 @@ private:
 
     TPZVecGPU<REAL> d_RhsLinear;
 
+    TPZVecGPU<REAL> d_Kg;
 
+    TPZVecGPU<REAL> d_rhs;
     #endif
     
 };

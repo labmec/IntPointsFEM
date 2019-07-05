@@ -31,6 +31,8 @@ TPZElastoPlasticIntPointsStructMatrix::TPZElastoPlasticIntPointsStructMatrix(TPZ
     d_IA_to_sequence_linear.resize(0);    
     d_JA_to_sequence_linear.resize(0);  
     d_el_color_indexes.resize(0); 
+    d_Kg.resize(0);
+    d_rhs.resize(0);
     #endif
 }
 
@@ -181,10 +183,9 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 
 
 #if USING_CUDA
-    int NNZ = 102;
-    TPZVecGPU<REAL> d_Kg(NNZ);
+    int NNZ = stiff.A().size();
+    d_Kg.resize(NNZ);
     d_Kg.set(&stiff.A()[0], NNZ);
-    d_Kg.Zero();
 
     int n_colors = m_first_color_index.size()-1;
     for (int ic = 0; ic < n_colors; ic++) {
@@ -198,23 +199,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
             d_IA_to_sequence_linear.getData(), d_JA_to_sequence_linear.getData(), d_KgLinear.getData());
     }
 
-    int neq = fMesh->NEquations();
-    TPZVecGPU<REAL> d_rhs(neq);
-    d_rhs.Zero();
-    fIntegrator.ResidualIntegration(fMesh->Solution(),d_rhs);
-    fCudaCalls.DaxpyOperation(neq, 1., d_RhsLinear.getData(), d_rhs.getData());
-
-    TPZVecGPU<REAL> d_solution(neq);
-    d_solution.Zero();
-
-    fCudaCalls.SolveCG(neq, NNZ, d_Kg.getData(), d_IA_to_sequence.getData(), d_JA_to_sequence.getData(), d_rhs.getData(), d_solution.getData()); 
-    TPZFMatrix<REAL> sol(d_solution.getSize());
-    d_solution.get(&sol(0,0), d_solution.getSize()); //back to CPU
-    sol.Print(std::cout);
-
-
     d_Kg.get(&Kg[0], NNZ); // back to CPU
-//     d_rhs.get(&rhs(0,0), neq); //back to CPU
 #else
     /// Serial by color
     int n_colors = m_first_color_index.size()-1;
@@ -258,7 +243,18 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     }
 #endif
 
-    Assemble(rhs,guiInterface);    
+    Assemble(rhs,guiInterface);   
+
+#ifdef USING_CUDA
+    int neq = fMesh->NEquations();
+    TPZVecGPU<REAL> d_solution(neq);
+    d_solution.Zero();
+
+    fCudaCalls.SolveCG(neq, NNZ, d_Kg.getData(), d_IA_to_sequence.getData(), d_JA_to_sequence.getData(), d_rhs.getData(), d_solution.getData()); 
+    TPZFMatrix<REAL> sol(d_solution.getSize());
+    d_solution.get(&sol(0,0), d_solution.getSize()); //back to CPU
+    fMesh->Solution() = sol;
+#endif
 }
 
 int TPZElastoPlasticIntPointsStructMatrix::StressRateVectorSize(){
@@ -291,7 +287,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TP
     rhs.Resize(neq, 1);
     rhs.Zero();  
 #ifdef USING_CUDA
-    TPZVecGPU<REAL> d_rhs(rhs.Rows());
+    d_rhs.resize(rhs.Rows());
     d_rhs.Zero();
     fIntegrator.ResidualIntegration(fMesh->Solution(),d_rhs);
     fCudaCalls.DaxpyOperation(neq, 1., d_RhsLinear.getData(), d_rhs.getData());

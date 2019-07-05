@@ -244,7 +244,6 @@ void TPZCudaCalls::SolveCG(int n, int nnzA, REAL *csrValA, int *csrRowPtrA, int 
         {
             cublasDcopy(handle_cublas, n, r, 1, d_p, 1);
         }
-
         cusparseDcsrmv(handle_cusparse, CUSPARSE_OPERATION_NON_TRANSPOSE, n, n, nnzA, &alpha, descr, csrValA, csrRowPtrA, csrColIndA, d_p, &beta, d_Ax);
         cublasDdot(handle_cublas, n, d_p, 1, d_Ax, 1, &dot);
         a = r1 / dot;
@@ -256,7 +255,10 @@ void TPZCudaCalls::SolveCG(int n, int nnzA, REAL *csrValA, int *csrRowPtrA, int 
         r0 = r1;
         cublasDdot(handle_cublas, n, r, 1, r, 1, &r1);
         cudaThreadSynchronize();
+        k++;
     }
+    cudaFree(d_p);
+    cudaFree(d_Ax);
 }
 
 // void assemble_poisson_matrix_coo(std::vector<float>& vals, std::vector<int>& row, std::vector<int>& col,
