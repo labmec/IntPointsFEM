@@ -68,7 +68,7 @@ private:
     
     int fDimension;
     
-    int64_t me(TPZVec<int64_t> &IA, TPZVec<int64_t> &jA, int64_t & i_dest, int64_t & j_dest);
+    int64_t me(TPZVec<int> &IA, TPZVec<int> &jA, int64_t & i_dest, int64_t & j_dest);
     
     TPZNumericalIntegrator fIntegrator;
 
@@ -78,17 +78,17 @@ private:
     
     std::set<int> fBCMaterialIds;
     
-    TPZVec<int64_t> m_IA_to_sequence;
+    TPZVec<int> m_IA_to_sequence;
     
-    TPZVec<int64_t> m_JA_to_sequence;
+    TPZVec<int> m_JA_to_sequence;
     
     std::vector<int64_t> m_el_color_indexes;
     
     std::vector<int64_t> m_first_color_index;
 
-    TPZVec<int64_t> m_IA_to_sequence_linear;
+    TPZVec<int> m_IA_to_sequence_linear;
 
-    TPZVec<int64_t> m_JA_to_sequence_linear;
+    TPZVec<int> m_JA_to_sequence_linear;
 
     #ifdef USING_CUDA
     TPZCudaCalls fCudaCalls;

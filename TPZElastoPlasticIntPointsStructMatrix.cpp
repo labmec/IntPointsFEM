@@ -18,8 +18,12 @@ TPZElastoPlasticIntPointsStructMatrix::TPZElastoPlasticIntPointsStructMatrix(TPZ
         DebugStop();
     }
     fDimension = cmesh->Reference()->Dimension();
-    m_IA_to_sequence.clear();
-    m_JA_to_sequence.clear();
+    m_IA_to_sequence.resize(0);
+    m_JA_to_sequence.resize(0);
+
+    m_IA_to_sequence_linear.resize(0);
+    m_JA_to_sequence_linear.resize(0);
+
 
     #ifdef USING_CUDA
     d_IA_to_sequence.resize(0);    
@@ -49,8 +53,17 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
     /// Sparsify global indexes
     // Filling local std::map
     TPZSYsmpMatrix<STATE> *stiff = dynamic_cast<TPZSYsmpMatrix<STATE> *> (mat);
-    m_IA_to_sequence = stiff->IA();
-    m_JA_to_sequence = stiff->JA();
+
+    m_IA_to_sequence.resize(stiff->IA().size());
+    for (int i = 0; i < stiff->IA().size(); ++i) {
+        m_IA_to_sequence[i] = stiff->IA()[i];
+    }
+
+    m_JA_to_sequence.resize(stiff->JA().size());
+    for (int i = 0; i < stiff->JA().size(); ++i) {
+        m_JA_to_sequence[i] = stiff->JA()[i];
+    }
+
 
 #ifdef USING_CUDA
     Timer timer;   
@@ -92,7 +105,7 @@ void TPZElastoPlasticIntPointsStructMatrix::TransferDataToGPU() {
 }
 #endif
 
-int64_t TPZElastoPlasticIntPointsStructMatrix::me(TPZVec<int64_t> &IA, TPZVec<int64_t> &JA, int64_t & i_dest, int64_t & j_dest) {
+int64_t TPZElastoPlasticIntPointsStructMatrix::me(TPZVec<int> &IA, TPZVec<int> &JA, int64_t & i_dest, int64_t & j_dest) {
     // Get the matrix entry at (row,col) without bound checking
     int64_t row(i_dest),col(j_dest);
     if (i_dest > j_dest) {
@@ -241,7 +254,6 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 #endif
     }
 #endif
-    std::cout << Kg << std::endl;
 
     Assemble(rhs,guiInterface);    
 }
@@ -306,8 +318,15 @@ void TPZElastoPlasticIntPointsStructMatrix::AssembleBoundaryData() {
 
     str.Assemble(*fSparseMatrixLinear, fRhsLinear, guiInterface);
 
-    m_IA_to_sequence_linear = fSparseMatrixLinear->IA();
-    m_JA_to_sequence_linear = fSparseMatrixLinear->JA();
+    m_IA_to_sequence_linear.resize(fSparseMatrixLinear->IA().size());
+    for (int i = 0; i < fSparseMatrixLinear->IA().size(); ++i) {
+        m_IA_to_sequence_linear[i] = fSparseMatrixLinear->IA()[i];
+    }
+
+    m_JA_to_sequence_linear.resize(fSparseMatrixLinear->JA().size());
+    for (int i = 0; i < fSparseMatrixLinear->JA().size(); ++i) {
+        m_JA_to_sequence_linear[i] = fSparseMatrixLinear->JA()[i];
+    }
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::ComputeDomainElementIndexes(TPZVec<int> &element_indexes) {
