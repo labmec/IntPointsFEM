@@ -93,13 +93,13 @@ private:
     #ifdef USING_CUDA
     TPZCudaCalls fCudaCalls;
 
-    TPZVecGPU<int64_t> d_IA_to_sequence;
+    TPZVecGPU<int> d_IA_to_sequence;
     
-    TPZVecGPU<int64_t> d_JA_to_sequence;
+    TPZVecGPU<int> d_JA_to_sequence;
 
-    TPZVecGPU<int64_t> d_IA_to_sequence_linear;
+    TPZVecGPU<int> d_IA_to_sequence_linear;
     
-    TPZVecGPU<int64_t> d_JA_to_sequence_linear;
+    TPZVecGPU<int> d_JA_to_sequence_linear;
     
     TPZVecGPU<int64_t> d_el_color_indexes;
 

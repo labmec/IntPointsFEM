@@ -37,19 +37,17 @@ public:
 
 	void DaxpyOperation(int n, REAL alpha, REAL *x, REAL *y); 
 
-	void SpMSpM(int opt, int m, int n, int k, int nnzA, REAL *csrValA, int *csrRowPtrA, int *csrColIndA, int nnzB, REAL *csrValB, int *csrRowPtrB, int *csrColIndB, int nnzC, REAL *csrValC, int *csrRowPtrC);
+	void SpMSpM(int opt, int sym, int m, int n, int k, int nnzA, REAL *csrValA, int *csrRowPtrA, int *csrColIndA, int nnzB, REAL *csrValB, int *csrRowPtrB, int *csrColIndB, int nnzC, REAL *csrValC, int *csrRowPtrC);
 
-	void SpMV(int opt, int m, int k, int nnz, REAL alpha, REAL *csrVal, int *csrRowPtr, int *csrColInd, REAL *B, REAL *C); 
+	void SpMV(int opt, int sym, int m, int k, int nnz, REAL alpha, REAL *csrVal, int *csrRowPtr, int *csrColInd, REAL *B, REAL *C) ; 
 
 	void ComputeSigma(int npts, REAL *delta_strain, REAL *sigma, REAL lambda, REAL mu, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL *plastic_strain,  REAL *m_type, REAL *alpha, REAL *weight);
 
 	void MatrixAssemble(REAL *K, int first_el, int last_el, int64_t *el_color_index, REAL *weight, int *dof_indexes,
-		REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int64_t *ia_to_sequence, int64_t *ja_to_sequence,
-		int64_t *ia_to_sequence_linear, int64_t *ja_to_sequence_linear, REAL *KgLinear);
+		REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *ia_to_sequence, int *ja_to_sequence,
+		int *ia_to_sequence_linear, int *ja_to_sequence_linear, REAL *KgLinear);
 
-	void Solve(int n, int nnzA, REAL *csrValA, int64_t *csrRowPtrA, int64_t *csrColIndA, REAL *b, REAL *x);
-
-	void Teste();
+	void SolveCG(int n, int nnzA, REAL *csrValA, int *csrRowPtrA, int *csrColIndA, REAL *b, REAL *x);
 
 private:
 	cusparseHandle_t handle_cusparse;

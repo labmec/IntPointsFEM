@@ -103,9 +103,9 @@ void TPZIrregularBlocksMatrix::MultiplyVector(REAL *A, REAL *res, int opt) {
     int cols = this->Cols();
     #ifdef USING_SPARSE
     if(opt == 0) {
-        fCudaCalls->SpMV(0, rows, cols, dBlocksInfo.dStorage.getSize(), 1., dBlocksInfo.dStorage.getData(), dBlocksInfo.dRowPtr.getData(), dBlocksInfo.dColInd.getData(), A, res);
+        fCudaCalls->SpMV(0, 0, rows, cols, dBlocksInfo.dStorage.getSize(), 1., dBlocksInfo.dStorage.getData(), dBlocksInfo.dRowPtr.getData(), dBlocksInfo.dColInd.getData(), A, res);
     } else {
-        fCudaCalls->SpMV(1, rows, cols, dBlocksInfo.dStorage.getSize(), -1., dBlocksInfo.dStorage.getData(), dBlocksInfo.dRowPtr.getData(), dBlocksInfo.dColInd.getData(), A, res);
+        fCudaCalls->SpMV(1, 0, rows, cols, dBlocksInfo.dStorage.getSize(), -1., dBlocksInfo.dStorage.getData(), dBlocksInfo.dRowPtr.getData(), dBlocksInfo.dColInd.getData(), A, res);
     }
     #else
     TPZVecGPU<int> dOne(nblocks);
