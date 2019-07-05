@@ -7,12 +7,11 @@
 #include "MatrixAssembleKernel.h"
 
 
-#define NT 256
+#define NT 32
 
 TPZCudaCalls::TPZCudaCalls() {
 	cusparse_h = false;
 	cublas_h = false;
-	cusolver_h = false;
 }
 
 TPZCudaCalls::~TPZCudaCalls() {
@@ -21,9 +20,6 @@ TPZCudaCalls::~TPZCudaCalls() {
 	}
 	if(cusparse_h == true) {
 		cusparseDestroy(handle_cusparse);			
-	}
-	if(cusolver_h == true) {
-		cusolverSpDestroy(handle_cusolver);			
 	}
 }
 

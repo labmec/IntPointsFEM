@@ -180,7 +180,10 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     TPZVec<int> &indexes = fIntegrator.DoFIndexes();
     TPZVec<int> & el_n_dofs = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes;
     TPZVec<int> & cols_first_index = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex;
-
+    Timer timer;   
+    timer.TimeUnit(Timer::ESeconds);
+    timer.TimerOption(Timer::EChrono);
+    timer.Start();
 
 #if USING_CUDA
     int NNZ = stiff.A().size();
@@ -243,18 +246,25 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     }
 #endif
 
+        timer.Stop();
+        std::cout << "K Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+
+timer.Start();
     Assemble(rhs,guiInterface);   
+            timer.Stop();
+        std::cout << "R Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
 
-#ifdef USING_CUDA
-    int neq = fMesh->NEquations();
-    TPZVecGPU<REAL> d_solution(neq);
-    d_solution.Zero();
+// #ifdef USING_CUDA
+//     int NNZ = stiff.A().size();
+//     int neq = fMesh->NEquations();
+//     TPZVecGPU<REAL> d_solution(neq);
+//     d_solution.Zero();
 
-    fCudaCalls.SolveCG(neq, NNZ, d_Kg.getData(), d_IA_to_sequence.getData(), d_JA_to_sequence.getData(), d_rhs.getData(), d_solution.getData()); 
-    TPZFMatrix<REAL> sol(d_solution.getSize());
-    d_solution.get(&sol(0,0), d_solution.getSize()); //back to CPU
-    fMesh->Solution() = sol;
-#endif
+//     fCudaCalls.SolveCG(neq, NNZ, d_Kg.getData(), d_IA_to_sequence.getData(), d_JA_to_sequence.getData(), d_rhs.getData(), d_solution.getData()); 
+//     TPZFMatrix<REAL> sol(d_solution.getSize());
+//     d_solution.get(&sol(0,0), d_solution.getSize()); //back to CPU
+//     fMesh->Solution() = sol;
+// #endif
 }
 
 int TPZElastoPlasticIntPointsStructMatrix::StressRateVectorSize(){

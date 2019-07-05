@@ -23,8 +23,6 @@ public:
 		cusparse_h = copy.cusparse_h;
 		handle_cublas = copy.handle_cublas;
 		cublas_h = copy.cublas_h;
-		// handle_cusolver = copy.handle_cusolver;
-		// cusolver_h = copy.cusolver_h;
 
 		return *this;
 	}
@@ -55,9 +53,6 @@ private:
 	
 	cublasHandle_t handle_cublas;
 	bool cublas_h;
-
-	cusolverSpHandle_t handle_cusolver;
-	bool cusolver_h;
 
 };
 #endif
