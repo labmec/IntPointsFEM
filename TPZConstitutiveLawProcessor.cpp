@@ -60,6 +60,12 @@ TPZConstitutiveLawProcessor &TPZConstitutiveLawProcessor::operator=(const TPZCon
 void TPZConstitutiveLawProcessor::SetUpDataByIntPoints(int64_t npts) {
     fNpts = npts;
     
+    fSigma.Resize(6 * fNpts, 1);
+    fSigma.Zero();
+    
+    fStrain.Resize(6 * fNpts, 1);
+    fStrain.Zero();
+    
     fPlasticStrain.Resize(6 * fNpts, 1);
     fPlasticStrain.Zero();
     
@@ -91,12 +97,12 @@ void TPZConstitutiveLawProcessor::SetMaterial(TPZMaterial *material) {
     fMaterial = dynamic_cast<TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse> , TPZElastoPlasticMem> *>(material);
 }
 
-void TPZConstitutiveLawProcessor::ElasticStrain(TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> &elastic_strain) {
-    elastic_strain -= plastic_strain;
+void TPZConstitutiveLawProcessor::ElasticStrain(TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> & strain ,TPZFMatrix<REAL> &elastic_strain) {
+    elastic_strain = strain - plastic_strain;
 }
 
-void TPZConstitutiveLawProcessor::PlasticStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &plastic_strain) {
-    plastic_strain = delta_strain - elastic_strain;
+void TPZConstitutiveLawProcessor::PlasticStrain(TPZFMatrix<REAL> &strain, TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &plastic_strain) {
+    plastic_strain = strain - elastic_strain;
 }
 
 void TPZConstitutiveLawProcessor::De(TPZFMatrix<REAL> & De){
@@ -190,186 +196,206 @@ void TPZConstitutiveLawProcessor::ReconstructStressTensor(TPZFMatrix<REAL> &sigm
 
 }
 
-void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &sigma) {
+void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> & glob_delta_strain, TPZFMatrix<REAL> & glob_sigma) {
     
-    int64_t rows = delta_strain.Rows();
-    int64_t cols = delta_strain.Cols();
-    sigma.Resize(rows,cols);
+    int64_t rows = glob_delta_strain.Rows();
+    int64_t cols = glob_delta_strain.Cols();
+    glob_sigma.Resize(rows,cols);
 
+    // Variables required for lambda's capture block
     TPZMatWithMem<TPZElastoPlasticMem> * mat = dynamic_cast<TPZMatWithMem<TPZElastoPlasticMem> *>(fMaterial);
 
-    
-    // Lambda expression to populate plastic strain vector
-    auto FillPlasticStrain = [this] (int ipts, TPZMatWithMem<TPZElastoPlasticMem> * mat)
-    {
- 
-        
-    };
-    
-    int ipts;
-#ifdef USING_TBB
-    tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1),[&](size_t ipts)
-#else
-     for (ipts = 0; ipts < fNpts; ipts++)
-#endif
-      {
-          FillPlasticStrain(ipts,mat);
-      }
-#ifdef USING_TBB
-);
-#endif
     
     // The constitutive law is computing assuming full tensors
 #ifdef USING_TBB
     
-    tbb::parallel_for(size_t(0), size_t(fNpts), size_t(1) , [this, & delta_strain, & sigma] (size_t & ipts) {
+    tbb::parallel_for(size_t(0), size_t(fNpts), size_t(1) , [this, mat, & glob_delta_strain, & glob_sigma] (size_t & ipts) {
         
-        TPZFMatrix<REAL> elastic_strain(6, 1, 0.);
-        TPZFMatrix<REAL> full_sigma(6, 1, 0.);
-        TPZFMatrix<REAL> full_plastic_strain(6, 1, 0.);
-        TPZFMatrix<REAL> el_tensor(3, 1, 0.);
+        TPZFNMatrix<6,REAL> strain(6, 1, 0.);
+        TPZFNMatrix<6,REAL> elastic_strain(6, 1, 0.);
+        TPZFNMatrix<6,REAL> sigma(6, 1, 0.);
+        TPZFNMatrix<6,REAL> plastic_strain(6, 1, 0.);
+        TPZFNMatrix<3,REAL> aux_tensor(3, 1, 0.);
         
         REAL alpha;
         int mtype;
         
         //Get from delta strain vector
-        delta_strain.GetSub(3 * ipts, 0, 3, 1, el_tensor);
-        // Translate
-        TranslateStrain(el_tensor, elastic_strain);
+        glob_delta_strain.GetSub(3 * ipts, 0, 3, 1, aux_tensor);
+        
+        //Get last strain vector
+        fStrain.GetSub(6 * ipts, 0, 6, 1, strain);
+        
+        // Translate and
+        ComposeStrain(aux_tensor, strain);
         
         //Get from plastic strain vector
-        fPlasticStrain.GetSub(6 * ipts, 0, 6, 1, full_plastic_strain);
+        fPlasticStrain.GetSub(6 * ipts, 0, 6, 1, plastic_strain);
         
-        {
-
-            TPZFMatrix<REAL> eigenvectors(9, 1, 0.);
-            TPZFMatrix<REAL> sigma_projected(3, 1, 0.);
-            
-            // Return Mapping components
-            ElasticStrain(full_plastic_strain, elastic_strain);
-            ComputeTrialStress(elastic_strain, full_sigma);
-            SpectralDecomposition(full_sigma, sigma_projected, eigenvectors);
-            ProjectSigma(sigma_projected, sigma_projected, alpha, mtype);
-            ReconstructStressTensor(sigma_projected, eigenvectors, full_sigma);
-            
-            // Update plastic strain
-            ComputeStrain(full_sigma, elastic_strain);
-            PlasticStrain(elastic_strain, elastic_strain, full_plastic_strain);
-        }
+        TPZFMatrix<REAL> eigenvectors(9, 1, 0.);
+        TPZFMatrix<REAL> sigma_projected(3, 1, 0.);
+        
+        // Return Mapping components
+        ElasticStrain(plastic_strain, strain, elastic_strain);
+        ComputeTrialStress(elastic_strain, sigma);
+        SpectralDecomposition(sigma, sigma_projected, eigenvectors);
+        ProjectSigma(sigma_projected, sigma_projected, alpha, mtype);
+        ReconstructStressTensor(sigma_projected, eigenvectors, sigma);
+        
+        // Update plastic strain
+        ComputeStrain(sigma, elastic_strain);
+        PlasticStrain(strain, elastic_strain, plastic_strain);
         
         //Copy to stress vector
-        TranslateStress(full_sigma, el_tensor);
+        TranslateStress(sigma, aux_tensor);
         
-        el_tensor(0,0) *= fWeight[ipts];
-        el_tensor(1,0) *= fWeight[ipts];
-        el_tensor(2,0) *= fWeight[ipts];
-        sigma.AddSub(3 * ipts, 0, el_tensor);
+        aux_tensor *= fWeight[ipts];
+        glob_sigma.PutSub(3 * ipts, 0, aux_tensor);
         
-        //Copy to plastic strain vector
-        fPlasticStrain.AddSub(6 * ipts, 0, full_plastic_strain);
-        
-        //Copy to MType and Alpha vectors
-        fAlpha(ipts,0) = alpha;
-        fMType(ipts,0) = mtype;
+        if (mat->GetUpdateMem()) {
+            //Accumulate to strain vector
+            fStrain.AddSub(6 * ipts, 0, strain);
+            
+            //Copy to plastic strain vector
+            fPlasticStrain.PutSub(6 * ipts, 0, plastic_strain);
+            
+            //Copy to MType and Alpha vectors
+            fAlpha(ipts,0) = alpha;
+            fMType(ipts,0) = mtype;
+        }
         
     }
 );
 #else
+    
+    TPZFNMatrix<6,REAL> strain(6, 1, 0.);
+    TPZFNMatrix<6,REAL> elastic_strain(6, 1, 0.);
+    TPZFNMatrix<6,REAL> sigma(6, 1, 0.);
+    TPZFNMatrix<6,REAL> plastic_strain(6, 1, 0.);
+    TPZFNMatrix<3,REAL> aux_tensor(3, 1, 0.);
     
     // Lambda for evaluate flux, this is supposed to be implemented in GPU
-    auto EvaluateFlux = [this] (int & ipts, TPZFMatrix<REAL> & delta_strain, TPZFMatrix<REAL> & sigma)
+    auto EvaluateFlux = [this, mat, & glob_delta_strain, & glob_sigma, & strain, & elastic_strain, & plastic_strain, & sigma, & aux_tensor] (int & ipts)
     {
-       TPZFMatrix<REAL> elastic_strain(6, 1, 0.);
-        TPZFMatrix<REAL> full_sigma(6, 1, 0.);
-        TPZFMatrix<REAL> full_plastic_strain(6, 1, 0.);
-        TPZFMatrix<REAL> el_tensor(3, 1, 0.);
         
+    
         REAL alpha;
         int mtype;
         
         //Get from delta strain vector
-        delta_strain.GetSub(3 * ipts, 0, 3, 1, el_tensor);
-        // Translate
-        TranslateStrain(el_tensor, elastic_strain);
+        glob_delta_strain.GetSub(3 * ipts, 0, 3, 1, aux_tensor);
+        
+        //Get last strain vector
+        fStrain.GetSub(6 * ipts, 0, 6, 1, strain);
+        
+        // Translate and
+        ComposeStrain(aux_tensor, strain);
         
         //Get from plastic strain vector
-        fPlasticStrain.GetSub(6 * ipts, 0, 6, 1, full_plastic_strain);
+        fPlasticStrain.GetSub(6 * ipts, 0, 6, 1, plastic_strain);
         
-        {
-
-            TPZFMatrix<REAL> eigenvectors(9, 1, 0.);
-            TPZFMatrix<REAL> sigma_projected(3, 1, 0.);
-            
-            // Return Mapping components
-            ElasticStrain(full_plastic_strain, elastic_strain);
-            ComputeTrialStress(elastic_strain, full_sigma);
-            SpectralDecomposition(full_sigma, sigma_projected, eigenvectors);
-            ProjectSigma(sigma_projected, sigma_projected, alpha, mtype);
-            ReconstructStressTensor(sigma_projected, eigenvectors, full_sigma);
-            
-            // Update plastic strain
-            ComputeStrain(full_sigma, elastic_strain);
-            PlasticStrain(elastic_strain, elastic_strain, full_plastic_strain);
-        }
+        TPZFMatrix<REAL> eigenvectors(9, 1, 0.);
+        TPZFMatrix<REAL> sigma_projected(3, 1, 0.);
+        
+        // Return Mapping components
+        ElasticStrain(plastic_strain, strain, elastic_strain);
+        ComputeTrialStress(elastic_strain, sigma);
+        SpectralDecomposition(sigma, sigma_projected, eigenvectors);
+        ProjectSigma(sigma_projected, sigma_projected, alpha, mtype);
+        ReconstructStressTensor(sigma_projected, eigenvectors, sigma);
+        
+        // Update plastic strain
+        ComputeStrain(sigma, elastic_strain);
+        PlasticStrain(strain, elastic_strain, plastic_strain);
         
         //Copy to stress vector
-        TranslateStress(full_sigma, el_tensor);
+        TranslateStress(sigma, aux_tensor);
         
-        el_tensor(0,0) *= fWeight[ipts];
-        el_tensor(1,0) *= fWeight[ipts];
-        el_tensor(2,0) *= fWeight[ipts];
-        sigma.AddSub(3 * ipts, 0, el_tensor);
+        aux_tensor *= fWeight[ipts];
+        glob_sigma.PutSub(3 * ipts, 0, aux_tensor);
         
-        //Copy to plastic strain vector
-        fPlasticStrain.AddSub(6 * ipts, 0, full_plastic_strain);
-        
-        //Copy to MType and Alpha vectors
-        fAlpha(ipts,0) = alpha;
-        fMType(ipts,0) = mtype;
+        if (mat->GetUpdateMem()) {
+            
+            fSigma.AddSub(6 * ipts, 0, sigma);
+            
+            //Accumulate to strain vector
+            fStrain.AddSub(6 * ipts, 0, strain);
+            
+            //Copy to plastic strain vector
+            fPlasticStrain.PutSub(6 * ipts, 0, plastic_strain);
+            
+            //Copy to MType and Alpha vectors
+            fAlpha(ipts,0) = alpha;
+            fMType(ipts,0) = mtype;
+        }
         
     };
     
-    for (ipts = 0; ipts < fNpts; ipts++)
+    for (int ipts = 0; ipts < fNpts; ipts++)
     {
-        EvaluateFlux(ipts,delta_strain,sigma);
+        EvaluateFlux(ipts);
     }
 #endif
     
     
-    
-    // Lambda expression to update memory
-    auto UpdateElastoPlasticState = [this] (int ipts, TPZMatWithMem<TPZElastoPlasticMem> * mat)
-    {
+    if (mat->GetUpdateMem()) {
         
-        
-    };
-    
 #ifdef USING_TBB
-    tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1),[&](size_t ipts)
+        tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1), [this, mat] (size_t & ipts){
+            
+            TPZFNMatrix<6,REAL> strain(6, 1, 0.);
+            TPZFNMatrix<6,REAL> plastic_strain(6, 1, 0.);
+            TPZFNMatrix<6,REAL> sigma(6, 1, 0.);
+            
+            TPZElastoPlasticMem & memory = mat->MemItem(ipts);
+            fSigma.GetSub(6 * ipts, 0, 6, 1, sigma);
+            fStrain.GetSub(6 * ipts, 0, 6, 1, strain);
+            fPlasticStrain.GetSub(6 * ipts, 0, 6, 1, plastic_strain);
+            memory.m_sigma.CopyFrom(sigma);
+            memory.m_elastoplastic_state.m_eps_t.CopyFrom(strain);
+            memory.m_elastoplastic_state.m_eps_p.CopyFrom(plastic_strain);
+            memory.m_elastoplastic_state.m_hardening = fAlpha(ipts,0);
+            memory.m_elastoplastic_state.m_m_type = fMType(ipts,0);
+            
+        }
+                          );
 #else
-      for (ipts = 0; ipts < fNpts; ipts++)
+        // Lambda expression to update memory
+        auto UpdateElastoPlasticState = [this, mat, & strain, & plastic_strain, & sigma] (int ipts)
+        {
+            
+            TPZElastoPlasticMem & memory = mat->MemItem(ipts);
+            fSigma.GetSub(6 * ipts, 0, 6, 1, sigma);
+            fStrain.GetSub(6 * ipts, 0, 6, 1, strain);
+            fPlasticStrain.GetSub(6 * ipts, 0, 6, 1, plastic_strain);
+            memory.m_sigma.CopyFrom(sigma);
+            memory.m_elastoplastic_state.m_eps_t.CopyFrom(strain);
+            memory.m_elastoplastic_state.m_eps_p.CopyFrom(plastic_strain);
+            memory.m_elastoplastic_state.m_hardening = fAlpha(ipts,0);
+            memory.m_elastoplastic_state.m_m_type = fMType(ipts,0);
+            
+        };
+        
+        for (int ipts = 0; ipts < fNpts; ipts++)
+        {
+            UpdateElastoPlasticState(ipts);
+            
+        }
+        
 #endif
-      {
-          UpdateElastoPlasticState(ipts,mat);
-          
-      }
-#ifdef USING_TBB
-);
-#endif
+    }
 
 }
 
-void TPZConstitutiveLawProcessor::TranslateStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> &full_delta_strain){
+void TPZConstitutiveLawProcessor::ComposeStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> & strain){
     
     int dim = 2;
     if (dim == 2) {
-            full_delta_strain.Resize(6,1);
-            full_delta_strain.Zero();
-        	full_delta_strain(_XX_,0) = delta_strain(0,0);
-            full_delta_strain(_XY_,0) = delta_strain(1,0);
-            full_delta_strain(_YY_,0) = delta_strain(2,0);
+        	strain(_XX_,0) += delta_strain(0,0);
+            strain(_XY_,0) += delta_strain(1,0);
+            strain(_YY_,0) += delta_strain(2,0);
     }else{
-        full_delta_strain = delta_strain;
+        strain += delta_strain;
     }
     
 }

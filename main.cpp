@@ -19,7 +19,6 @@
 
 #ifdef USING_TBB
 #include "tbb/task_scheduler_init.h"
-tbb::task_scheduler_init init(tbb::task_scheduler_init::automatic); //max number of threads
 #endif
 
 
@@ -58,7 +57,7 @@ void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData material, int n_threads,
 void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_material, int npoints, std::ostream &out, bool euler = false);
 
 int main(int argc, char *argv[]) {
-    int pOrder = 2; // Computational mesh order
+    int pOrder = 1; // Computational mesh order
     bool render_vtk_Q = false;
     
 // Generates the geometry
@@ -91,10 +90,17 @@ int main(int argc, char *argv[]) {
 
 // Defines the analysis
     int n_threads = 8;
+    
+#ifdef USING_TBB
+#include "tbb/task_scheduler_init.h"
+//    tbb::task_scheduler_init init(tbb::task_scheduler_init::automatic); //max number of threads
+    tbb::task_scheduler_init init(n_threads); //max number of threads
+#endif
+    
     TPZAnalysis *analysis;
     // {
         timer.Start();
-       // analysis = Analysis(cmesh,n_threads);
+//        analysis = Analysis(cmesh,n_threads);
         analysis = Analysis_IPFEM(cmesh,n_threads);
         timer.Stop();
         std::cout << "Calling Analysis_IPFEM: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
@@ -102,7 +108,7 @@ int main(int argc, char *argv[]) {
     
 // Calculates the solution using Newton method
     int n_iterations = 80;
-    REAL tolerance = 1.e-3;
+    REAL tolerance = 1.e-4;
     // {
         timer.Start();
         Solution(analysis, n_iterations, tolerance);
@@ -161,8 +167,8 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
         norm_delta_du = Norm(delta_du);
         norm_res = Norm(analysis->Rhs());
         stop_criterion_Q = norm_res < tolerance & norm_delta_du < tolerance;
-        std::cout << "Nonlinear process :: delta_du norm = " << norm_delta_du << std::endl;
-        std::cout << "Nonlinear process :: residue norm = " << norm_res << std::endl;
+        std::cout << "Nonlinear process : delta_du norm = " << norm_delta_du << std::endl;
+        std::cout << "Nonlinear process : residue norm = " << norm_res << std::endl;
         if (stop_criterion_Q) {
             AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
             norm_res = Norm(analysis->Rhs());
@@ -170,12 +176,12 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
             std::cout << "Number of iterations = " << i + 1 << std::endl;
             break;
         }
-        // {
-            timer.Start();
-            analysis->Assemble();
-            timer.Stop();
-            std::cout << "Calling Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
-        // }
+       // {
+           timer.Start();
+           analysis->Assemble();
+           timer.Stop();
+           std::cout << "Calling Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+       // }
 
     }
 
