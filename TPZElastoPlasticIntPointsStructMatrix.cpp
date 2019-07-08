@@ -101,11 +101,16 @@ void TPZElastoPlasticIntPointsStructMatrix::TransferDataToGPU() {
     d_el_color_indexes.resize(m_el_color_indexes.size());
     d_el_color_indexes.set(&m_el_color_indexes[0], m_el_color_indexes.size());
 
+    d_ip_color_indexes.resize(m_ip_color_indexes.size());
+    d_ip_color_indexes.set(&m_ip_color_indexes[0], m_ip_color_indexes.size());
+
     d_KgLinear.resize(fSparseMatrixLinear->A().size());
     d_KgLinear.set(&fSparseMatrixLinear->A()[0], fSparseMatrixLinear->A().size());
 
     d_RhsLinear.resize(fRhsLinear.Rows());
     d_RhsLinear.set(&fRhsLinear(0,0), fRhsLinear.Rows());
+
+    
 }
 #endif
 
@@ -170,15 +175,14 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     AssembleBoundaryData();
 }
 
-#define ColorbyIp_Q
+// #define ColorbyIp_Q
 
 void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
 
     TPZSYsmpMatrix<STATE> &stiff = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
     TPZVec<STATE> &Kg = stiff.A();
-    
-#ifdef ColorbyIp_Q
     int64_t nnz = Kg.size();
+#ifdef ColorbyIp_Q
     Kg.resize(nnz*fMaxNPoints);
     for (int64_t i = 0; i < nnz; i++) {
         Kg[i] = 0.0;
@@ -192,31 +196,50 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     timer.TimeUnit(Timer::ESeconds);
     timer.TimerOption(Timer::EChrono);
 timer.Start();
+
+
+#ifdef ColorbyIp_Q
+        int n_colors = m_first_color_el_ip_index.size()-1;
+#else
+        int n_colors = m_first_color_index.size()-1;
+#endif   
+
+
 #ifdef USING_CUDA
     fCudaCalls.SetHeapSize();
-    int NNZ = stiff.A().size();
-    d_Kg.resize(NNZ);
-    d_Kg.set(&stiff.A()[0], NNZ);
+#ifdef ColorbyIp_Q
+    d_Kg.resize(nnz*fMaxNPoints);
+    d_Kg.Zero();
+#else
+    d_Kg.resize(nnz);
+    d_Kg.Zero();
+#endif    
+
    
     /// Serial by color
-    int n_colors = m_first_color_index.size()-1;
-    for (int ic = 0; ic < n_colors; ic++) {
+    for (int ic = 0; ic < 1; ic++) {
+
+#ifdef ColorbyIp_Q
+        int first = m_first_color_el_ip_index[ic];
+        int last = m_first_color_el_ip_index[ic + 1];
+#else
         int first = m_first_color_index[ic];
         int last = m_first_color_index[ic + 1];
+#endif 
+
         fCudaCalls.MatrixAssemble(d_Kg.getData(), first, last, &d_el_color_indexes.getData()[first], fIntegrator.ConstitutiveLawProcessor().WeightVectorDev().getData(), 
             fIntegrator.DoFIndexesDev().getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dStorage.getData(),
             fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowSizes.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColSizes.getData(),
             fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowFirstIndex.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColFirstIndex.getData(),
             fIntegrator.IrregularBlocksMatrix().BlocksDev().dMatrixPosition.getData(), d_IA_to_sequence.getData(), d_JA_to_sequence.getData(), 
-            d_IA_to_sequence_linear.getData(), d_JA_to_sequence_linear.getData(), d_KgLinear.getData());
+            d_IA_to_sequence_linear.getData(), d_JA_to_sequence_linear.getData(), d_KgLinear.getData(), d_ip_color_indexes.getData());
     }
 
-    d_Kg.get(&Kg[0], NNZ); // back to CPU
+    d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU
 #else
     
     /// Serial by color
-    int n_colors = m_first_color_index.size()-1;
-    for (int ic = 0; ic < n_colors; ic++) {
+    for (int ic = 0; ic < 1; ic++) {
 
 #ifdef USING_TBB
         
@@ -246,6 +269,8 @@ timer.Start();
             fIntegrator.ComputeTangentMatrix(iel,K);
 #endif
             
+            if(iel != 0) continue;
+
             int el_dof = el_n_dofs[iel];
             int pos = cols_first_index[iel];
             
@@ -283,6 +308,10 @@ timer.Start();
         );
 #endif
     }
+#endif
+
+
+
 #ifdef ColorbyIp_Q
     { /// Vector reduction
         int ncolor = fMaxNPoints;
@@ -298,7 +327,9 @@ timer.Start();
         Kg.Resize(nnz);
     }
 #endif
-#endif
+
+        std:cout << Kg << std::endl;
+
 
         timer.Stop();
         std::cout << "K Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;

@@ -43,7 +43,7 @@ public:
 
 	void MatrixAssemble(REAL *K, int first_el, int last_el, int64_t *el_color_index, REAL *weight, int *dof_indexes,
 		REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *ia_to_sequence, int *ja_to_sequence,
-		int *ia_to_sequence_linear, int *ja_to_sequence_linear, REAL *KgLinear);
+		int *ia_to_sequence_linear, int *ja_to_sequence_linear, REAL *KgLinear, int64_t *ip_color_index);
 
 	void SolveCG(int n, int nnzA, REAL *csrValA, int *csrRowPtrA, int *csrColIndA, REAL *b, REAL *x);
 

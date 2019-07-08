@@ -62,10 +62,10 @@ int main(int argc, char *argv[]) {
     
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
-   std::string msh_file = source_dir + "/gmsh/wellbore_15p876k.msh";
+   // std::string msh_file = source_dir + "/gmsh/wellbore_15p876k.msh";
    // std::string msh_file = source_dir + "/gmsh/wellbore_64p516k.msh";
    // std::string msh_file = source_dir + "/gmsh/wellbore_260p100k.msh";
-    // std::string msh_file = source_dir + "/gmsh/wellbore.msh";
+    std::string msh_file = source_dir + "/gmsh/wellbore-coarse.msh";
     TPZGeoMesh *gmesh = ReadGeometry(msh_file);
 #ifdef PZDEBUG
     PrintGeometry(gmesh);
@@ -89,7 +89,7 @@ int main(int argc, char *argv[]) {
 
 
 // Defines the analysis
-    int n_threads = 8;
+    int n_threads = 0;
     
 #ifdef USING_TBB
 #include "tbb/task_scheduler_init.h"
@@ -148,7 +148,7 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
     timer.Stop();
     std::cout << "Calling CreateAssemble and Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
 
-    for (int i = 0; i < n_iterations; i++) {
+    for (int i = 0; i < 1; i++) {
 
         timer.Start();
         analysis->Solve();

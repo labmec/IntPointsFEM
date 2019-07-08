@@ -114,6 +114,8 @@ private:
     
     TPZVecGPU<int64_t> d_el_color_indexes;
 
+    TPZVecGPU<int64_t> d_ip_color_indexes;
+
     TPZVecGPU<REAL> d_KgLinear;
 
     TPZVecGPU<REAL> d_RhsLinear;

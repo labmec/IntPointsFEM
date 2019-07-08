@@ -165,13 +165,13 @@ void TPZCudaCalls::ComputeSigma(int npts, REAL *delta_strain, REAL *sigma, REAL 
 
 void TPZCudaCalls::MatrixAssemble(REAL *Kg, int first_el, int last_el, int64_t *el_color_index, REAL *weight, int *dof_indexes,
 	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *ia_to_sequence, int *ja_to_sequence,
-	int *ia_to_sequence_linear, int *ja_to_sequence_linear, REAL *KgLinear) {
+	int *ia_to_sequence_linear, int *ja_to_sequence_linear, REAL *KgLinear, int64_t *ip_color_index) {
 	int nel = last_el - first_el;
 	int numBlocks = (nel + NT - 1) / NT;
 	size_t getsize;
 	cudaDeviceGetLimit(&getsize, cudaLimitMallocHeapSize);
 	MatrixAssembleKernel<<<numBlocks,NT>>> (nel, Kg, first_el, el_color_index, weight, dof_indexes, storage, rowsizes, colsizes, rowfirstindex, colfirstindex, matrixposition, 
-		ia_to_sequence, ja_to_sequence, ia_to_sequence_linear, ja_to_sequence_linear, KgLinear);
+		ia_to_sequence, ja_to_sequence, ia_to_sequence_linear, ja_to_sequence_linear, KgLinear, ip_color_index);
 	cudaDeviceSynchronize();
 	cudaError_t error = cudaGetLastError();
 	if (error != cudaSuccess) {
