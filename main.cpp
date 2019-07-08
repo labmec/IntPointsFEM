@@ -88,7 +88,7 @@ int main(int argc, char *argv[]) {
 
 
 // Defines the analysis
-    int n_threads = 32;
+    int n_threads = 8;
     TPZAnalysis *analysis;
     // {
         timer.Start();

@@ -248,14 +248,14 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 
         timer.Stop();
         std::cout << "K Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
-
+    // std::cout << Kg << std::endl;
 timer.Start();
     Assemble(rhs,guiInterface);   
             timer.Stop();
         std::cout << "R Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
 
 // #ifdef USING_CUDA
-//     int NNZ = stiff.A().size();
+//     // int NNZ = stiff.A().size();
 //     int neq = fMesh->NEquations();
 //     TPZVecGPU<REAL> d_solution(neq);
 //     d_solution.Zero();
