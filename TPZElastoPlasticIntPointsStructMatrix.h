@@ -82,6 +82,11 @@ private:
     
     std::vector<int64_t> m_first_color_index;
     
+    std::vector<std::pair<int64_t,int64_t>> m_el_ip_color_indexes;
+    
+    std::vector<int64_t> m_first_color_el_ip_index;
+    
+    
 };
 
 #endif /* TPZIntPointsFEM_h */

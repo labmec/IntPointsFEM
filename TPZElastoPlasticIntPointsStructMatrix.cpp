@@ -126,19 +126,22 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 
 }
 
-
+#define ColorbyIp_Q
 
 void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
     
     TPZSYsmpMatrix<STATE> &stiff = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
     TPZVec<STATE> &Kg = stiff.A();
     
+#ifdef ColorbyIp_Q
+    int np = 4;
+    int64_t nnz = Kg.size();
+    Kg.resize(nnz*np);
+#endif
+    
     TPZVec<int> &indexes = fIntegrator.DoFIndexes();
-//    int64_t n_vols = fIntegrator.IrregularBlocksMatrix().Blocks().fNumBlocks;
     TPZVec<int> & el_n_dofs = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes;
     TPZVec<int> & cols_first_index = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex;
-    
-
     
     /// Serial by color
     int n_colors = m_first_color_index.size()-1;
@@ -147,11 +150,18 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 #ifdef USING_TBB
         tbb::parallel_for(size_t(m_first_color_index[ic]),size_t(m_first_color_index[ic+1]),size_t(1),[&](size_t i)
 #else
+#ifdef ColorbyIp_Q
+        for (int i = m_first_color_el_ip_index[ic]; i < m_first_color_el_ip_index[ic+1]; i++)
+#else
         for (int i = m_first_color_index[ic]; i < m_first_color_index[ic+1]; i++)
 #endif
+#endif
         {
+#ifdef ColorbyIp_Q
             int iel = m_el_color_indexes[i];
-            
+#else
+            int iel = m_el_color_indexes[i];
+#endif
             /// Compute Elementary Matrix.
             TPZFMatrix<STATE> K;
             fIntegrator.ComputeTangentMatrix(iel,K);
@@ -525,18 +535,30 @@ void TPZElastoPlasticIntPointsStructMatrix::ColoredIndexes(TPZVec<int> &element_
     m_el_color_indexes.resize(nblocks);
     m_first_color_index.resize(color_map.size()+1);
     
+    
     int c_color = 0;
 
     m_first_color_index[c_color] = 0;
+    m_first_color_el_ip_index.push_back(0);
     for (auto color_data : color_map) {
         int n_el_per_color = color_data.second.size();
         int iel = m_first_color_index[c_color];
+        int n_el_ip_per_color = 0;
         for (int i = 0; i < n_el_per_color ; i++) {
-            m_el_color_indexes[iel] = color_data.second[i];
+            int el_index = color_data.second[i];
+            m_el_color_indexes[iel] = el_index;
+            int npts = fIntegrator.IrregularBlocksMatrix().Blocks().fRowSizes[el_index]/3;
+            for (int ip = 0; ip < npts; ip++) {
+                m_el_ip_color_indexes.push_back(std::make_pair(el_index, ip));
+                n_el_ip_per_color++;
+            }
             iel++;
         }
         c_color++;
         m_first_color_index[c_color] = n_el_per_color + m_first_color_index[c_color-1];
+        m_first_color_el_ip_index[c_color] = n_el_ip_per_color + m_first_color_el_ip_index[c_color-1];
     }
     
+    std::cout << "Number of colors = " << color_map.size() << std::endl;
+    std::cout << "Number of colored integration points = " << m_el_ip_color_indexes.size() << std::endl;
 }
