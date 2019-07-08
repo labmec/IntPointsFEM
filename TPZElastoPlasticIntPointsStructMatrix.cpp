@@ -328,7 +328,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     }
 #endif
                           
-//    std::cout << Kg <<std::endl;
+   // std::cout << Kg <<std::endl;
 
     timer.Stop();
     std::cout << "K Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;

@@ -99,7 +99,7 @@ __global__ void MatrixAssembleKernel(int nel, REAL *Kg, int first_el, int64_t *e
 
     // printf("%d\n", nel);
 
-	if(tid < 1) {
+	if(tid < nel) {
         int iel = el_color_index[tid];
 #ifdef ColorbyIp_Q       
 
