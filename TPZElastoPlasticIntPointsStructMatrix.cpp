@@ -205,7 +205,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 #endif
     }
 #ifdef ColorbyIp_Q
-    if(1){ /// Vector reduction
+    { /// Vector reduction
         int ncolor = fMaxNPoints;
         int64_t colorassemb = ncolor / 2.;
         while (colorassemb > 0) {
