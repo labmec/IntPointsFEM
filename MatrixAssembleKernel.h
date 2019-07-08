@@ -105,7 +105,7 @@ __global__ void MatrixAssembleKernel(int nel, REAL *Kg, int first_el, int64_t *e
 		REAL K[8 * 8];
 		for(int i = 0; i < 8 * 8; i++) K[i] = 0;
 		// memset(&K, 0., el_dofs * el_dofs * sizeof(REAL));
-        teste<<<1,el_npts>>>(el_npts, el_dofs, storage, weight, K);
+ //       teste<<<1,el_npts>>>(el_npts, el_dofs, storage, weight, K);
         cudaDeviceSynchronize();
 		ComputeTangentMatrixDevice(el_npts, el_dofs, &storage[matpos], &weight[first_el_ip], K);
 

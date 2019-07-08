@@ -108,8 +108,8 @@ if(USING_CUDA)
 
     set(CUDA_SEPARABLE_COMPILATION ON)
     
-    include_directories(/usr/local/cuda-8.0/include/)
-    link_directories(/usr/local/cuda-8.0/lib64/)
+    include_directories(${CUDA_TOOLKIT_ROOT_DIR}/include/)
+    link_directories(${CUDA_TOOLKIT_ROOT_DIR}/lib64/)
 
     file(GLOB sources *.cpp)
     file(GLOB headers *.h)
