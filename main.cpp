@@ -89,7 +89,7 @@ int main(int argc, char *argv[]) {
 
 
 // Defines the analysis
-    int n_threads = 0;
+    int n_threads = 24;
     
 #ifdef USING_TBB
 #include "tbb/task_scheduler_init.h"

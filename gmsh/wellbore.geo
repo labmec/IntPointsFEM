@@ -13,15 +13,15 @@ Mesh.SecondOrderLinear = 0;
 wr = 0.1;
 fr = 4.0;
 
-LargeCBurdenQ = 1;
+LargeCBurdenQ = 0;
 
 If(LargeCBurdenQ)
 	nt = 256;
 	nr = 256;
 	radial_progression = 1.01125;
 Else
-	nt = 4;
-	nr = 4;
+	nt = 2;
+	nr = 2;
 	radial_progression = 10.25;	
 EndIf
 

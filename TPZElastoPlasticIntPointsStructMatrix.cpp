@@ -175,14 +175,15 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     AssembleBoundaryData();
 }
 
-// #define ColorbyIp_Q
+ #define ColorbyIp_Q
 
 void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
 
     TPZSYsmpMatrix<STATE> &stiff = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
     TPZVec<STATE> &Kg = stiff.A();
-    int64_t nnz = Kg.size();
+
 #ifdef ColorbyIp_Q
+    int64_t nnz = Kg.size();
     Kg.resize(nnz*fMaxNPoints);
     for (int64_t i = 0; i < nnz; i++) {
         Kg[i] = 0.0;
@@ -195,7 +196,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     Timer timer;   
     timer.TimeUnit(Timer::ESeconds);
     timer.TimerOption(Timer::EChrono);
-timer.Start();
+    timer.Start();
 
 
 #ifdef ColorbyIp_Q
@@ -217,7 +218,7 @@ timer.Start();
 
    
     /// Serial by color
-    for (int ic = 0; ic < 1; ic++) {
+    for (int ic = 0; ic < n_colors; ic++) {
 
 #ifdef ColorbyIp_Q
         int first = m_first_color_el_ip_index[ic];
@@ -239,7 +240,7 @@ timer.Start();
 #else
     
     /// Serial by color
-    for (int ic = 0; ic < 1; ic++) {
+    for (int ic = 0; ic < n_colors; ic++) {
 
 #ifdef USING_TBB
         
@@ -268,8 +269,7 @@ timer.Start();
             TPZFMatrix<STATE> K;
             fIntegrator.ComputeTangentMatrix(iel,K);
 #endif
-            
-            if(iel != 0) continue;
+    
 
             int el_dof = el_n_dofs[iel];
             int pos = cols_first_index[iel];
@@ -327,17 +327,16 @@ timer.Start();
         Kg.Resize(nnz);
     }
 #endif
+                          
+//    std::cout << Kg <<std::endl;
 
-        std:cout << Kg << std::endl;
-
-
-        timer.Stop();
-        std::cout << "K Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+    timer.Stop();
+    std::cout << "K Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
     // std::cout << Kg << std::endl;
-timer.Start();
-    Assemble(rhs,guiInterface);   
-timer.Stop();
-std::cout << "R Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;  
+    timer.Start();
+    Assemble(rhs,guiInterface);
+    timer.Stop();
+    std::cout << "R Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
 }
 
 int TPZElastoPlasticIntPointsStructMatrix::StressRateVectorSize(){
