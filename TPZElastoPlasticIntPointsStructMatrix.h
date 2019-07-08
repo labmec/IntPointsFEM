@@ -66,6 +66,8 @@ private:
     
     int64_t me(int64_t & i_dest, int64_t & j_dest);
     
+    int64_t fMaxNPoints; // maximum number of integration points
+    
     TPZNumericalIntegrator fIntegrator;
 
     TPZVerySparseMatrix<STATE> fSparseMatrixLinear; //-> BC data

@@ -134,9 +134,11 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     TPZVec<STATE> &Kg = stiff.A();
     
 #ifdef ColorbyIp_Q
-    int np = 4;
     int64_t nnz = Kg.size();
-    Kg.resize(nnz*np);
+    Kg.resize(nnz*fMaxNPoints);
+    for (int64_t i = 0; i < nnz; i++) {
+        Kg[i] = 0.0;
+    }
 #endif
     
     TPZVec<int> &indexes = fIntegrator.DoFIndexes();
@@ -148,7 +150,12 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     for (int ic = 0; ic < n_colors; ic++) {
 
 #ifdef USING_TBB
+        
+#ifdef ColorbyIp_Q
+        tbb::parallel_for(size_t(m_first_color_el_ip_index[ic]),size_t(m_first_color_el_ip_index[ic+1]),size_t(1),[&](size_t i)
+#else
         tbb::parallel_for(size_t(m_first_color_index[ic]),size_t(m_first_color_index[ic+1]),size_t(1),[&](size_t i)
+#endif
 #else
 #ifdef ColorbyIp_Q
         for (int i = m_first_color_el_ip_index[ic]; i < m_first_color_el_ip_index[ic+1]; i++)
@@ -158,13 +165,17 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 #endif
         {
 #ifdef ColorbyIp_Q
-            int iel = m_el_color_indexes[i];
+            int iel = m_el_ip_color_indexes[i].first;
+            int ip = m_el_ip_color_indexes[i].second;
+            /// Compute Elementary Matrix.
+            TPZFMatrix<STATE> K;
+            fIntegrator.ComputeTangentMatrix(ip,iel,K);
 #else
             int iel = m_el_color_indexes[i];
-#endif
             /// Compute Elementary Matrix.
             TPZFMatrix<STATE> K;
             fIntegrator.ComputeTangentMatrix(iel,K);
+#endif
             
             int el_dof = el_n_dofs[iel];
             int pos = cols_first_index[iel];
@@ -180,7 +191,11 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
                     
                     if (i_dest <= j_dest) {
                         int64_t  index = me(i_dest,j_dest);
+#ifdef ColorbyIp_Q
+                        Kg[index+nnz*ip] += val;
+#else
                         Kg[index] += val;
+#endif
                     }
                 }
             }
@@ -189,7 +204,21 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
         );
 #endif
     }
-
+#ifdef ColorbyIp_Q
+    if(1){ /// Vector reduction
+        int ncolor = fMaxNPoints;
+        int64_t colorassemb = ncolor / 2.;
+        while (colorassemb > 0) {
+            
+            int64_t firsteq = (ncolor - colorassemb) * nnz;
+            cblas_daxpy(colorassemb * nnz, 1., &Kg[firsteq], 1., &Kg[0], 1.);
+            
+            ncolor -= colorassemb;
+            colorassemb = ncolor/2;
+        }
+        Kg.Resize(nnz);
+    }
+#endif
     
     auto it_end = fSparseMatrixLinear.MapEnd();
     for (auto it = fSparseMatrixLinear.MapBegin(); it!=it_end; it++) {
@@ -540,6 +569,7 @@ void TPZElastoPlasticIntPointsStructMatrix::ColoredIndexes(TPZVec<int> &element_
 
     m_first_color_index[c_color] = 0;
     m_first_color_el_ip_index.push_back(0);
+    fMaxNPoints = 0;
     for (auto color_data : color_map) {
         int n_el_per_color = color_data.second.size();
         int iel = m_first_color_index[c_color];
@@ -548,6 +578,7 @@ void TPZElastoPlasticIntPointsStructMatrix::ColoredIndexes(TPZVec<int> &element_
             int el_index = color_data.second[i];
             m_el_color_indexes[iel] = el_index;
             int npts = fIntegrator.IrregularBlocksMatrix().Blocks().fRowSizes[el_index]/3;
+            if(fMaxNPoints < npts) fMaxNPoints = npts;
             for (int ip = 0; ip < npts; ip++) {
                 m_el_ip_color_indexes.push_back(std::make_pair(el_index, ip));
                 n_el_ip_per_color++;
@@ -556,7 +587,7 @@ void TPZElastoPlasticIntPointsStructMatrix::ColoredIndexes(TPZVec<int> &element_
         }
         c_color++;
         m_first_color_index[c_color] = n_el_per_color + m_first_color_index[c_color-1];
-        m_first_color_el_ip_index[c_color] = n_el_ip_per_color + m_first_color_el_ip_index[c_color-1];
+        m_first_color_el_ip_index.push_back(n_el_ip_per_color + m_first_color_el_ip_index[c_color-1]);
     }
     
     std::cout << "Number of colors = " << color_map.size() << std::endl;

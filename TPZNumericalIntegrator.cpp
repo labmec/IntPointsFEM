@@ -6,7 +6,7 @@
 #include "pzcmesh.h"
 #include "Timer.h"
 
-TPZNumericalIntegrator::TPZNumericalIntegrator() : fBlockMatrix(0,0), fNColor(-1), fDoFIndexes(0), fColorIndexes(0), fConstitutiveLawProcessor() {
+TPZNumericalIntegrator::TPZNumericalIntegrator() : fBlockMatrix(0,0), fNColor(-1), fDoFIndexes(0), fColorIndexes(0), fConstitutiveLawProcessor(){
 #ifdef USING_CUDA
     dDoFIndexes.resize(0);
     dColorIndexes.resize(0);
@@ -217,7 +217,7 @@ void TPZNumericalIntegrator::ComputeTangentMatrix(int ip, int64_t iel, TPZFMatri
     int c = 0;
     for (int i = 0; i < n_sigma_comps; i++) {
         for (int j = 0; j < el_dofs; j++) {
-            Bip(i,j) = fBlockMatrix.Blocks().fStorage[pos + c];
+            Bip(i,j) = fBlockMatrix.Blocks().fStorage[pos + c + n_sigma_comps*el_dofs*ip];
             c++;
         }
     }

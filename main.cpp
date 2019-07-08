@@ -174,12 +174,12 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
             std::cout << "Number of iterations = " << i + 1 << std::endl;
             break;
         }
-//        // {
-//            timer.Start();
-//            analysis->Assemble();
-//            timer.Stop();
-//            std::cout << "Calling Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
-//        // }
+        // {
+            timer.Start();
+            analysis->Assemble();
+            timer.Stop();
+            std::cout << "Calling Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+        // }
 
     }
 
