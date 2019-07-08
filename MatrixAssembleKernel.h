@@ -20,11 +20,13 @@ __device__ void ComputeTangentMatrixDevice(int el_npts, int el_dofs, REAL *stora
 
     int n_sigma_comps = 3;
 
-    REAL De[3 * 3];
-    REAL DeBip[3 * 8];
-    for(int i = 0; i < 3 * 8; i++) DeBip[i] = 0;
-    
-    int c = 0;
+    // REAL De[3 * 3];
+    // REAL DeBip[3 * 8];
+    REAL *De = (REAL*)malloc(n_sigma_comps * n_sigma_comps * sizeof(REAL));
+    REAL *DeBip = (REAL*)malloc(n_sigma_comps * el_dofs * sizeof(REAL));
+    for(int i = 0; i < n_sigma_comps * el_dofs; i++) DeBip[i] = 0;
+
+        int c = 0;
 #pragma unroll
     for (int ip = 0; ip < el_npts; ip++) {
     	ComputeConstitutiveMatrixDevice(ip,De);
@@ -36,12 +38,12 @@ __device__ void ComputeTangentMatrixDevice(int el_npts, int el_dofs, REAL *stora
 
         c += n_sigma_comps * el_dofs;
     }
-    // free(De);
-    // free(DeBip);
+    free(De);
+    free(DeBip);
 }
 
 __device__ int64_t me(int *ia_to_sequence, int *ja_to_sequence, int64_t & i_dest, int64_t & j_dest) {
-        
+
     // Get the matrix entry at (row,col) without bound checking
     int64_t row(i_dest),col(j_dest);
     if (i_dest > j_dest) {
@@ -68,7 +70,7 @@ __global__ void teste(int el_npts, int el_dofs, REAL *storage, REAL *weight, REA
         REAL DeBip[3 * 8];
         for(int i = 0; i < 3 * 8; i++) DeBip[i] = 0;
 
-        ComputeConstitutiveMatrixDevice(tid,De);
+            ComputeConstitutiveMatrixDevice(tid,De);
         REAL omega = weight[tid];
 
         MultAddDevice(false, n_sigma_comps, el_dofs, n_sigma_comps, De, &storage[tid*n_sigma_comps * el_dofs], DeBip, 1., 0.);
@@ -101,31 +103,27 @@ __global__ void MatrixAssembleKernel(int nel, REAL *Kg, int first_el, int64_t *e
 
 
 
-		// REAL *K = (REAL*)malloc(el_dofs * el_dofs * sizeof(REAL));
-		REAL K[8 * 8];
-		for(int i = 0; i < 8 * 8; i++) K[i] = 0;
-		// memset(&K, 0., el_dofs * el_dofs * sizeof(REAL));
- //       teste<<<1,el_npts>>>(el_npts, el_dofs, storage, weight, K);
-        cudaDeviceSynchronize();
-		ComputeTangentMatrixDevice(el_npts, el_dofs, &storage[matpos], &weight[first_el_ip], K);
+		REAL *K = (REAL*)malloc(el_dofs * el_dofs * sizeof(REAL));
+		for(int i = 0; i < el_dofs * el_dofs; i++) K[i] = 0;
+        ComputeTangentMatrixDevice(el_npts, el_dofs, &storage[matpos], &weight[first_el_ip], K);
 
-		for (int i_dof = 0; i_dof < el_dofs; i_dof++) {
+        for (int i_dof = 0; i_dof < el_dofs; i_dof++) {
 
-			int64_t i_dest = dof_indexes[colpos + i_dof];
+         int64_t i_dest = dof_indexes[colpos + i_dof];
 
-			for (int j_dof = 0; j_dof < el_dofs; j_dof++) {
+         for (int j_dof = 0; j_dof < el_dofs; j_dof++) {
 
-				int64_t j_dest = dof_indexes[colpos + j_dof];
-				STATE val = K[i_dof * el_dofs + j_dof];
-				if (i_dest <= j_dest) {
-                    int64_t  index = me(ia_to_sequence, ja_to_sequence, i_dest, j_dest);
-                    int64_t  index_linear = me(ia_to_sequence_linear, ja_to_sequence_linear, i_dest, j_dest);
-                    STATE val_linear = KgLinear[index_linear];
-                    Kg[index] += val + val_linear;
-				}
-			}
-		}			
-		// free(K);
-	}
+            int64_t j_dest = dof_indexes[colpos + j_dof];
+            STATE val = K[i_dof * el_dofs + j_dof];
+            if (i_dest <= j_dest) {
+                int64_t  index = me(ia_to_sequence, ja_to_sequence, i_dest, j_dest);
+                int64_t  index_linear = me(ia_to_sequence_linear, ja_to_sequence_linear, i_dest, j_dest);
+                STATE val_linear = KgLinear[index_linear];
+                Kg[index] += val + val_linear;
+            }
+        }
+    }			
+    free(K);
+}
 }
 
