@@ -47,12 +47,22 @@ public:
 
 	void SolveCG(int n, int nnzA, REAL *csrValA, int *csrRowPtrA, int *csrColIndA, REAL *b, REAL *x);
 
+	void SetHeapSize() {
+		if(heap_q == false) {
+			heap_q = true;
+			size_t size = 120000000;
+			cudaDeviceSetLimit(cudaLimitMallocHeapSize, size);
+		}
+	}
+
 private:
 	cusparseHandle_t handle_cusparse;
 	bool cusparse_h;
 	
 	cublasHandle_t handle_cublas;
 	bool cublas_h;
+
+	bool heap_q;
 
 };
 #endif

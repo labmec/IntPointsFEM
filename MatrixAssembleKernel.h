@@ -21,7 +21,7 @@ __device__ void ComputeTangentMatrixDevice(int el_npts, int el_dofs, REAL *stora
     int n_sigma_comps = 3;
 
     // REAL De[3 * 3];
-    // REAL DeBip[3 * 8];
+    // REAL DeBip[3 * 18];
     REAL *De = (REAL*)malloc(n_sigma_comps * n_sigma_comps * sizeof(REAL));
     REAL *DeBip = (REAL*)malloc(n_sigma_comps * el_dofs * sizeof(REAL));
     for(int i = 0; i < n_sigma_comps * el_dofs; i++) DeBip[i] = 0;
@@ -89,41 +89,39 @@ __global__ void MatrixAssembleKernel(int nel, REAL *Kg, int first_el, int64_t *e
 	__shared__ int n_sigma_comps;
 	n_sigma_comps = 3;
 
+    // printf("%d\n", nel);
+
 	if(tid < nel) {
-		// printf("%d\n", tid);
+        int iel = el_color_index[tid];
 
+        int el_npts = rowsizes[iel]/n_sigma_comps;
+        int el_dofs = colsizes[iel];
+        int colpos = colfirstindex[iel];
+        int first_el_ip = rowfirstindex[iel]/n_sigma_comps;
+        int matpos = matrixposition[iel];
 
-		int iel = el_color_index[tid];
-
-		int el_npts = rowsizes[iel]/n_sigma_comps;
-		int el_dofs = colsizes[iel];
-		int colpos = colfirstindex[iel];
-		int first_el_ip = rowfirstindex[iel]/n_sigma_comps;
-		int matpos = matrixposition[iel];
-
-
-
-		REAL *K = (REAL*)malloc(el_dofs * el_dofs * sizeof(REAL));
-		for(int i = 0; i < el_dofs * el_dofs; i++) K[i] = 0;
+            // REAL K[18 * 18];
+        REAL *K = (REAL*)malloc(el_dofs * el_dofs * sizeof(REAL));
+        for(int i = 0; i < el_dofs * el_dofs; i++) K[i] = 0;
         ComputeTangentMatrixDevice(el_npts, el_dofs, &storage[matpos], &weight[first_el_ip], K);
 
         for (int i_dof = 0; i_dof < el_dofs; i_dof++) {
 
-         int64_t i_dest = dof_indexes[colpos + i_dof];
+        int64_t i_dest = dof_indexes[colpos + i_dof];
 
-         for (int j_dof = 0; j_dof < el_dofs; j_dof++) {
+            for (int j_dof = 0; j_dof < el_dofs; j_dof++) {
 
-            int64_t j_dest = dof_indexes[colpos + j_dof];
-            STATE val = K[i_dof * el_dofs + j_dof];
-            if (i_dest <= j_dest) {
-                int64_t  index = me(ia_to_sequence, ja_to_sequence, i_dest, j_dest);
-                int64_t  index_linear = me(ia_to_sequence_linear, ja_to_sequence_linear, i_dest, j_dest);
-                STATE val_linear = KgLinear[index_linear];
-                Kg[index] += val + val_linear;
+                int64_t j_dest = dof_indexes[colpos + j_dof];
+                STATE val = K[i_dof * el_dofs + j_dof];
+                if (i_dest <= j_dest) {
+                    int64_t  index = me(ia_to_sequence, ja_to_sequence, i_dest, j_dest);
+                    int64_t  index_linear = me(ia_to_sequence_linear, ja_to_sequence_linear, i_dest, j_dest);
+                    STATE val_linear = KgLinear[index_linear];
+                    Kg[index] += val + val_linear;
+                }
             }
-        }
-    }			
+        }			
     free(K);
-}
+    }
 }
 

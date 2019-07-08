@@ -186,6 +186,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     timer.Start();
 
 #if USING_CUDA
+    fCudaCalls.SetHeapSize();
     int NNZ = stiff.A().size();
     d_Kg.resize(NNZ);
     d_Kg.set(&stiff.A()[0], NNZ);
@@ -251,7 +252,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     // std::cout << Kg << std::endl;
 timer.Start();
     Assemble(rhs,guiInterface);   
-            timer.Stop();
+timer.Stop();
         std::cout << "R Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
 
 // #ifdef USING_CUDA
