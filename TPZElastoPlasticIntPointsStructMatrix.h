@@ -16,7 +16,9 @@
 
 
 class TPZElastoPlasticIntPointsStructMatrix : public TPZSymetricSpStructMatrix {
+    
 public:
+    
     /** @brief Default constructor */
     TPZElastoPlasticIntPointsStructMatrix();
 
@@ -64,6 +66,11 @@ private:
     
     int fDimension;
     
+    struct intpoint_by_element {
+        int64_t fglob_el_index;
+        int64_t flocal_ip_index;
+    };
+    
     int64_t me(int64_t & i_dest, int64_t & j_dest);
     
     int64_t fMaxNPoints; // maximum number of integration points
@@ -82,11 +89,12 @@ private:
     
     std::vector<int64_t> m_el_color_indexes;
     
+    std::vector<int64_t> m_ip_color_indexes;
+    
     std::vector<int64_t> m_first_color_index;
     
-    std::vector<std::pair<int64_t,int64_t>> m_el_ip_color_indexes;
-    
     std::vector<int64_t> m_first_color_el_ip_index;
+    
     
     
 };
