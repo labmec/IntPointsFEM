@@ -79,6 +79,8 @@ public:
     void ComputeConstitutiveMatrix(int64_t point_index, TPZFMatrix<STATE> &De);
     
     void ComputeTangentMatrix(int64_t iel, TPZFMatrix<REAL> &K);
+    
+    void ComputeTangentMatrix(int ip, int64_t iel, TPZFMatrix<REAL> &K);
 
     void SetConstitutiveLawProcessor(TPZConstitutiveLawProcessor & processor);
     

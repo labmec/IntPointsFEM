@@ -170,12 +170,20 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     AssembleBoundaryData();
 }
 
-
+#define ColorbyIp_Q
 
 void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
 
     TPZSYsmpMatrix<STATE> &stiff = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
     TPZVec<STATE> &Kg = stiff.A();
+    
+#ifdef ColorbyIp_Q
+    int64_t nnz = Kg.size();
+    Kg.resize(nnz*fMaxNPoints);
+    for (int64_t i = 0; i < nnz; i++) {
+        Kg[i] = 0.0;
+    }
+#endif
     
     TPZVec<int> &indexes = fIntegrator.DoFIndexes();
     TPZVec<int> & el_n_dofs = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes;
@@ -183,14 +191,14 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     Timer timer;   
     timer.TimeUnit(Timer::ESeconds);
     timer.TimerOption(Timer::EChrono);
-    timer.Start();
-
-#if USING_CUDA
+timer.Start();
+#ifdef USING_CUDA
     fCudaCalls.SetHeapSize();
     int NNZ = stiff.A().size();
     d_Kg.resize(NNZ);
     d_Kg.set(&stiff.A()[0], NNZ);
-
+   
+    /// Serial by color
     int n_colors = m_first_color_index.size()-1;
     for (int ic = 0; ic < n_colors; ic++) {
         int first = m_first_color_index[ic];
@@ -205,46 +213,91 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 
     d_Kg.get(&Kg[0], NNZ); // back to CPU
 #else
+    
     /// Serial by color
     int n_colors = m_first_color_index.size()-1;
     for (int ic = 0; ic < n_colors; ic++) {
+
 #ifdef USING_TBB
-        tbb::parallel_for(size_t(m_first_color_index[ic]),size_t(m_first_color_index[ic+1]),size_t(1),[&](size_t i)
+        
+#ifdef ColorbyIp_Q
+        tbb::parallel_for(size_t(m_first_color_el_ip_index[ic]),size_t(m_first_color_el_ip_index[ic+1]),size_t(1),[&](size_t i)
 #else
-            for (int i = m_first_color_index[ic]; i < m_first_color_index[ic+1]; i++)
+        tbb::parallel_for(size_t(m_first_color_index[ic]),size_t(m_first_color_index[ic+1]),size_t(1),[&](size_t i)
 #endif
-            {
-                int iel = m_el_color_indexes[i];
-
+#else
+#ifdef ColorbyIp_Q
+        for (int i = m_first_color_el_ip_index[ic]; i < m_first_color_el_ip_index[ic+1]; i++)
+#else
+        for (int i = m_first_color_index[ic]; i < m_first_color_index[ic+1]; i++)
+#endif
+#endif
+        {
+#ifdef ColorbyIp_Q
+            int iel = m_el_color_indexes[i];
+            int ip = m_ip_color_indexes[i];
             /// Compute Elementary Matrix.
-                TPZFMatrix<STATE> K;
-                fIntegrator.ComputeTangentMatrix(iel,K);
-
-                int el_dof = el_n_dofs[iel];
-                int pos = cols_first_index[iel];
-
-                for (int i_dof = 0; i_dof < el_dof; i_dof++) {
-
-                    int64_t i_dest = indexes[pos + i_dof];
-
-                    for (int j_dof = 0; j_dof < el_dof; j_dof++) {
-
-                        int64_t j_dest = indexes[pos + j_dof];
-                        STATE val = K(i_dof,j_dof);
-
-                        if (i_dest <= j_dest) {
-                            int64_t  index = me(m_IA_to_sequence, m_JA_to_sequence, i_dest, j_dest);
-                            int64_t  index_linear = me(m_IA_to_sequence_linear, m_JA_to_sequence_linear, i_dest, j_dest);
-                            STATE val_linear = fSparseMatrixLinear->A()[index_linear];
-                            Kg[index] += val + val_linear;
+            TPZFMatrix<STATE> K;
+            fIntegrator.ComputeTangentMatrix(ip,iel,K);
+#else
+            int iel = m_el_color_indexes[i];
+            /// Compute Elementary Matrix.
+            TPZFMatrix<STATE> K;
+            fIntegrator.ComputeTangentMatrix(iel,K);
+#endif
+            
+            int el_dof = el_n_dofs[iel];
+            int pos = cols_first_index[iel];
+            
+            for (int i_dof = 0; i_dof < el_dof; i_dof++) {
+                
+                int64_t i_dest = indexes[pos + i_dof];
+                
+                for (int j_dof = 0; j_dof < el_dof; j_dof++) {
+                    
+                    int64_t j_dest = indexes[pos + j_dof];
+                    STATE val = K(i_dof,j_dof);
+                    
+                    if (i_dest <= j_dest) {
+                        int64_t  index = me(m_IA_to_sequence, m_JA_to_sequence, i_dest, j_dest);
+                        int64_t  index_linear = me(m_IA_to_sequence_linear, m_JA_to_sequence_linear, i_dest, j_dest);
+#ifdef ColorbyIp_Q
+                        if(ip == 0) {
+                             STATE val_linear = fSparseMatrixLinear->A()[index_linear];
+                             Kg[index+nnz*ip] += val + val_linear;
                         }
+                        else  {
+                            Kg[index+nnz*ip] += val;
+                        }
+
+#else
+
+                        STATE val_linear = fSparseMatrixLinear->A()[index_linear];
+                        Kg[index] += val + val_linear;
+#endif
                     }
                 }
             }
+        }
 #ifdef USING_TBB
-            );
+        );
 #endif
     }
+#ifdef ColorbyIp_Q
+    { /// Vector reduction
+        int ncolor = fMaxNPoints;
+        int64_t colorassemb = ncolor / 2.;
+        while (colorassemb > 0) {
+            
+            int64_t firsteq = (ncolor - colorassemb) * nnz;
+            cblas_daxpy(colorassemb * nnz, 1., &Kg[firsteq], 1., &Kg[0], 1.);
+            
+            ncolor -= colorassemb;
+            colorassemb = ncolor/2;
+        }
+        Kg.Resize(nnz);
+    }
+#endif
 #endif
 
         timer.Stop();
@@ -253,19 +306,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 timer.Start();
     Assemble(rhs,guiInterface);   
 timer.Stop();
-        std::cout << "R Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
-
-// #ifdef USING_CUDA
-//     // int NNZ = stiff.A().size();
-//     int neq = fMesh->NEquations();
-//     TPZVecGPU<REAL> d_solution(neq);
-//     d_solution.Zero();
-
-//     fCudaCalls.SolveCG(neq, NNZ, d_Kg.getData(), d_IA_to_sequence.getData(), d_JA_to_sequence.getData(), d_rhs.getData(), d_solution.getData()); 
-//     TPZFMatrix<REAL> sol(d_solution.getSize());
-//     d_solution.get(&sol(0,0), d_solution.getSize()); //back to CPU
-//     fMesh->Solution() = sol;
-// #endif
+std::cout << "R Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;  
 }
 
 int TPZElastoPlasticIntPointsStructMatrix::StressRateVectorSize(){
@@ -618,21 +659,45 @@ void TPZElastoPlasticIntPointsStructMatrix::ColoredIndexes(TPZVec<int> &element_
         DebugStop();
     }
     
+#ifndef ColorbyIp_Q
     m_el_color_indexes.resize(nblocks);
+#endif
+    
     m_first_color_index.resize(color_map.size()+1);
+    
     
     int c_color = 0;
 
     m_first_color_index[c_color] = 0;
+    m_first_color_el_ip_index.push_back(0);
+    fMaxNPoints = 0;
     for (auto color_data : color_map) {
         int n_el_per_color = color_data.second.size();
         int iel = m_first_color_index[c_color];
+        int n_el_ip_per_color = 0;
         for (int i = 0; i < n_el_per_color ; i++) {
-            m_el_color_indexes[iel] = color_data.second[i];
+            int el_index = color_data.second[i];
+#ifndef ColorbyIp_Q
+            m_el_color_indexes[iel] = el_index;
+#endif
+#ifdef ColorbyIp_Q
+            int npts = fIntegrator.IrregularBlocksMatrix().Blocks().fRowSizes[el_index]/3;
+            if(fMaxNPoints < npts) fMaxNPoints = npts;
+            for (int ip = 0; ip < npts; ip++) {
+                m_el_color_indexes.push_back(el_index);
+                m_ip_color_indexes.push_back(ip);
+                n_el_ip_per_color++;
+            }
+#endif
             iel++;
         }
         c_color++;
         m_first_color_index[c_color] = n_el_per_color + m_first_color_index[c_color-1];
+        m_first_color_el_ip_index.push_back(n_el_ip_per_color + m_first_color_el_ip_index[c_color-1]);
     }
     
+    std::cout << "Number of colors = " << color_map.size() << std::endl;
+#ifdef ColorbyIp_Q
+    std::cout << "Number of colored integration points = " << m_ip_color_indexes.size() << std::endl;
+#endif
 }

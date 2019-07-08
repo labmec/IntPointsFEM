@@ -6,7 +6,7 @@
 #include "pzcmesh.h"
 #include "Timer.h"
 
-TPZNumericalIntegrator::TPZNumericalIntegrator() : fBlockMatrix(0,0), fNColor(-1), fDoFIndexes(0), fColorIndexes(0), fConstitutiveLawProcessor() {
+TPZNumericalIntegrator::TPZNumericalIntegrator() : fBlockMatrix(0,0), fNColor(-1), fDoFIndexes(0), fColorIndexes(0), fConstitutiveLawProcessor(){
 #ifdef USING_CUDA
     dDoFIndexes.resize(0);
     dColorIndexes.resize(0);
@@ -191,6 +191,39 @@ void TPZNumericalIntegrator::ComputeTangentMatrix(int64_t iel, TPZFMatrix<REAL> 
         De.Multiply(Bip, DeBip);
         Bip.MultAdd(DeBip, K, K, omega, 1.0, 1);
     }
+}
+
+void TPZNumericalIntegrator::ComputeTangentMatrix(int ip, int64_t iel, TPZFMatrix<REAL> &K){
+    
+    int n_sigma_comps = 3;
+    
+    int el_npts = fBlockMatrix.Blocks().fRowSizes[iel]/n_sigma_comps;
+    int el_dofs = fBlockMatrix.Blocks().fColSizes[iel];
+    int first_el_ip = fBlockMatrix.Blocks().fRowFirstIndex[iel]/n_sigma_comps;
+    
+    K.Resize(el_dofs, el_dofs);
+    K.Zero();
+    
+    if (ip >= el_npts ) { // Contribute with zero values.
+        return;
+    }
+    
+    int pos = fBlockMatrix.Blocks().fMatrixPosition[iel];
+    TPZFMatrix<STATE> De(3,3);
+    TPZFMatrix<STATE> Bip(n_sigma_comps,el_dofs,0.0);
+    TPZFMatrix<STATE> DeBip;
+    int c = 0;
+    for (int i = 0; i < n_sigma_comps; i++) {
+        for (int j = 0; j < el_dofs; j++) {
+            Bip(i,j) = fBlockMatrix.Blocks().fStorage[pos + c + n_sigma_comps*el_dofs*ip];
+            c++;
+        }
+    }
+    
+    REAL omega = fConstitutiveLawProcessor.fWeight[first_el_ip + ip];
+    ComputeConstitutiveMatrix(ip,De);
+    De.Multiply(Bip, DeBip);
+    Bip.MultAdd(DeBip, K, K, omega, 1.0, 1);
 }
 
 void TPZNumericalIntegrator::SetConstitutiveLawProcessor(TPZConstitutiveLawProcessor & processor){
