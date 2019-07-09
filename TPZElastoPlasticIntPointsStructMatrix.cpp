@@ -184,7 +184,6 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 
     int64_t nnz = Kg.size();
 #ifdef ColorbyIp_Q
-    // printf("cpu nnz = %d\n", nnz);
     Kg.resize(nnz*fMaxNPoints);
     for (int64_t i = 0; i < nnz; i++) {
         Kg[i] = 0.0;
@@ -201,138 +200,107 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 
 
 #ifdef ColorbyIp_Q
-        int n_colors = m_first_color_el_ip_index.size()-1;
+    int n_colors = m_first_color_el_ip_index.size()-1;
 #else
-        int n_colors = m_first_color_index.size()-1;
+    int n_colors = m_first_color_index.size()-1;
 #endif   
 
-
-#ifdef USING_CUDA
     fCudaCalls.SetHeapSize();
-#ifdef ColorbyIp_Q
-    // printf("d nnz = %d\n", nnz);
-    // printf("d fMaxNPoints = %d\n", fMaxNPoints);
-    d_Kg.resize(nnz*fMaxNPoints);
-    d_Kg.Zero();
-#else
-    d_Kg.resize(nnz);
-    d_Kg.Zero();
-#endif    
 
-   
-    /// Serial by color
+#ifdef COMPUTE_K_GPU
+    std::cout << "COMPUTE_K_GPU" << std::endl;
+    #ifdef ColorbyIp_Q
+        d_Kg.resize(nnz*fMaxNPoints);
+        d_Kg.Zero();
+    #else
+        d_Kg.resize(nnz);
+        d_Kg.Zero();
+    #endif       
+        /// Serial by color
+        for (int ic = 0; ic < n_colors; ic++) {
+    #ifdef ColorbyIp_Q
+            int first = m_first_color_el_ip_index[ic];
+            int last = m_first_color_el_ip_index[ic + 1];
+    #else
+            int first = m_first_color_index[ic];
+            int last = m_first_color_index[ic + 1];
+    #endif 
+            fCudaCalls.MatrixAssemble(nnz,d_Kg.getData(), first, last, &d_el_color_indexes.getData()[first], fIntegrator.ConstitutiveLawProcessor().WeightVectorDev().getData(), 
+                fIntegrator.DoFIndexesDev().getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dStorage.getData(),
+                fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowSizes.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColSizes.getData(),
+                fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowFirstIndex.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColFirstIndex.getData(),
+                fIntegrator.IrregularBlocksMatrix().BlocksDev().dMatrixPosition.getData(), d_IA_to_sequence.getData(), d_JA_to_sequence.getData(), 
+                d_IA_to_sequence_linear.getData(), d_JA_to_sequence_linear.getData(), d_KgLinear.getData(), d_ip_color_indexes.getData());
+        }
+        d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU
+#endif
+
+#ifdef COMPUTE_K_CPU
+    std::cout << "COMPUTE_K_CPU" << std::endl;
     for (int ic = 0; ic < n_colors; ic++) {
-
-#ifdef ColorbyIp_Q
-        int first = m_first_color_el_ip_index[ic];
-        int last = m_first_color_el_ip_index[ic + 1];
-#else
-        int first = m_first_color_index[ic];
-        int last = m_first_color_index[ic + 1];
-#endif 
-
-        fCudaCalls.MatrixAssemble(nnz,d_Kg.getData(), first, last, &d_el_color_indexes.getData()[first], fIntegrator.ConstitutiveLawProcessor().WeightVectorDev().getData(), 
-            fIntegrator.DoFIndexesDev().getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dStorage.getData(),
-            fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowSizes.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColSizes.getData(),
-            fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowFirstIndex.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColFirstIndex.getData(),
-            fIntegrator.IrregularBlocksMatrix().BlocksDev().dMatrixPosition.getData(), d_IA_to_sequence.getData(), d_JA_to_sequence.getData(), 
-            d_IA_to_sequence_linear.getData(), d_JA_to_sequence_linear.getData(), d_KgLinear.getData(), d_ip_color_indexes.getData());
-    }
-
-    d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU
-#else
-    
-    /// Serial by color
-    for (int ic = 0; ic < n_colors; ic++) {
-        int first = m_first_color_index[ic];
-        int last = m_first_color_index[ic + 1];
-        int el_dofs = el_n_dofs[0];
-        int nel = last - first;
-        TPZVec<STATE> K(el_dofs * el_dofs * nel, 0.);
-
-#ifdef USING_TBB
-        
-#ifdef ColorbyIp_Q
-        tbb::parallel_for(size_t(m_first_color_el_ip_index[ic]),size_t(m_first_color_el_ip_index[ic+1]),size_t(1),[&](size_t i)
-#else
-        tbb::parallel_for(size_t(m_first_color_index[ic]),size_t(m_first_color_index[ic+1]),size_t(1),[&](size_t i)
-#endif
-#else
-#ifdef ColorbyIp_Q
-        for (int i = m_first_color_el_ip_index[ic]; i < m_first_color_el_ip_index[ic+1]; i++)
-#else
-        int cont = 0;
-        for (int i = m_first_color_index[ic]; i < m_first_color_index[ic+1]; i++)
-#endif
-#endif
-        {
-#ifdef ColorbyIp_Q
-            int iel = m_el_color_indexes[i];
+    #ifdef USING_TBB
+        #ifdef ColorbyIp_Q
+            tbb::parallel_for(size_t(m_first_color_el_ip_index[ic]),size_t(m_first_color_el_ip_index[ic+1]),size_t(1),[&](size_t i)
+        #else
+            tbb::parallel_for(size_t(m_first_color_index[ic]),size_t(m_first_color_index[ic+1]),size_t(1),[&](size_t i)
+        #endif
+    #else
+        #ifdef ColorbyIp_Q
+            for (int i = m_first_color_el_ip_index[ic]; i < m_first_color_el_ip_index[ic+1]; i++)
+        #else
+            for (int i = m_first_color_index[ic]; i < m_first_color_index[ic+1]; i++)
+        #endif
+    #endif
+            {
+    #ifdef ColorbyIp_Q
             int ip = m_ip_color_indexes[i];
-            /// Compute Elementary Matrix.
-
-            TPZFMatrix<STATE> Kel;
-            fIntegrator.ComputeTangentMatrix(ip,iel,Kel);
-#else
+    #endif
             int iel = m_el_color_indexes[i];
-            /// Compute Elementary Matrix.
-            TPZFMatrix<STATE> Kel;
-            fIntegrator.ComputeTangentMatrix(iel,Kel);
-#endif
-            int stride = el_dofs * el_dofs * cont;
-            TPZFMatrix<REAL> K_el_loc(el_dofs, el_dofs, &K[stride], el_dofs * el_dofs);
-            K_el_loc = Kel;
 
+            /// Compute Elementary Matrix.                            
+            TPZFMatrix<STATE> K;
+            fIntegrator.ComputeTangentMatrix(iel,K);
 
             int el_dof = el_n_dofs[iel];
             int pos = cols_first_index[iel];
-            
+
             for (int i_dof = 0; i_dof < el_dof; i_dof++) {
-                
+
                 int64_t i_dest = indexes[pos + i_dof];
-                
+
                 for (int j_dof = 0; j_dof < el_dof; j_dof++) {
-                    
+
                     int64_t j_dest = indexes[pos + j_dof];
-//                     STATE val = Kel(i_dof,j_dof);
-                    STATE val = K[i_dof + j_dof * el_dofs + stride];
-                    
+                    STATE val = K(i_dof,j_dof);
+
                     if (i_dest <= j_dest) {
                         int64_t  index = me(m_IA_to_sequence, m_JA_to_sequence, i_dest, j_dest);
                         int64_t  index_linear = me(m_IA_to_sequence_linear, m_JA_to_sequence_linear, i_dest, j_dest);
-                        // std::cout << index << std::endl;
-#ifdef ColorbyIp_Q
+                    #ifdef ColorbyIp_Q
                         if(ip == 0) {
-                             STATE val_linear = fSparseMatrixLinear->A()[index_linear];
-                             Kg[index+nnz*ip] += val + val_linear;
+                         STATE val_linear = fSparseMatrixLinear->A()[index_linear];
+                         Kg[index+nnz*ip] += val + val_linear;
+                        } else {
+                        Kg[index+nnz*ip] += val;
                         }
-                        else  {
-                            Kg[index+nnz*ip] += val;
-                        }
-
-#else
-
+                    #else
                         STATE val_linear = fSparseMatrixLinear->A()[index_linear];
                         Kg[index] += val + val_linear;
-#endif
+                    #endif
                     }
                 }
             }
-            cont++;
         }
-#ifdef USING_TBB
-        );
-#endif
+    #ifdef USING_TBB
+    );
+    #endif
     }
-#endif
 
-
-#ifdef ColorbyIp_Q
-    { /// Vector reduction
+    #ifdef ColorbyIp_Q
         int ncolor = fMaxNPoints;
         int64_t colorassemb = ncolor / 2.;
         while (colorassemb > 0) {
-            
+
             int64_t firsteq = (ncolor - colorassemb) * nnz;
             cblas_daxpy(colorassemb * nnz, 1., &Kg[firsteq], 1., &Kg[0], 1.);
             
@@ -340,7 +308,51 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
             colorassemb = ncolor/2;
         }
         Kg.Resize(nnz);
+    #endif
+#endif
+
+#ifdef COMPUTE_K_HYBRID
+    std::cout << "COMPUTE_K_HYBRID" << std::endl;          
+    d_Kg.resize(nnz);
+    d_Kg.Zero();
+
+    /// Serial by color
+    for (int ic = 0; ic < n_colors; ic++) {
+        int first = m_first_color_index[ic];
+        int last = m_first_color_index[ic + 1];
+
+        int el_dofs = el_n_dofs[0];
+        int nel = last - first;
+        TPZVec<STATE> K(el_dofs * el_dofs * nel, 0.);
+
+    #ifdef USING_TBB
+        tbb::parallel_for(size_t(0),size_t(nel),size_t(1),[&](size_t i)
+    #else
+            for (int i = 0; i < nel; i++)
+    #endif
+            {
+                int iel = m_el_color_indexes[first + i];
+
+                /// Compute Elementary Matrix.
+                TPZFMatrix<STATE> Kel;
+                fIntegrator.ComputeTangentMatrix(iel,Kel);
+
+                int stride = el_dofs * el_dofs * i;
+                TPZFMatrix<REAL> K_el_loc(el_dofs, el_dofs, &K[stride], el_dofs * el_dofs);
+                K_el_loc = Kel;
+            }
+    #ifdef USING_TBB
+        );
+    #endif
+        TPZVecGPU<REAL> d_K(K.size());
+        d_K.set(&K[0], K.size());
+
+        fCudaCalls.MatrixAssemble(d_K.getData(), nnz, d_Kg.getData(), first, last, &d_el_color_indexes.getData()[first], fIntegrator.DoFIndexesDev().getData(),
+            fIntegrator.IrregularBlocksMatrix().BlocksDev().dColSizes.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColFirstIndex.getData(),
+            d_IA_to_sequence.getData(), d_JA_to_sequence.getData(), d_IA_to_sequence_linear.getData(), d_JA_to_sequence_linear.getData(), d_KgLinear.getData(), 
+            d_ip_color_indexes.getData());        
     }
+    d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU
 #endif
                           
 //    std::cout << Kg <<std::endl;

@@ -94,17 +94,38 @@ if(GET_TIME)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGET_TIME")
 endif(GET_TIME)
 
+# Assembly options
+option(COMPUTE_K_GPU off)
+if(COMPUTE_K_GPU)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMPUTE_K_GPU")
+endif(COMPUTE_K_GPU)
+
+option(COMPUTE_K_CPU off)
+if(COMPUTE_K_CPU)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMPUTE_K_CPU")
+endif(COMPUTE_K_CPU)
+
+option(COMPUTE_K_HYBRID off)
+if(COMPUTE_K_HYBRID)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMPUTE_K_HYBRID")
+endif(COMPUTE_K_HYBRID)
+
+option(ColorbyIp_Q off)
+if(ColorbyIp_Q)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DColorbyIp_Q")
+endif(ColorbyIp_Q)
+
 # Enabling CUDA
 option(USING_CUDA off)
 if(USING_CUDA)
     find_package(CUDA REQUIRED)
     enable_language(CXX CUDA)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSING_CUDA")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --default-stream per-thread  -ftz=true -Xcompiler -O0 --ptxas-options=-O3 -w -Wno-deprecated-gpu-targets -arch=compute_35 -rdc=true -lcudadevrt --use_fast_math")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -O3 --ptxas-options=-O3 -w -Wno-deprecated-gpu-targets -arch=compute_35 --use_fast_math")
 
     set(CMAKE_CUDA_STANDARD 11)
 #   set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}; -arch=compute_35 -rdc=true -lcudadevrt)
-    set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS}  --default-stream per-thread  -ftz=true -Xcompiler -O0 -ptxas-options=-O3 -w -Wno-deprecated-gpu-targets -arch=compute_35 -rdc=true -lcudadevrt --use_fast_math")
+    set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -Xcompiler -O3 -ptxas-options=-O3 -w -Wno-deprecated-gpu-targets -arch=compute_35 --use_fast_math")
 
     set(CUDA_SEPARABLE_COMPILATION ON)
     

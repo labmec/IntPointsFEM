@@ -81,10 +81,66 @@ __device__ int64_t me(int *ia_to_sequence, int *ja_to_sequence, int64_t & i_dest
     return 0; 
 }
 
-
 // #define ColorbyIp_Q
 
-__global__ void MatrixAssembleKernel(int nel, int nnz, REAL *Kg, int first_el, int64_t *el_color_index, REAL *weight, int *dof_indexes, 
+__global__ 
+__launch_bounds__(2*256, 3)
+void MatrixAssembleKernel(REAL *K, int nel, int nnz, REAL *Kg, int64_t *el_color_index, int *dof_indexes, int *colsizes, int *colfirstindex, 
+    int *ia_to_sequence, int *ja_to_sequence, int *ia_to_sequence_linear, int *ja_to_sequence_linear, REAL *KgLinear, int64_t *ip_color_indexes) {
+
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+    __shared__ int n_sigma_comps;
+    n_sigma_comps = 3;
+
+    if(tid < nel) {
+        int iel = el_color_index[tid];
+#ifdef ColorbyIp_Q       
+
+        int ip = ip_color_indexes[tid];
+#endif 
+
+        int el_dofs = colsizes[iel];
+        int colpos = colfirstindex[iel];
+
+        for (int i_dof = 0; i_dof < el_dofs; i_dof++) {
+
+        int64_t i_dest = dof_indexes[colpos + i_dof];
+
+            for (int j_dof = 0; j_dof < el_dofs; j_dof++) {
+
+                int64_t j_dest = dof_indexes[colpos + j_dof];
+                // STATE val = K[i_dof * el_dofs + j_dof];
+                STATE val = K[i_dof + j_dof * el_dofs + el_dofs * el_dofs * tid];
+                
+                if (i_dest <= j_dest) {
+                    int index = me(ia_to_sequence, ja_to_sequence, i_dest, j_dest);
+                    int64_t  index_linear = me(ia_to_sequence_linear, ja_to_sequence_linear, i_dest, j_dest);
+
+#ifdef ColorbyIp_Q            
+                    if(ip == 0) {
+                     STATE val_linear = KgLinear[index_linear];
+                       Kg[index+nnz*ip] += val + val_linear;
+                   }
+                   else  {
+                    Kg[index+nnz*ip] += val;
+
+                    }
+#else  
+                    STATE val_linear = KgLinear[index_linear];
+                    Kg[index] += val + val_linear;
+#endif  
+
+                }
+            }
+        }           
+    }
+}
+
+
+__global__ 
+__launch_bounds__(2*256, 3)
+void MatrixAssembleKernel(int nel, int nnz, REAL *Kg, int first_el, int64_t *el_color_index, REAL *weight, int *dof_indexes, 
 	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *ia_to_sequence, int *ja_to_sequence,
     int *ia_to_sequence_linear, int *ja_to_sequence_linear, REAL *KgLinear, int64_t *ip_color_indexes) {
 
