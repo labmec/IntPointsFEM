@@ -41,7 +41,7 @@ public:
 
 	void ComputeSigma(int npts, REAL *delta_strain, REAL *sigma, REAL lambda, REAL mu, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL *plastic_strain,  REAL *m_type, REAL *alpha, REAL *weight);
 
-	void MatrixAssemble(REAL *K, int first_el, int last_el, int64_t *el_color_index, REAL *weight, int *dof_indexes,
+	void MatrixAssemble(int nnz, REAL *K, int first_el, int last_el, int64_t *el_color_index, REAL *weight, int *dof_indexes,
 		REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *ia_to_sequence, int *ja_to_sequence,
 		int *ia_to_sequence_linear, int *ja_to_sequence_linear, REAL *KgLinear, int64_t *ip_color_index);
 

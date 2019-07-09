@@ -57,7 +57,7 @@ void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData material, int n_threads,
 void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_material, int npoints, std::ostream &out, bool euler = false);
 
 int main(int argc, char *argv[]) {
-    int pOrder = 1; // Computational mesh order
+    int pOrder = 2; // Computational mesh order
     bool render_vtk_Q = false;
     
 // Generates the geometry
@@ -89,7 +89,7 @@ int main(int argc, char *argv[]) {
 
 
 // Defines the analysis
-    int n_threads = 24;
+    int n_threads = 0;
     
 #ifdef USING_TBB
 #include "tbb/task_scheduler_init.h"
@@ -148,7 +148,7 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
     timer.Stop();
     std::cout << "Calling CreateAssemble and Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
 
-    for (int i = 0; i < 1; i++) {
+    for (int i = 0; i < n_iterations; i++) {
 
         timer.Start();
         analysis->Solve();
