@@ -45,10 +45,10 @@ __device__ void ComputeTangentMatrixDevice(int el_npts, int el_dofs, REAL *stora
 __device__ void ComputeTangentMatrixDevice(int ip, int el_npts, int el_dofs, REAL *storage, REAL *weight, REAL *K){       
     int n_sigma_comps = 3;
 
-    // REAL De[3 * 3];
-    // REAL DeBip[3 * 18];
-    REAL *De = (REAL*)malloc(n_sigma_comps * n_sigma_comps * sizeof(REAL));
-    REAL *DeBip = (REAL*)malloc(n_sigma_comps * el_dofs * sizeof(REAL));
+    REAL De[3 * 3];
+    REAL DeBip[3 * 18];
+    // REAL *De = (REAL*)malloc(n_sigma_comps * n_sigma_comps * sizeof(REAL));
+    // REAL *DeBip = (REAL*)malloc(n_sigma_comps * el_dofs * sizeof(REAL));
     for(int i = 0; i < n_sigma_comps * el_dofs; i++) DeBip[i] = 0;
 
     ComputeConstitutiveMatrixDevice(ip,De);
@@ -59,8 +59,8 @@ __device__ void ComputeTangentMatrixDevice(int ip, int el_npts, int el_dofs, REA
     MultAddDevice(true, el_dofs, el_dofs, n_sigma_comps, &storage[n_sigma_comps * el_dofs * ip], DeBip, K, omega, 1.);
 
 
-    free(De);
-    free(DeBip);
+    // free(De);
+    // free(DeBip);
 }
 
 __device__ int64_t me(int *ia_to_sequence, int *ja_to_sequence, int64_t & i_dest, int64_t & j_dest) {
@@ -82,15 +82,11 @@ __device__ int64_t me(int *ia_to_sequence, int *ja_to_sequence, int64_t & i_dest
 }
 
 
-// #define ColorbyIp_Q
+#define ColorbyIp_Q
 
-__global__ void MatrixAssembleKernel(int nel, REAL *Kg, int first_el, int64_t *el_color_index, REAL *weight, int *dof_indexes, 
+__global__ void MatrixAssembleKernel(int nel, int nnz, REAL *Kg, int first_el, int64_t *el_color_index, REAL *weight, int *dof_indexes, 
 	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *ia_to_sequence, int *ja_to_sequence,
     int *ia_to_sequence_linear, int *ja_to_sequence_linear, REAL *KgLinear, int64_t *ip_color_indexes) {
-
-    int nnz = sizeof(Kg)/sizeof(REAL);
-
-
 
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -99,12 +95,16 @@ __global__ void MatrixAssembleKernel(int nel, REAL *Kg, int first_el, int64_t *e
 
     // printf("%d\n", nel);
 
-	if(tid < 1) {
+	if(tid < nel) {
         int iel = el_color_index[tid];
 #ifdef ColorbyIp_Q       
 
         int ip = ip_color_indexes[tid];
-#endif            
+#endif 
+
+        // printf("iel = %d\n", iel);
+        // printf("nnz = %d\n", nnz);
+        // printf("ip = %d\n", ip);
 
         int el_npts = rowsizes[iel]/n_sigma_comps;
         int el_dofs = colsizes[iel];
@@ -112,14 +112,18 @@ __global__ void MatrixAssembleKernel(int nel, REAL *Kg, int first_el, int64_t *e
         int first_el_ip = rowfirstindex[iel]/n_sigma_comps;
         int matpos = matrixposition[iel];
 
-            // REAL K[18 * 18];
-        REAL *K = (REAL*)malloc(el_dofs * el_dofs * sizeof(REAL));
+            REAL K[18 * 18];
+        // REAL *K = (REAL*)malloc(el_dofs * el_dofs * sizeof(REAL));
         for(int i = 0; i < el_dofs * el_dofs; i++) K[i] = 0;
 #ifdef ColorbyIp_Q            
         ComputeTangentMatrixDevice(ip, el_npts, el_dofs, &storage[matpos], &weight[first_el_ip], K);
 #else  
         ComputeTangentMatrixDevice(el_npts, el_dofs, &storage[matpos], &weight[first_el_ip], K);
 #endif  
+
+       // for(int k=0; k < el_dofs*el_dofs; k++ ) {
+       //      printf("k[%d] = %g\n",k, K[k]);
+       //  }
 
         for (int i_dof = 0; i_dof < el_dofs; i_dof++) {
 
@@ -129,9 +133,12 @@ __global__ void MatrixAssembleKernel(int nel, REAL *Kg, int first_el, int64_t *e
 
                 int64_t j_dest = dof_indexes[colpos + j_dof];
                 STATE val = K[i_dof * el_dofs + j_dof];
+                
                 if (i_dest <= j_dest) {
-                    int64_t  index = me(ia_to_sequence, ja_to_sequence, i_dest, j_dest);
+                    int index = me(ia_to_sequence, ja_to_sequence, i_dest, j_dest);
                     int64_t  index_linear = me(ia_to_sequence_linear, ja_to_sequence_linear, i_dest, j_dest);
+                    // printf("index = %d\n", index);
+                    // printf("%d\n", nnz*ip);
 #ifdef ColorbyIp_Q            
                     if(ip == 0) {
                      STATE val_linear = KgLinear[index_linear];
@@ -149,7 +156,7 @@ __global__ void MatrixAssembleKernel(int nel, REAL *Kg, int first_el, int64_t *e
                 }
             }
         }			
-    free(K);
+    // free(K);
     }
 }
 

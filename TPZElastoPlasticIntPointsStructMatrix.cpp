@@ -182,8 +182,8 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     TPZSYsmpMatrix<STATE> &stiff = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
     TPZVec<STATE> &Kg = stiff.A();
 
-#ifdef ColorbyIp_Q
     int64_t nnz = Kg.size();
+#ifdef ColorbyIp_Q
     Kg.resize(nnz*fMaxNPoints);
     for (int64_t i = 0; i < nnz; i++) {
         Kg[i] = 0.0;
@@ -228,7 +228,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
         int last = m_first_color_index[ic + 1];
 #endif 
 
-        fCudaCalls.MatrixAssemble(d_Kg.getData(), first, last, &d_el_color_indexes.getData()[first], fIntegrator.ConstitutiveLawProcessor().WeightVectorDev().getData(), 
+        fCudaCalls.MatrixAssemble(nnz,d_Kg.getData(), first, last, &d_el_color_indexes.getData()[first], fIntegrator.ConstitutiveLawProcessor().WeightVectorDev().getData(), 
             fIntegrator.DoFIndexesDev().getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dStorage.getData(),
             fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowSizes.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColSizes.getData(),
             fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowFirstIndex.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColFirstIndex.getData(),
@@ -261,6 +261,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
             int iel = m_el_color_indexes[i];
             int ip = m_ip_color_indexes[i];
             /// Compute Elementary Matrix.
+            if(i != 1) continue;
             TPZFMatrix<STATE> K;
             fIntegrator.ComputeTangentMatrix(ip,iel,K);
 #else
@@ -269,7 +270,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
             TPZFMatrix<STATE> K;
             fIntegrator.ComputeTangentMatrix(iel,K);
 #endif
-    
+   
 
             int el_dof = el_n_dofs[iel];
             int pos = cols_first_index[iel];
@@ -286,6 +287,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
                     if (i_dest <= j_dest) {
                         int64_t  index = me(m_IA_to_sequence, m_JA_to_sequence, i_dest, j_dest);
                         int64_t  index_linear = me(m_IA_to_sequence_linear, m_JA_to_sequence_linear, i_dest, j_dest);
+                        std::cout << index << std::endl;
 #ifdef ColorbyIp_Q
                         if(ip == 0) {
                              STATE val_linear = fSparseMatrixLinear->A()[index_linear];
@@ -328,7 +330,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     }
 #endif
                           
-//    std::cout << Kg <<std::endl;
+   // std::cout << Kg <<std::endl;
 
     timer.Stop();
     std::cout << "K Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
