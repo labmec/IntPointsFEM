@@ -244,6 +244,11 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     
     /// Serial by color
     for (int ic = 0; ic < n_colors; ic++) {
+        int first = m_first_color_index[ic];
+        int last = m_first_color_index[ic + 1];
+        int el_dofs = el_n_dofs[0];
+        int nel = last - first;
+        TPZVec<STATE> K(el_dofs * el_dofs * nel, 0.);
 
 #ifdef USING_TBB
         
@@ -265,15 +270,17 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
             int ip = m_ip_color_indexes[i];
             /// Compute Elementary Matrix.
 
-            TPZFMatrix<STATE> K;
-            fIntegrator.ComputeTangentMatrix(ip,iel,K);
+            TPZFMatrix<STATE> Kel;
+            fIntegrator.ComputeTangentMatrix(ip,iel,Kel);
 #else
             int iel = m_el_color_indexes[i];
             /// Compute Elementary Matrix.
-            TPZFMatrix<STATE> K;
-            fIntegrator.ComputeTangentMatrix(iel,K);
+            TPZFMatrix<STATE> Kel;
+            fIntegrator.ComputeTangentMatrix(iel,Kel);
 #endif
-   
+            TPZFMatrix<REAL> K_el_loc(el_dofs, el_dofs, &K[el_dofs * el_dofs * i], el_dofs * el_dofs);
+            K_el_loc = Kel;
+  
 
             int el_dof = el_n_dofs[iel];
             int pos = cols_first_index[iel];
@@ -285,7 +292,8 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
                 for (int j_dof = 0; j_dof < el_dof; j_dof++) {
                     
                     int64_t j_dest = indexes[pos + j_dof];
-                    STATE val = K(i_dof,j_dof);
+                    // STATE val = K(i_dof,j_dof);
+                    STATE val = K[i_dof + j_dof * el_dofs];
                     
                     if (i_dest <= j_dest) {
                         int64_t  index = me(m_IA_to_sequence, m_JA_to_sequence, i_dest, j_dest);
@@ -312,9 +320,9 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 #ifdef USING_TBB
         );
 #endif
+            // K.Print(std::cout);
     }
 #endif
-
 
 
 #ifdef ColorbyIp_Q
