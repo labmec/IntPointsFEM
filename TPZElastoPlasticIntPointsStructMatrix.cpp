@@ -261,6 +261,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 #ifdef ColorbyIp_Q
         for (int i = m_first_color_el_ip_index[ic]; i < m_first_color_el_ip_index[ic+1]; i++)
 #else
+        int cont = 0;
         for (int i = m_first_color_index[ic]; i < m_first_color_index[ic+1]; i++)
 #endif
 #endif
@@ -278,9 +279,10 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
             TPZFMatrix<STATE> Kel;
             fIntegrator.ComputeTangentMatrix(iel,Kel);
 #endif
-            TPZFMatrix<REAL> K_el_loc(el_dofs, el_dofs, &K[el_dofs * el_dofs * i], el_dofs * el_dofs);
+            int stride = el_dofs * el_dofs * cont;
+            TPZFMatrix<REAL> K_el_loc(el_dofs, el_dofs, &K[stride], el_dofs * el_dofs);
             K_el_loc = Kel;
-  
+
 
             int el_dof = el_n_dofs[iel];
             int pos = cols_first_index[iel];
@@ -292,8 +294,8 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
                 for (int j_dof = 0; j_dof < el_dof; j_dof++) {
                     
                     int64_t j_dest = indexes[pos + j_dof];
-                    // STATE val = K(i_dof,j_dof);
-                    STATE val = K[i_dof + j_dof * el_dofs];
+//                     STATE val = Kel(i_dof,j_dof);
+                    STATE val = K[i_dof + j_dof * el_dofs + stride];
                     
                     if (i_dest <= j_dest) {
                         int64_t  index = me(m_IA_to_sequence, m_JA_to_sequence, i_dest, j_dest);
@@ -316,11 +318,11 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
                     }
                 }
             }
+            cont++;
         }
 #ifdef USING_TBB
         );
 #endif
-            // K.Print(std::cout);
     }
 #endif
 
@@ -341,7 +343,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     }
 #endif
                           
-   // std::cout << Kg <<std::endl;
+//    std::cout << Kg <<std::endl;
 
     timer.Stop();
     std::cout << "K Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
