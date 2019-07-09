@@ -82,7 +82,7 @@ __device__ int64_t me(int *ia_to_sequence, int *ja_to_sequence, int64_t & i_dest
 }
 
 
-#define ColorbyIp_Q
+// #define ColorbyIp_Q
 
 __global__ void MatrixAssembleKernel(int nel, int nnz, REAL *Kg, int first_el, int64_t *el_color_index, REAL *weight, int *dof_indexes, 
 	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *ia_to_sequence, int *ja_to_sequence,
@@ -93,7 +93,7 @@ __global__ void MatrixAssembleKernel(int nel, int nnz, REAL *Kg, int first_el, i
 	__shared__ int n_sigma_comps;
 	n_sigma_comps = 3;
 
-    // printf("%d\n", nel);
+    // printf("nnz = %d\n", nnz);
 
 	if(tid < nel) {
         int iel = el_color_index[tid];
@@ -112,8 +112,8 @@ __global__ void MatrixAssembleKernel(int nel, int nnz, REAL *Kg, int first_el, i
         int first_el_ip = rowfirstindex[iel]/n_sigma_comps;
         int matpos = matrixposition[iel];
 
-            REAL K[18 * 18];
-        // REAL *K = (REAL*)malloc(el_dofs * el_dofs * sizeof(REAL));
+            // REAL K[18 * 18];
+        REAL *K = (REAL*)malloc(el_dofs * el_dofs * sizeof(REAL));
         for(int i = 0; i < el_dofs * el_dofs; i++) K[i] = 0;
 #ifdef ColorbyIp_Q            
         ComputeTangentMatrixDevice(ip, el_npts, el_dofs, &storage[matpos], &weight[first_el_ip], K);
@@ -156,7 +156,7 @@ __global__ void MatrixAssembleKernel(int nel, int nnz, REAL *Kg, int first_el, i
                 }
             }
         }			
-    // free(K);
+    free(K);
     }
 }
 

@@ -175,7 +175,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     AssembleBoundaryData();
 }
 
- #define ColorbyIp_Q
+ // #define ColorbyIp_Q
 
 void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
 
@@ -184,13 +184,14 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 
     int64_t nnz = Kg.size();
 #ifdef ColorbyIp_Q
+    // printf("cpu nnz = %d\n", nnz);
     Kg.resize(nnz*fMaxNPoints);
     for (int64_t i = 0; i < nnz; i++) {
         Kg[i] = 0.0;
     }
 #endif
     
-    TPZVec<int> &indexes = fIntegrator.DoFIndexes();
+    TPZVec<int> & indexes = fIntegrator.DoFIndexes();
     TPZVec<int> & el_n_dofs = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes;
     TPZVec<int> & cols_first_index = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex;
     Timer timer;   
@@ -209,6 +210,8 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
 #ifdef USING_CUDA
     fCudaCalls.SetHeapSize();
 #ifdef ColorbyIp_Q
+    // printf("d nnz = %d\n", nnz);
+    // printf("d fMaxNPoints = %d\n", fMaxNPoints);
     d_Kg.resize(nnz*fMaxNPoints);
     d_Kg.Zero();
 #else
@@ -261,7 +264,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
             int iel = m_el_color_indexes[i];
             int ip = m_ip_color_indexes[i];
             /// Compute Elementary Matrix.
-            if(i != 1) continue;
+
             TPZFMatrix<STATE> K;
             fIntegrator.ComputeTangentMatrix(ip,iel,K);
 #else
@@ -287,7 +290,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
                     if (i_dest <= j_dest) {
                         int64_t  index = me(m_IA_to_sequence, m_JA_to_sequence, i_dest, j_dest);
                         int64_t  index_linear = me(m_IA_to_sequence_linear, m_JA_to_sequence_linear, i_dest, j_dest);
-                        std::cout << index << std::endl;
+                        // std::cout << index << std::endl;
 #ifdef ColorbyIp_Q
                         if(ip == 0) {
                              STATE val_linear = fSparseMatrixLinear->A()[index_linear];

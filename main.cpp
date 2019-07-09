@@ -57,17 +57,18 @@ void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData material, int n_threads,
 void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_material, int npoints, std::ostream &out, bool euler = false);
 
 int main(int argc, char *argv[]) {
-    int pOrder = 2; // Computational mesh order
+    int pOrder = 3; // Computational mesh order
     bool render_vtk_Q = false;
     
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
+    // std::string msh_file = source_dir + "/gmsh/wellbore_3p844k.msh";
    // std::string msh_file = source_dir + "/gmsh/wellbore_15p876k.msh";
-   // std::string msh_file = source_dir + "/gmsh/wellbore_64p516k.msh";
-//    std::string msh_file = source_dir + "/gmsh/wellbore_260p100k.msh";
+   std::string msh_file = source_dir + "/gmsh/wellbore_64p516k.msh";
+   // std::string msh_file = source_dir + "/gmsh/wellbore_260p100k.msh";
 //    std::string msh_file = source_dir + "/gmsh/wellbore_1044p484k.msh";
 //    std::string msh_file = source_dir + "/gmsh/wellbore-coarse.msh";
-    std::string msh_file = source_dir + "/gmsh/wellbore.msh";
+    // std::string msh_file = source_dir + "/gmsh/wellbore.msh";
     TPZGeoMesh *gmesh = ReadGeometry(msh_file);
 #ifdef PZDEBUG
     PrintGeometry(gmesh);
@@ -91,7 +92,7 @@ int main(int argc, char *argv[]) {
 
 
 // Defines the analysis
-    int n_threads = 0;
+    int n_threads = 8;
     
 #ifdef USING_TBB
 #include "tbb/task_scheduler_init.h"
@@ -102,8 +103,8 @@ int main(int argc, char *argv[]) {
     TPZAnalysis *analysis;
     // {
         timer.Start();
-//        analysis = Analysis(cmesh,n_threads);
-        analysis = Analysis_IPFEM(cmesh,n_threads);
+       analysis = Analysis(cmesh,n_threads);
+        // analysis = Analysis_IPFEM(cmesh,n_threads);
         timer.Stop();
         std::cout << "Calling Analysis_IPFEM: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
     // }
