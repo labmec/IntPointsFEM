@@ -1,6 +1,14 @@
 #include "pzreal.h"
 #include "MatMulKernels.h"
 
+#ifdef O_LINEAR
+#define ndof 8
+#elif O_QUADRATIC
+#define ndof 18
+#elif O_CUBIC
+#define ndof 32
+#endif
+
 __device__ void ComputeConstitutiveMatrixDevice(int64_t point_index, REAL *De){
     REAL lambda = 555.555555555556;
     REAL mu = 833.333333333333;
@@ -20,10 +28,20 @@ __device__ void ComputeTangentMatrixDevice(int el_npts, int el_dofs, REAL *stora
 
     int n_sigma_comps = 3;
 
-    // REAL De[3 * 3];
-    // REAL DeBip[3 * 18];
-    REAL *De = (REAL*)malloc(n_sigma_comps * n_sigma_comps * sizeof(REAL));
-    REAL *DeBip = (REAL*)malloc(n_sigma_comps * el_dofs * sizeof(REAL));
+    REAL De[3 * 3];
+
+// int ndof;
+// #ifdef LINEAR
+// ndof = 8;
+// #elif QUADRATIC
+// ndof = 18;
+// #elif CUBIC
+// ndof = 32;
+// #endif
+
+REAL DeBip[3 * ndof];
+    // REAL *De = (REAL*)malloc(n_sigma_comps * n_sigma_comps * sizeof(REAL));
+    // REAL *DeBip = (REAL*)malloc(n_sigma_comps * el_dofs * sizeof(REAL));
     for(int i = 0; i < n_sigma_comps * el_dofs; i++) DeBip[i] = 0;
 
         int c = 0;
@@ -38,15 +56,25 @@ __device__ void ComputeTangentMatrixDevice(int el_npts, int el_dofs, REAL *stora
 
         c += n_sigma_comps * el_dofs;
     }
-    free(De);
-    free(DeBip);
+    // free(De);
+    // free(DeBip);
 }
 
 __device__ void ComputeTangentMatrixDevice(int ip, int el_npts, int el_dofs, REAL *storage, REAL *weight, REAL *K){       
     int n_sigma_comps = 3;
 
     REAL De[3 * 3];
-    REAL DeBip[3 * 18];
+
+// int ndof;
+// #ifdef LINEAR
+// ndof = 8;
+// #elif QUADRATIC
+// ndof = 18;
+// #elif CUBIC
+// ndof = 32;
+// #endif
+
+REAL DeBip[3 * ndof];
     // REAL *De = (REAL*)malloc(n_sigma_comps * n_sigma_comps * sizeof(REAL));
     // REAL *DeBip = (REAL*)malloc(n_sigma_comps * el_dofs * sizeof(REAL));
     for(int i = 0; i < n_sigma_comps * el_dofs; i++) DeBip[i] = 0;
@@ -84,7 +112,6 @@ __device__ int64_t me(int *ia_to_sequence, int *ja_to_sequence, int64_t & i_dest
 // #define ColorbyIp_Q
 
 __global__ 
-__launch_bounds__(2*256, 3)
 void MatrixAssembleKernel(REAL *K, int nel, int nnz, REAL *Kg, int64_t *el_color_index, int *dof_indexes, int *colsizes, int *colfirstindex, 
     int *ia_to_sequence, int *ja_to_sequence, int *ia_to_sequence_linear, int *ja_to_sequence_linear, REAL *KgLinear, int64_t *ip_color_indexes) {
 
@@ -139,7 +166,6 @@ void MatrixAssembleKernel(REAL *K, int nel, int nnz, REAL *Kg, int64_t *el_color
 
 
 __global__ 
-__launch_bounds__(2*256, 3)
 void MatrixAssembleKernel(int nel, int nnz, REAL *Kg, int first_el, int64_t *el_color_index, REAL *weight, int *dof_indexes, 
 	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *ia_to_sequence, int *ja_to_sequence,
     int *ia_to_sequence_linear, int *ja_to_sequence_linear, REAL *KgLinear, int64_t *ip_color_indexes) {
@@ -168,8 +194,16 @@ void MatrixAssembleKernel(int nel, int nnz, REAL *Kg, int first_el, int64_t *el_
         int first_el_ip = rowfirstindex[iel]/n_sigma_comps;
         int matpos = matrixposition[iel];
 
-            // REAL K[18 * 18];
-        REAL *K = (REAL*)malloc(el_dofs * el_dofs * sizeof(REAL));
+// int ndof;
+// #ifdef LINEAR
+// ndof = 8;
+// #elif QUADRATIC
+// ndof = 18;
+// #elif CUBIC
+// ndof = 32;
+// #endif
+REAL K[ndof * ndof];
+        // REAL *K = (REAL*)malloc(el_dofs * el_dofs * sizeof(REAL));
         for(int i = 0; i < el_dofs * el_dofs; i++) K[i] = 0;
 #ifdef ColorbyIp_Q            
         ComputeTangentMatrixDevice(ip, el_npts, el_dofs, &storage[matpos], &weight[first_el_ip], K);
@@ -212,7 +246,7 @@ void MatrixAssembleKernel(int nel, int nnz, REAL *Kg, int first_el, int64_t *el_
                 }
             }
         }			
-    free(K);
+    // free(K);
     }
 }
 

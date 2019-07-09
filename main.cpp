@@ -21,7 +21,6 @@
 #include "tbb/task_scheduler_init.h"
 #endif
 
-
 /// Gmsh mesh
 TPZGeoMesh * ReadGeometry(std::string geometry_file);
 void PrintGeometry(TPZGeoMesh * geometry);
@@ -56,9 +55,24 @@ void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData material, int n_threads,
 ///RK Approximation
 void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_material, int npoints, std::ostream &out, bool euler = false);
 
+static bool USING_CUDA_Q;
+
+static bool USING_Hybrid_Q;
+
 int main(int argc, char *argv[]) {
-    int pOrder = atoi(argv[2]); // Computational mesh order
+int pOrder;
+#ifdef O_LINEAR
+    pOrder = 1; // Computational mesh order
+#elif O_QUADRATIC
+    pOrder = 2; // Computational mesh order
+#elif O_CUBIC
+    pOrder = 3; // Computational mesh order
+#endif
+
     bool render_vtk_Q = false;
+    USING_CUDA_Q = true;
+
+
     
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
@@ -93,7 +107,8 @@ int main(int argc, char *argv[]) {
 
 
 // Defines the analysis
-    int n_threads = atoi(argv[3]);
+    int n_threads = 32;
+    // int n_threads = atoi(argv[2]);
     
 #ifdef USING_TBB
 #include "tbb/task_scheduler_init.h"

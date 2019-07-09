@@ -100,6 +100,25 @@ if(ColorbyIp_Q)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DColorbyIp_Q")
 endif(ColorbyIp_Q)
 
+# Polinomial order
+option(O_LINEAR off)
+if(O_LINEAR)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DO_LINEAR")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DO_LINEAR") 
+endif(O_LINEAR)
+
+option(O_QUADRATIC off)
+if(O_QUADRATIC)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DO_QUADRATIC")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DO_QUADRATIC")
+endif(O_QUADRATIC)
+
+option(O_CUBIC off)
+if(O_CUBIC)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DO_CUBIC")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DO_CUBIC")
+endif(O_CUBIC)
+
 # Enabling CUDA
 option(USING_CUDA off)
 if(USING_CUDA)
