@@ -205,9 +205,52 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     int n_colors = m_first_color_index.size()-1;
 #endif   
 
-    fCudaCalls.SetHeapSize();
 
-#ifdef COMPUTE_K_GPU
+#ifdef USING_CUDA
+    #ifdef COMPUTE_K_HYBRID
+    std::cout << "COMPUTE_K_HYBRID" << std::endl;          
+    d_Kg.resize(nnz);
+    d_Kg.Zero();
+
+    /// Serial by color
+    for (int ic = 0; ic < n_colors; ic++) {
+        int first = m_first_color_index[ic];
+        int last = m_first_color_index[ic + 1];
+
+        int el_dofs = el_n_dofs[0];
+        int nel = last - first;
+        TPZVec<STATE> K(el_dofs * el_dofs * nel, 0.);
+
+    #ifdef USING_TBB
+        tbb::parallel_for(size_t(0),size_t(nel),size_t(1),[&](size_t i)
+    #else
+            for (int i = 0; i < nel; i++)
+    #endif
+            {
+                int iel = m_el_color_indexes[first + i];
+
+                /// Compute Elementary Matrix.
+                TPZFMatrix<STATE> Kel;
+                fIntegrator.ComputeTangentMatrix(iel,Kel);
+
+                int stride = el_dofs * el_dofs * i;
+                TPZFMatrix<REAL> K_el_loc(el_dofs, el_dofs, &K[stride], el_dofs * el_dofs);
+                K_el_loc = Kel;
+            }
+    #ifdef USING_TBB
+        );
+    #endif
+        TPZVecGPU<REAL> d_K(K.size());
+        d_K.set(&K[0], K.size());
+
+        fCudaCalls.MatrixAssemble(d_K.getData(), nnz, d_Kg.getData(), first, last, &d_el_color_indexes.getData()[first], fIntegrator.DoFIndexesDev().getData(),
+            fIntegrator.IrregularBlocksMatrix().BlocksDev().dColSizes.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColFirstIndex.getData(),
+            d_IA_to_sequence.getData(), d_JA_to_sequence.getData(), d_IA_to_sequence_linear.getData(), d_JA_to_sequence_linear.getData(), d_KgLinear.getData(), 
+            d_ip_color_indexes.getData());        
+    }
+    d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU
+    #else
+    fCudaCalls.SetHeapSize();
     std::cout << "COMPUTE_K_GPU" << std::endl;
     #ifdef ColorbyIp_Q
         d_Kg.resize(nnz*fMaxNPoints);
@@ -233,9 +276,8 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
                 d_IA_to_sequence_linear.getData(), d_JA_to_sequence_linear.getData(), d_KgLinear.getData(), d_ip_color_indexes.getData());
         }
         d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU
-#endif
-
-#ifdef COMPUTE_K_CPU
+    #endif
+#else
     std::cout << "COMPUTE_K_CPU" << std::endl;
     for (int ic = 0; ic < n_colors; ic++) {
     #ifdef USING_TBB
@@ -311,49 +353,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZ
     #endif
 #endif
 
-#ifdef COMPUTE_K_HYBRID
-    std::cout << "COMPUTE_K_HYBRID" << std::endl;          
-    d_Kg.resize(nnz);
-    d_Kg.Zero();
 
-    /// Serial by color
-    for (int ic = 0; ic < n_colors; ic++) {
-        int first = m_first_color_index[ic];
-        int last = m_first_color_index[ic + 1];
-
-        int el_dofs = el_n_dofs[0];
-        int nel = last - first;
-        TPZVec<STATE> K(el_dofs * el_dofs * nel, 0.);
-
-    #ifdef USING_TBB
-        tbb::parallel_for(size_t(0),size_t(nel),size_t(1),[&](size_t i)
-    #else
-            for (int i = 0; i < nel; i++)
-    #endif
-            {
-                int iel = m_el_color_indexes[first + i];
-
-                /// Compute Elementary Matrix.
-                TPZFMatrix<STATE> Kel;
-                fIntegrator.ComputeTangentMatrix(iel,Kel);
-
-                int stride = el_dofs * el_dofs * i;
-                TPZFMatrix<REAL> K_el_loc(el_dofs, el_dofs, &K[stride], el_dofs * el_dofs);
-                K_el_loc = Kel;
-            }
-    #ifdef USING_TBB
-        );
-    #endif
-        TPZVecGPU<REAL> d_K(K.size());
-        d_K.set(&K[0], K.size());
-
-        fCudaCalls.MatrixAssemble(d_K.getData(), nnz, d_Kg.getData(), first, last, &d_el_color_indexes.getData()[first], fIntegrator.DoFIndexesDev().getData(),
-            fIntegrator.IrregularBlocksMatrix().BlocksDev().dColSizes.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColFirstIndex.getData(),
-            d_IA_to_sequence.getData(), d_JA_to_sequence.getData(), d_IA_to_sequence_linear.getData(), d_JA_to_sequence_linear.getData(), d_KgLinear.getData(), 
-            d_ip_color_indexes.getData());        
-    }
-    d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU
-#endif
                           
 //    std::cout << Kg <<std::endl;
 
