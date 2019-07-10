@@ -41,7 +41,7 @@ TPZAnalysis * Analysis(TPZCompMesh * cmesh, int n_threads);
 TPZAnalysis * Analysis_IPFEM(TPZCompMesh * cmesh, int n_threads);
 
 ///Solve using Newton method
-void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance);
+void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance, bool modified_thomas_accel_Q);
 
 /// Accept solution
 void AcceptPseudoTimeStepSolution(TPZAnalysis * an, TPZCompMesh * cmesh);
@@ -70,6 +70,7 @@ int pOrder;
 #endif
 
     bool render_vtk_Q = true;
+    bool modified_thomas_accel_Q = true;
     USING_CUDA_Q = true;
 
 
@@ -119,18 +120,18 @@ int pOrder;
     TPZAnalysis *analysis;
     // {
         timer.Start();
-       // analysis = Analysis(cmesh,n_threads);
-        analysis = Analysis_IPFEM(cmesh,n_threads);
+        analysis = Analysis(cmesh,n_threads);
+//        analysis = Analysis_IPFEM(cmesh,n_threads);
         timer.Stop();
         std::cout << "Calling Analysis_IPFEM: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
     // }
     
 // Calculates the solution using Newton method
-    int n_iterations = 80;
-    REAL tolerance = 1.e-4;
+    int n_iterations = 100;
+    REAL tolerance = 1.e-7;
     // {
         timer.Start();
-        Solution(analysis, n_iterations, tolerance);
+        Solution(analysis, n_iterations, tolerance, modified_thomas_accel_Q);
         timer.Stop();
         std::cout << "Calling Solution: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
     // }
@@ -148,13 +149,19 @@ int pOrder;
     return 0;
 }
 
-void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
+void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance, bool modified_thomas_accel_Q) {
     bool stop_criterion_Q = false;
     REAL norm_res, norm_delta_du;
 
     int neq = analysis->Solution().Rows();
     std::cout  << "Solving a NLS with DOF = " << neq << std::endl;
 
+    /// Thomas correction
+    TPZFMatrix<REAL> delta_u_tilde;
+    
+    /// Modified Thomas cceleration factor
+    REAL mt_alpha = 1.0;
+    
     Timer timer;   
     timer.TimeUnit(Timer::ESeconds);
     timer.TimerOption(Timer::EChrono);
@@ -175,15 +182,51 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
         std::cout << "Calling Linear Solve: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
 
         delta_du = analysis->Mesh()->Solution();
-        du += delta_du;
-        analysis->LoadSolution(du);
+        
+        if (modified_thomas_accel_Q) { // Accelerated conventional initial stiffness method
+            du += mt_alpha*delta_du;
+            analysis->LoadSolution(du);
+            analysis->AssembleResidual();
+            analysis->Solve();
+            
+            delta_u_tilde = analysis->Solution();
+            norm_delta_du = Norm(mt_alpha*delta_du + delta_u_tilde);
+            
+            int n_equ = delta_u_tilde.Rows();
+            REAL num = 0, dem = 0;
+            
+#ifdef USING_TBB
+            tbb::parallel_for(size_t(0), size_t(n_equ), size_t(1) , [& num, & dem, & mt_alpha, & delta_du, & delta_u_tilde] (size_t & i) {
+                num += (mt_alpha*delta_du(i,0))*(delta_u_tilde(i,0));
+                dem += (mt_alpha*delta_du(i,0))*(mt_alpha*delta_du(i,0));
+            }
+);
+#else
+            for (int i = 0; i < n_equ; i++) {
+                num += (mt_alpha*delta_du(i,0))*(delta_u_tilde(i,0));
+                dem += (mt_alpha*delta_du(i,0))*(mt_alpha*delta_du(i,0));
+            }
+#endif
+            
+            REAL s = num/dem;
+            mt_alpha += s;
+        
+            du += delta_u_tilde;
+            analysis->LoadSolution(du);
+            
+        }else{ // Conventional initial stiffness method
+            du += delta_du;
+            norm_delta_du = Norm(delta_du);
+            analysis->LoadSolution(du);
+        }
+        
+
 
         timer.Start();
         analysis->AssembleResidual();
         timer.Stop();
         std::cout << "Calling AssembleResidual: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
 
-        norm_delta_du = Norm(delta_du);
         norm_res = Norm(analysis->Rhs());
         stop_criterion_Q = norm_res < tolerance & norm_delta_du < tolerance;
         std::cout << "Nonlinear process : delta_du norm = " << norm_delta_du << std::endl;
@@ -196,10 +239,10 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance) {
             break;
         }
         // {
-            timer.Start();
-            analysis->Assemble();
-            timer.Stop();
-            std::cout << "Calling Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+//            timer.Start();
+//            analysis->Assemble();
+//            timer.Stop();
+//            std::cout << "Calling Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
         // }
 
     }
