@@ -443,19 +443,73 @@ void TPZConstitutiveLawProcessor::TranslateStress(TPZFMatrix<REAL> &full_stress,
 }
 
 #ifdef USING_CUDA
-void TPZConstitutiveLawProcessor::ComputeSigma(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &sigma) {
+void TPZConstitutiveLawProcessor::ComputeSigma(TPZVecGPU<REAL> &glob_delta_strain, TPZVecGPU<REAL> &glob_sigma) {
     REAL lambda = fMaterial->GetPlasticModel().fER.Lambda();
     REAL mu =  fMaterial->GetPlasticModel().fER.Mu();
     REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();
     REAL mc_psi = fMaterial->GetPlasticModel().fYC.Psi();
     REAL mc_cohesion = fMaterial->GetPlasticModel().fYC.Cohesion();
 
-    int64_t rows = delta_strain.getSize();
-    sigma.resize(rows);
+    int64_t rows = glob_delta_strain.getSize();
+    glob_sigma.resize(rows);
 
+    TPZMatWithMem<TPZElastoPlasticMem> * mat = dynamic_cast<TPZMatWithMem<TPZElastoPlasticMem> *>(fMaterial);
 
+    fCudaCalls->ComputeSigma(mat->GetUpdateMem(), fNpts, glob_delta_strain.getData(), glob_sigma.getData(), lambda, mu, mc_phi, mc_psi, mc_cohesion, dPlasticStrain.getData(), 
+        dMType.getData(), dAlpha.getData(), dSigma.getData(), dStrain.getData(), dWeight.getData());
 
-    fCudaCalls->ComputeSigma(fNpts, delta_strain.getData(), sigma.getData(), lambda, mu, mc_phi, mc_psi, mc_cohesion, dPlasticStrain.getData(),  dMType.getData(), dAlpha.getData(), dWeight.getData());
+        if (mat->GetUpdateMem()) {
+            dPlasticStrain.get(&fPlasticStrain(0,0), 6 * fNpts);
+            dSigma.get(&fSigma(0,0), 6 * fNpts);
+            dStrain.get(&fStrain(0,0), 6 * fNpts);
+            dMType.get(&fMType(0,0), 6 * fNpts);
+            dAlpha.get(&fAlpha(0,0), 6 * fNpts);
+
+        
+#ifdef USING_TBB
+        tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1), [this, mat] (size_t & ipts){
+            
+            TPZFNMatrix<6,REAL> strain(6, 1, 0.);
+            TPZFNMatrix<6,REAL> plastic_strain(6, 1, 0.);
+            TPZFNMatrix<6,REAL> sigma(6, 1, 0.);
+            
+            TPZElastoPlasticMem & memory = mat->MemItem(ipts);
+            fSigma.GetSub(6 * ipts, 0, 6, 1, sigma);
+            fStrain.GetSub(6 * ipts, 0, 6, 1, strain);
+            fPlasticStrain.GetSub(6 * ipts, 0, 6, 1, plastic_strain);
+            memory.m_sigma.CopyFrom(sigma);
+            memory.m_elastoplastic_state.m_eps_t.CopyFrom(strain);
+            memory.m_elastoplastic_state.m_eps_p.CopyFrom(plastic_strain);
+            memory.m_elastoplastic_state.m_hardening = fAlpha(ipts,0);
+            memory.m_elastoplastic_state.m_m_type = fMType(ipts,0);
+            
+        }
+                          );
+#else
+        // Lambda expression to update memory
+        auto UpdateElastoPlasticState = [this, mat, & strain, & plastic_strain, & sigma] (int ipts)
+        {
+            
+            TPZElastoPlasticMem & memory = mat->MemItem(ipts);
+            fSigma.GetSub(6 * ipts, 0, 6, 1, sigma);
+            fStrain.GetSub(6 * ipts, 0, 6, 1, strain);
+            fPlasticStrain.GetSub(6 * ipts, 0, 6, 1, plastic_strain);
+            memory.m_sigma.CopyFrom(sigma);
+            memory.m_elastoplastic_state.m_eps_t.CopyFrom(strain);
+            memory.m_elastoplastic_state.m_eps_p.CopyFrom(plastic_strain);
+            memory.m_elastoplastic_state.m_hardening = fAlpha(ipts,0);
+            memory.m_elastoplastic_state.m_m_type = fMType(ipts,0);
+            
+        };
+        
+        for (int ipts = 0; ipts < fNpts; ipts++)
+        {
+            UpdateElastoPlasticState(ipts);
+            
+        }
+        
+#endif
+    }
 
 }
 #endif

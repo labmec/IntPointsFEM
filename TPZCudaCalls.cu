@@ -159,9 +159,11 @@ void TPZCudaCalls::SpMSpM(int opt, int sym, int m, int n, int k, int nnzA, REAL 
 	}	
 }
 
-void TPZCudaCalls::ComputeSigma(int npts, REAL *delta_strain, REAL *sigma, REAL lambda, REAL mu, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL *plastic_strain,  REAL *m_type, REAL *alpha, REAL *weight){
+void TPZCudaCalls::ComputeSigma(bool update_mem, int npts, REAL *glob_delta_strain, REAL *glob_sigma, REAL lambda, REAL mu, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL *dPlasticStrain,  
+	REAL *dMType, REAL *dAlpha, REAL *dSigma, REAL *dStrain, REAL *weight) {
+	
 	int numBlocks = (npts + 256 - 1) / 256;
-	ComputeSigmaKernel<<<numBlocks,256>>> (npts, delta_strain, sigma, lambda, mu, mc_phi, mc_psi, mc_cohesion, plastic_strain, m_type, alpha, weight);
+	ComputeSigmaKernel<<<numBlocks,256>>> (update_mem, npts, glob_delta_strain, glob_sigma, lambda, mu, mc_phi, mc_psi, mc_cohesion, dPlasticStrain, dMType, dAlpha, dSigma, dStrain, weight);
 	cudaDeviceSynchronize();
 	cudaError_t error = cudaGetLastError();
 	if (error != cudaSuccess) {

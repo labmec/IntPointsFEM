@@ -20,15 +20,15 @@ __device__ void TranslateStrainDevice(REAL *delta_strain, REAL *full_delta_strai
     }
 }
 
-__device__ void ElasticStrainDevice(REAL *plastic_strain, REAL *elastic_strain) {
+__device__ void ElasticStrainDevice(REAL *plastic_strain, REAL *strain, REAL *elastic_strain) {
     for(int i = 0; i < 6; i++) {
-        elastic_strain[i] -= plastic_strain[i];
+        elastic_strain[i] = strain[i] - plastic_strain[i];
     }
 }
 
-__device__ void PlasticStrainDevice(REAL *delta_strain, REAL *elastic_strain, REAL *plastic_strain) {
+__device__ void PlasticStrainDevice(REAL *strain, REAL *elastic_strain, REAL *plastic_strain) {
     for(int i = 0; i < 6; i++) {
-        plastic_strain[i] = delta_strain[i] - elastic_strain[i];
+        plastic_strain[i] = strain[i] - elastic_strain[i];
     }
 }
 
@@ -77,7 +77,8 @@ __device__ void TranslateStressDevice(REAL *full_stress, REAL *stress){
 }
 
 
-__global__ void ComputeSigmaKernel(int npts, REAL *delta_strain, REAL *sigma, REAL lambda, REAL mu, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL *plastic_strain,  REAL *m_type, REAL *alpha, REAL *weight) {
+__global__ void ComputeSigmaKernel(bool update_mem, int npts, REAL *glob_delta_strain, REAL *glob_sigma, REAL lambda, REAL mu, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, 
+    REAL *dPlasticStrain,  REAL *dMType, REAL *dAlpha, REAL *dSigma, REAL *dStrain, REAL *weight) {
  int ipts = blockIdx.x * blockDim.x + threadIdx.x;
 
     __shared__ REAL K;
@@ -86,54 +87,61 @@ __global__ void ComputeSigmaKernel(int npts, REAL *delta_strain, REAL *sigma, RE
     K = lambda + 2 * mu/3;
     G = mu;
 
-    // REAL el_delta_strain[3];
-    // REAL full_delta_strain[6];
+    REAL strain[6];
     REAL elastic_strain[6];
-    REAL full_sigma[6];
-    REAL full_plastic_strain[6];
-    REAL el_tensor[3];
-    // REAL eigenvalues[3];
+    REAL sigma[6];
+    REAL plastic_strain[6];
+    REAL aux_tensor[3];
+
     REAL eigenvectors[9];
     REAL sigma_projected[3];
-    // REAL full_sigma[6];
 
     REAL el_alpha;
     int el_mtype;
 
     if(ipts < npts) {
         for(int i = 0; i < 3; i++) {
-            el_tensor[i] = delta_strain[3*ipts + i];
+            aux_tensor[i] = glob_delta_strain[3*ipts + i];
         }
         for(int i = 0; i < 6; i++) {
-            full_plastic_strain[i] = plastic_strain[6*ipts + i];
-        }
+            strain[i] = dStrain[6*ipts + i];
+        }        
 
         // Compute sigma
-        TranslateStrainDevice(el_tensor, elastic_strain);
-        ElasticStrainDevice(full_plastic_strain, elastic_strain);
-        ComputeTrialStressDevice(elastic_strain, full_sigma, mu, lambda);
-        SpectralDecompositionDevice(full_sigma, sigma_projected, eigenvectors);
+        TranslateStrainDevice(aux_tensor, strain);
+
+        for(int i = 0; i < 6; i++) {
+            plastic_strain[i] = dPlasticStrain[6*ipts + i];
+        }
+
+        ElasticStrainDevice(plastic_strain, strain, elastic_strain);
+        ComputeTrialStressDevice(elastic_strain, sigma, mu, lambda);
+        SpectralDecompositionDevice(sigma, sigma_projected, eigenvectors);
         ProjectSigmaDevice(sigma_projected, sigma_projected, el_mtype, el_alpha, mc_phi, mc_psi, mc_cohesion, K, G);
-        ReconstructStressTensorDevice(sigma_projected, eigenvectors, full_sigma);
+        ReconstructStressTensorDevice(sigma_projected, eigenvectors, sigma);
 
         // Update plastic strain
-        ComputeStrainDevice(full_sigma, elastic_strain, mu, lambda);
-        PlasticStrainDevice(elastic_strain, elastic_strain, full_plastic_strain);
+        ComputeStrainDevice(sigma, elastic_strain, mu, lambda);
+        PlasticStrainDevice(strain, elastic_strain, plastic_strain);
 
         //Copy to stress vector
-        TranslateStressDevice(full_sigma, el_tensor);
+        TranslateStressDevice(sigma, aux_tensor);
         for(int i = 0; i < 3; i++) {
-            sigma[3*ipts + i] = weight[ipts] * el_tensor[i];
+            glob_sigma[3*ipts + i] = weight[ipts] * aux_tensor[i];
         }
 
-        //Copy to PlasticStrain vector
-        for(int i = 0; i < 6; i++) {
-            plastic_strain[6*ipts + i] = full_plastic_strain[i];
+        if(update_mem) {
+            //Update mem
+            for(int i = 0; i < 6; i++) {
+                dSigma[6*ipts + i] = sigma[i];
+                dStrain[6*ipts + i] = strain[i];
+                dPlasticStrain[6*ipts + i] = plastic_strain[i];
+            }
+            dMType[ipts] = el_mtype;
+            dAlpha[ipts] = el_alpha;
+
         }
 
-        //Copy to MType and Alpha vectors
-        m_type[ipts] = el_mtype;
-        alpha[ipts] = el_alpha;
     }
 }
 

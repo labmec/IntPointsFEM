@@ -39,7 +39,8 @@ public:
 
 	void SpMV(int opt, int sym, int m, int k, int nnz, REAL alpha, REAL *csrVal, int *csrRowPtr, int *csrColInd, REAL *B, REAL *C) ; 
 
-	void ComputeSigma(int npts, REAL *delta_strain, REAL *sigma, REAL lambda, REAL mu, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL *plastic_strain,  REAL *m_type, REAL *alpha, REAL *weight);
+	void ComputeSigma(bool update_mem, int npts, REAL *glob_delta_strain, REAL *glob_sigma, REAL lambda, REAL mu, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL *dPlasticStrain,  
+		REAL *dMType, REAL *dAlpha, REAL *dSigma, REAL *dStrain, REAL *weight);
 
 	void MatrixAssemble(int nnz, REAL *K, int first_el, int last_el, int64_t *el_color_index, REAL *weight, int *dof_indexes,
 		REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *ia_to_sequence, int *ja_to_sequence,
