@@ -79,7 +79,7 @@ int pOrder;
     std::string source_dir = SOURCE_DIR;
     // std::string mesh = argv[1];
     // std::string msh_file = source_dir + "/gmsh/wellbore_" + mesh + "k.msh";
-    std::string msh_file = source_dir + "/gmsh/wellbore_3k.msh";
+    std::string msh_file = source_dir + "/gmsh/wellbore_64k.msh";
     // std::string msh_file = source_dir + "/gmsh/wellbore_64p516k.msh";
    // std::string msh_file = source_dir + "/gmsh/wellbore_260p100k.msh";
 //    std::string msh_file = source_dir + "/gmsh/wellbore_1044p484k.msh";
@@ -120,8 +120,8 @@ int pOrder;
     TPZAnalysis *analysis;
     // {
         timer.Start();
-        analysis = Analysis(cmesh,n_threads);
-//        analysis = Analysis_IPFEM(cmesh,n_threads);
+//        analysis = Analysis(cmesh,n_threads);
+        analysis = Analysis_IPFEM(cmesh,n_threads);
         timer.Stop();
         std::cout << "Calling Analysis_IPFEM: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
     // }
