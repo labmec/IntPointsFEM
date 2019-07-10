@@ -107,7 +107,7 @@ int pOrder;
 
 
 // Defines the analysis
-    int n_threads = 32;
+    int n_threads = 24;
     // int n_threads = atoi(argv[2]);
     
 #ifdef USING_TBB

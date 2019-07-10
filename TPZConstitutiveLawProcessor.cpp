@@ -282,6 +282,8 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> & glob_delta_str
         glob_sigma.PutSub(3 * ipts, 0, aux_tensor);
         
         if (mat->GetUpdateMem()) {
+            fSigma.AddSub(6 * ipts, 0, sigma);
+            
             //Accumulate to strain vector
             fStrain.AddSub(6 * ipts, 0, strain);
             
