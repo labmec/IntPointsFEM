@@ -95,8 +95,14 @@ private:
 
     TPZVecGPU<REAL> dWeight;
 
+    TPZVecGPU<REAL> dSigma;
+
+    TPZVecGPU<REAL> dStrain;
+
     TPZVecGPU<REAL> dPlasticStrain;
+
     TPZVecGPU<REAL> dMType;
+    
     TPZVecGPU<REAL> dAlpha;
 #endif
 

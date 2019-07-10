@@ -19,7 +19,13 @@
 TPZConstitutiveLawProcessor::TPZConstitutiveLawProcessor() : fNpts(-1), fWeight(0), fMaterial(), fPlasticStrain(0,0), fMType(0,0), fAlpha(0,0) {
 #ifdef USING_CUDA
     fCudaCalls = new TPZCudaCalls();
+
     dWeight.resize(0);
+    dSigma.resize(0);
+    dStrain.resize(0);
+    dPlasticStrain.resize(0);
+    dMType.resize(0);
+    dAlpha.resize(0);
 #endif
 }
 
@@ -40,6 +46,15 @@ TPZConstitutiveLawProcessor::TPZConstitutiveLawProcessor(const TPZConstitutiveLa
     fPlasticStrain = copy.fPlasticStrain;
     fMType = copy.fMType;
     fAlpha = copy.fAlpha;
+
+#ifdef USING_CUDA
+    dWeight = copy.dWeight;
+    dSigma = copy.dSigma;
+    dStrain = copy.dStrain;
+    dPlasticStrain = copy.dPlasticStrain;
+    dMType = copy.dMType;
+    dAlpha = copy.dAlpha;
+#endif
 }
 
 TPZConstitutiveLawProcessor &TPZConstitutiveLawProcessor::operator=(const TPZConstitutiveLawProcessor &copy) {
@@ -53,6 +68,15 @@ TPZConstitutiveLawProcessor &TPZConstitutiveLawProcessor::operator=(const TPZCon
     fPlasticStrain = copy.fPlasticStrain;
     fMType = copy.fMType;
     fAlpha = copy.fAlpha;
+
+#ifdef USING_CUDA
+    dWeight = copy.dWeight;
+    dSigma = copy.dSigma;
+    dStrain = copy.dStrain;
+    dPlasticStrain = copy.dPlasticStrain;
+    dMType = copy.dMType;
+    dAlpha = copy.dAlpha;
+#endif
 
     return *this;
 }
@@ -76,6 +100,11 @@ void TPZConstitutiveLawProcessor::SetUpDataByIntPoints(int64_t npts) {
     fAlpha.Zero();
 
     #ifdef USING_CUDA
+    dSigma.resize(6 * fNpts);
+    dSigma.Zero();
+    
+    dStrain.resize(6 * fNpts);
+    dStrain.Zero();
 
     dPlasticStrain.resize(6 * fNpts);
     dPlasticStrain.Zero();
