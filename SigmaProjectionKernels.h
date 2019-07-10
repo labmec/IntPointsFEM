@@ -207,7 +207,7 @@ __device__ void ReturnMappingApexDevice(REAL *eigenvalues, REAL *sigma_projected
 	}
 }
 
-__device__ void ProjectSigmaDevice(REAL *eigenvalues, REAL *sigma_projected, int m_type, REAL alpha, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL K, REAL G) {
+__device__ void ProjectSigmaDevice(REAL *eigenvalues, REAL *sigma_projected, int &m_type, REAL &alpha, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL K, REAL G) {
 
 	bool check = false;
 	m_type = 0;
