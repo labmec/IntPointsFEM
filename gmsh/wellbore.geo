@@ -18,7 +18,11 @@ LargeCBurdenQ = 1;
 If(LargeCBurdenQ)
 	nt = 32;
 	nr = 32;
-	radial_progression = 1.01125;
+	radial_progression = 1.175; // 32
+	//radial_progression = 1.075; // 64
+	//radial_progression = 1.04; // 128
+	//radial_progression = 1.0175; // 256
+	//radial_progression = 1.009; // 512
 Else
 	nt = 2;
 	nr = 2;
