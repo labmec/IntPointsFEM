@@ -522,3 +522,11 @@ void TPZConstitutiveLawProcessor::TransferDataToGPU() {
     dWeight.set(&fWeight[0], fWeight.size());
 }
 #endif
+
+#ifdef USING_CUDA
+void TPZConstitutiveLawProcessor::De() {
+    REAL lambda = fMaterial->GetPlasticModel().fER.Lambda();
+    REAL mu = fMaterial->GetPlasticModel().fER.G();
+    fCudaCalls->DeToDevice(lambda, mu); 
+}
+#endif

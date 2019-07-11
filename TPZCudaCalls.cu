@@ -204,6 +204,12 @@ void TPZCudaCalls::MatrixAssemble(REAL *K, int nnz, REAL *Kg, int first_el, int 
 	}
 }
 
+void TPZCudaCalls::DeToDevice(REAL lambda, REAL mu) {
+		REAL De_host[] = {lambda + 2.0*mu, 0, lambda, 0, mu, 0, lambda, 0, lambda + 2.0*mu};
+		cudaMemcpyToSymbol(De, &De_host, 9 * sizeof(REAL));
+	}
+
+
 void TPZCudaCalls::SolveCG(int n, int nnzA, REAL *csrValA, int *csrRowPtrA, int *csrColIndA, REAL *r, REAL *x) {
     if(cusparse_h == false) {
         cusparse_h = true;

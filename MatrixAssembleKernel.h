@@ -9,35 +9,20 @@
 #define ndof 32
 #endif
 
-__device__ void ComputeConstitutiveMatrixDevice(int64_t point_index, REAL *De){
-    REAL lambda = 555.555555555556;
-    REAL mu = 833.333333333333;
-    
-    De[0] = lambda + 2.0*mu;
-    De[1] = 0.;
-    De[2] = lambda;
-    De[3] = 0.;
-    De[4]= mu;
-    De[5]= 0.;
-    De[6] = lambda;
-    De[7] = 0.;
-    De[8]= lambda + 2.0*mu;
-}
+__constant__ REAL De[3 * 3];
 
 __device__ void ComputeTangentMatrixDevice(int el_npts, int el_dofs, REAL *storage, REAL weight, REAL *K){   
 
     int n_sigma_comps = 3;
 
-    REAL De[3 * 3];
 REAL DeBip[3 * ndof];
-    // REAL *De = (REAL*)malloc(n_sigma_comps * n_sigma_comps * sizeof(REAL));
     // REAL *DeBip = (REAL*)malloc(n_sigma_comps * el_dofs * sizeof(REAL));
     for(int i = 0; i < n_sigma_comps * el_dofs; i++) DeBip[i] = 0;
 
         int c = 0;
 // #pragma unroll
     // for (int ip = 0; ip < el_npts; ip++) {
-    	ComputeConstitutiveMatrixDevice(0,De);
+    	// ComputeConstitutiveMatrixDevice(0,De);
 
 
         REAL omega = weight;
@@ -134,6 +119,8 @@ void MatrixAssembleKernel(int nel, int nnz, REAL *Kg, int first_el, int64_t *el_
         // for(int i = 0; i < el_dofs * el_dofs; i++) s_K[i + threadIdx.x * ndof * ndof] = 0;
         for(int i = 0; i < el_dofs * el_dofs; i++) K[i] = 0;
 
+// int div = 0;
+// for(int)
         __shared__ REAL s_storage[250 * 8 * 3];
         for (int ip = 0; ip < el_npts; ip++) {
             for(int i = 0; i < 8 * 3; i++) s_storage[i + threadIdx.x * 8 * 3] = storage[matpos + i + ip * 8 * 3];

@@ -58,6 +58,8 @@ public:
 		}
 	}
 
+	void DeToDevice(REAL lambda, REAL mu);
+	
 private:
 	cusparseHandle_t handle_cusparse;
 	bool cusparse_h;

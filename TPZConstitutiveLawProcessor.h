@@ -67,6 +67,8 @@ public:
     void De(TPZFMatrix<REAL> & De);
 
 #ifdef USING_CUDA
+    void De();
+    
     void ComputeSigma(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &sigma);
 
     void TransferDataToGPU();

@@ -258,12 +258,16 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 
     int n_colors = m_first_color_index.size()-1;
 
+#ifdef USING_CUDA      
+    d_Kg.resize(nnz);
+    d_Kg.Zero();
+    fIntegrator.ConstitutiveLawProcessor().De();
+#endif
+
 
 #ifdef USING_CUDA
     #ifdef COMPUTE_K_HYBRID
     std::cout << "COMPUTE_K_HYBRID" << std::endl;          
-    d_Kg.resize(nnz);
-    d_Kg.Zero();
 
     /// Serial by color
     for (int ic = 0; ic < n_colors; ic++) {
@@ -302,12 +306,8 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     }
     d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU
     #else
-    fCudaCalls.SetHeapSize();
-    std::cout << "COMPUTE_K_GPU" << std::endl;
-    d_Kg.resize(nnz);
-    d_Kg.Zero();
 
-    timer.Start();
+    std::cout << "COMPUTE_K_GPU" << std::endl;
     /// Serial by color
     for (int ic = 0; ic < n_colors; ic++) {
         int first = m_first_color_index[ic];
@@ -318,8 +318,6 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
             fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowFirstIndex.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColFirstIndex.getData(),
             fIntegrator.IrregularBlocksMatrix().BlocksDev().dMatrixPosition.getData(), d_IA_to_sequence.getData(), d_JA_to_sequence.getData());
     }
-    timer.Stop();
-    std::cout << "Loops: " << timer.ElapsedTime() << std::endl;
     d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU
     #endif
 #else
@@ -404,8 +402,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     );
     #endif
         
-#ifdef ColorWordAssembly_Q
-                          
+#ifdef ColorWordAssembly_Q                          
         /// Scatter to Kg
         cblas_dsctr(n_l_indexes, &Kc[0], &m_color_l_sequence[first_l], &Kg[0]);
                           
