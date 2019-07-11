@@ -208,7 +208,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     AssembleBoundaryData();
 }
 
-//#define ColorWordAssembly_Q
+#define ColorWordAssembly_Q
 
  void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
 
@@ -292,14 +292,12 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 #else
     std::cout << "COMPUTE_K_CPU" << std::endl;
     for (int ic = 0; ic < n_colors; ic++) {
-        
+    
+#ifdef ColorWordAssembly_Q
         int first = m_first_color_index[ic];
         int last = m_first_color_index[ic + 1];
-        
         int el_dofs = el_n_dofs[0];
         int nel_per_color = last - first;
-        
-#ifdef ColorWordAssembly_Q
         FillLIndexes(indexes, el_n_dofs, cols_first_index, ic);
         int n_l_indexes = m_color_l_sequence.size();
         TPZVec<REAL> Kc(n_l_indexes,0.0);
@@ -389,16 +387,12 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 #endif
 
      
-      for(int i = 0; i < stiff.Rows(); i++) {
-          for(int j = 0; j < stiff.Cols(); j++) {
-              REAL val = stiff.GetVal(i,j) + fSparseMatrixLinear->GetVal(i, j);
-              stiff.PutVal(i, j, val);
-          }
+    for(int i = 0; i < stiff.Rows(); i++) {
+      for(int j = 0; j < stiff.Cols(); j++) {
+          REAL val = stiff.GetVal(i,j) + fSparseMatrixLinear->GetVal(i, j);
+          stiff.PutVal(i, j, val);
       }
-
-     std::cout << "Kg = " << std::endl;
-     std::cout << Kg <<std::endl;
-    
+    }
 
     timer.Stop();
     std::cout << "K Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
