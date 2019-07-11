@@ -189,7 +189,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     AssembleBoundaryData();
 }
 
-//#define ColorWordAssembly_Q
+#define ColorWordAssembly_Q
 
  void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
 
@@ -281,7 +281,9 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
         int nel_per_color = last - first;
         FillLIndexes(indexes, el_n_dofs, cols_first_index, ic);
         int n_l_indexes = m_color_l_sequence.size();
-        TPZVec<REAL> Kc(n_l_indexes,0.0);
+        /// Gather from Kg
+        TPZVec<REAL> Kc(n_l_indexes);
+        cblas_dgthr(n_l_indexes, &Kg[0], &Kc[0], &m_color_l_sequence[0]);
 #endif
         
 #ifdef ColorWordAssembly_Q
@@ -314,7 +316,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
             int c = stride;
             for(int i_dof = 0 ; i_dof < el_dofs; i_dof++){
                 for(int j_dof = i_dof; j_dof < el_dofs; j_dof++){
-                    Kc[c] = K(i_dof,j_dof);
+                    Kc[c] += K(i_dof,j_dof);
                     c++;
                 }
             }
@@ -350,16 +352,8 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
         
 #ifdef ColorWordAssembly_Q
                           
-        /// Gather from Kg
-        TPZVec<REAL> ic_kg_entries(n_l_indexes);
-
-        cblas_dgthr(n_l_indexes, &Kg[0], &ic_kg_entries[0], &m_color_l_sequence[0]);
-
-        /// Accumulate data
-        cblas_daxpy(n_l_indexes, 1., &Kc[0], 1., &ic_kg_entries[0], 1.);
-
         /// Scatter to Kg
-        cblas_dsctr(n_l_indexes, &ic_kg_entries[0], &m_color_l_sequence[0], &Kg[0]);
+        cblas_dsctr(n_l_indexes, &Kc[0], &m_color_l_sequence[0], &Kg[0]);
                           
 #endif
                         
