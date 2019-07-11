@@ -14,9 +14,7 @@ __constant__ REAL De[3 * 3];
 __device__ void ComputeTangentMatrixDevice(int el_npts, int el_dofs, REAL *storage, REAL weight, REAL *K){   
 
     REAL DeBip[3 * ndof];
-    // REAL *DeBip = (REAL*)malloc(n_sigma_comps * el_dofs * sizeof(REAL));
-    for(int i = 0; i < 3 * el_dofs; i++) DeBip[i] = 0;
-
+    for(int i = 0; i < 3 * el_dofs; i++) DeBip[i] = 0.0;
     REAL omega = weight;
     MultAddDevice(false, 3, el_dofs, 3, De, &storage[0], DeBip, 1., 0.);
     MultAddDevice(true, el_dofs, el_dofs, 3, &storage[0], DeBip, K, omega, 1.);
@@ -96,39 +94,29 @@ void MatrixAssembleKernel(int nel, int nnz, REAL *Kg, int first_el, int64_t *el_
         int first_el_ip = rowfirstindex[iel]/3;
         int matpos = matrixposition[iel];
 
-        // __shared__ REAL s_K[64 * ndof * ndof];
+
+        int64_t dest[ndof];
         REAL K[ndof * ndof];
         // REAL *K = (REAL*)malloc(el_dofs * el_dofs * sizeof(REAL));
-        // for(int i = 0; i < el_dofs * el_dofs; i++) s_K[i + threadIdx.x * ndof * ndof] = 0;
+        for(int i = 0; i < el_dofs; i++) dest[i] = dof_indexes[colpos + i];
         for(int i = 0; i < el_dofs * el_dofs; i++) K[i] = 0;
-        __shared__ REAL s_storage[64 * 8 * 3]; // max allowed word for 48k
+        __shared__ REAL s_storage[64 * ndof * 3]; // max allowed word is 48k
         for (int ip = 0; ip < el_npts; ip++) {
-            for(int i = 0; i < 8 * 3; i++) s_storage[i + threadIdx.x * 8 * 3] = storage[matpos + i + ip * 8 * 3];
-            ComputeTangentMatrixDevice(el_npts, el_dofs, &s_storage[threadIdx.x * 8 * 3], weight[first_el_ip + ip], K);
-//	    Kg[0] = 0.0;
+            for(int i = 0; i < ndof * 3; i++) {
+               s_storage[i + threadIdx.x * ndof * 3] = storage[matpos + i + ip * ndof * 3];
+            }
+            ComputeTangentMatrixDevice(el_npts, el_dofs, &s_storage[threadIdx.x * ndof * 3], weight[first_el_ip + ip], K);   
         }
-            // int c = 0;
-            // for(int i_dof = 0 ; i_dof < el_dofs; i_dof++){
-            //     for(int j_dof = i_dof; j_dof < el_dofs; j_dof++){
-            //         Kg[c] += K[i_dof * el_dofs + j_dof];
-            //         c++;
-            //     }
-            // }
-
-
-        // ComputeTangentMatrixDevice(el_npts, el_dofs, &storage[matpos], &weight[first_el_ip], &s_K[threadIdx.x * ndof * ndof]);
-        // ComputeTangentMatrixDevice(el_npts, el_dofs, &storage[matpos], &weight[first_el_ip], K);
-
-            for (int i_dof = 0; i_dof < el_dofs; i_dof++) {
-                int64_t i_dest = dof_indexes[colpos + i_dof];
-                for (int j_dof = i_dof; j_dof < el_dofs; j_dof++) {
-                    int64_t j_dest = dof_indexes[colpos + j_dof];
-                    REAL val = K[i_dof * el_dofs + j_dof];
-                    int64_t index = me(ia_to_sequence, ja_to_sequence, i_dest, j_dest);
-                    Kg[index] += val;
-                }
-            }			
-        }
+ 
+        for (int i_dof = 0; i_dof < el_dofs; i_dof++) {
+            int64_t i_dest = dest[i_dof];
+            for (int j_dof = i_dof; j_dof < el_dofs; j_dof++) {
+                int64_t j_dest = dest[j_dof];
+                int64_t index = me(ia_to_sequence, ja_to_sequence, i_dest, j_dest);
+                Kg[index] += K[i_dof * el_dofs + j_dof];
+            }
+        }			
+     }
 
 }
 
