@@ -83,7 +83,7 @@ private:
     
     TPZNumericalIntegrator fIntegrator;
 
-    TPZSYsmpMatrix<STATE> *fSparseMatrixLinear; //-> BC data
+    TPZVerySparseMatrix<STATE> fSparseMatrixLinear; //-> BC data
 
     TPZFMatrix<STATE> fRhsLinear; //-> BC data
     
@@ -100,10 +100,6 @@ private:
     std::vector<int64_t> m_ip_color_indexes;
     
     std::vector<int64_t> m_first_color_index;
-
-    TPZVec<int> m_IA_to_sequence_linear;
-
-    TPZVec<int> m_JA_to_sequence_linear;
 
     #ifdef USING_CUDA
     TPZCudaCalls fCudaCalls;
