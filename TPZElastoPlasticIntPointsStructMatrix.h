@@ -70,6 +70,8 @@ private:
     
     void FillLIndexes(TPZVec<int> & indexes,TPZVec<int> & el_n_dofs,TPZVec<int> & cols_first_index, int ic);
     
+    void FillLIndexes(TPZVec<int> & indexes,TPZVec<int> & el_n_dofs,TPZVec<int> & cols_first_index);
+    
     int fDimension;
     
     struct intpoint_by_element {
@@ -92,6 +94,8 @@ private:
     TPZVec<int> m_JA_to_sequence;
     
     TPZVec<int> m_color_l_sequence;
+    
+    TPZVec<int> m_first_color_l_index;
     
     std::vector<int64_t> m_el_color_indexes;
     

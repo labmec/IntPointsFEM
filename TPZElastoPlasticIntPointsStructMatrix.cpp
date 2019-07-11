@@ -62,7 +62,10 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
         m_JA_to_sequence[i] = stiff->JA()[i];
     }
     
-    
+    TPZVec<int> & indexes = fIntegrator.DoFIndexes();
+    TPZVec<int> & el_n_dofs = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes;
+    TPZVec<int> & cols_first_index = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex;
+    FillLIndexes(indexes, el_n_dofs, cols_first_index);
     
 #ifdef USING_CUDA
     Timer timer;   
@@ -80,6 +83,7 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::FillLIndexes(TPZVec<int> & indexes,TPZVec<int> & el_n_dofs,TPZVec<int> & cols_first_index, int ic){
+    
     
     int first = m_first_color_index[ic];
     int last = m_first_color_index[ic + 1];
@@ -108,6 +112,51 @@ void TPZElastoPlasticIntPointsStructMatrix::FillLIndexes(TPZVec<int> & indexes,T
             }
         }
     }
+    
+}
+
+void TPZElastoPlasticIntPointsStructMatrix::FillLIndexes(TPZVec<int> & indexes,TPZVec<int> & el_n_dofs,TPZVec<int> & cols_first_index){
+    
+    int n_colors = m_first_color_index.size()-1;
+    m_first_color_l_index.resize(n_colors+1);
+    m_first_color_l_index[0]=0;
+    for (int ic = 0; ic < n_colors; ic++) {
+        
+        int first = m_first_color_index[ic];
+        int last = m_first_color_index[ic + 1];
+        int nel_per_color = last - first;
+        int64_t c = 0;
+        for (int i = 0; i < nel_per_color; i++) {
+            int iel = m_el_color_indexes[first + i];
+            int el_dof = el_n_dofs[iel];
+            int n_entries = (el_dof*el_dof + el_dof)/2;
+            c += n_entries;
+        }
+        m_first_color_l_index[ic+1] = c + m_first_color_l_index[ic];
+    }
+    m_color_l_sequence.resize(m_first_color_l_index[n_colors]);
+    
+    for (int ic = 0; ic < n_colors; ic++) {
+        int first = m_first_color_index[ic];
+        int last = m_first_color_index[ic + 1];
+        int nel_per_color = last - first;
+        int64_t c = m_first_color_l_index[ic];
+        for (int i = 0; i < nel_per_color; i++) {
+            int iel = m_el_color_indexes[first + i];
+            int el_dof = el_n_dofs[iel];
+            int pos = cols_first_index[iel];
+            for (int i_dof = 0; i_dof < el_dof; i_dof++) {
+                int64_t i_dest = indexes[pos + i_dof];
+                for (int j_dof = i_dof; j_dof < el_dof; j_dof++) {
+                    int64_t j_dest = indexes[pos + j_dof];
+                    int64_t l_index = me(m_IA_to_sequence, m_JA_to_sequence, i_dest, j_dest);
+                    m_color_l_sequence[c] = l_index;
+                    c++;
+                }
+            }
+        }
+    }
+    
     
 }
 
@@ -183,6 +232,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     int ncolor;
     
     this->ColoredIndexes(element_indexes, dof_indexes, colored_element_indexes, ncolor);
+    
     fIntegrator.SetColorIndexes(colored_element_indexes);
     fIntegrator.SetNColors(ncolor);
 
@@ -279,11 +329,13 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
         int last = m_first_color_index[ic + 1];
         int el_dofs = el_n_dofs[0];
         int nel_per_color = last - first;
-        FillLIndexes(indexes, el_n_dofs, cols_first_index, ic);
-        int n_l_indexes = m_color_l_sequence.size();
+        
+        int first_l = m_first_color_l_index[ic];
+        int last_l = m_first_color_l_index[ic + 1];
+        int n_l_indexes = last_l - first_l;
         /// Gather from Kg
         TPZVec<REAL> Kc(n_l_indexes);
-        cblas_dgthr(n_l_indexes, &Kg[0], &Kc[0], &m_color_l_sequence[0]);
+        cblas_dgthr(n_l_indexes, &Kg[0], &Kc[0], &m_color_l_sequence[first_l]);
 #endif
         
 #ifdef ColorWordAssembly_Q
@@ -353,7 +405,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 #ifdef ColorWordAssembly_Q
                           
         /// Scatter to Kg
-        cblas_dsctr(n_l_indexes, &Kc[0], &m_color_l_sequence[0], &Kg[0]);
+        cblas_dsctr(n_l_indexes, &Kc[0], &m_color_l_sequence[first_l], &Kg[0]);
                           
 #endif
                         
