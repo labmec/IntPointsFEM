@@ -298,8 +298,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 
         fCudaCalls.MatrixAssemble(d_K.getData(), nnz, d_Kg.getData(), first, last, &d_el_color_indexes.getData()[first], fIntegrator.DoFIndexesDev().getData(),
             fIntegrator.IrregularBlocksMatrix().BlocksDev().dColSizes.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColFirstIndex.getData(),
-            d_IA_to_sequence.getData(), d_JA_to_sequence.getData(), d_IA_to_sequence_linear.getData(), d_JA_to_sequence_linear.getData(), d_KgLinear.getData(), 
-            d_ip_color_indexes.getData());        
+            d_IA_to_sequence.getData(), d_JA_to_sequence.getData());        
     }
     d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU
     #else
@@ -307,6 +306,8 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     std::cout << "COMPUTE_K_GPU" << std::endl;
     d_Kg.resize(nnz);
     d_Kg.Zero();
+
+    timer.Start();
     /// Serial by color
     for (int ic = 0; ic < n_colors; ic++) {
         int first = m_first_color_index[ic];
@@ -315,9 +316,10 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
             fIntegrator.DoFIndexesDev().getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dStorage.getData(),
             fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowSizes.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColSizes.getData(),
             fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowFirstIndex.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColFirstIndex.getData(),
-            fIntegrator.IrregularBlocksMatrix().BlocksDev().dMatrixPosition.getData(), d_IA_to_sequence.getData(), d_JA_to_sequence.getData(),
-            d_IA_to_sequence_linear.getData(), d_JA_to_sequence_linear.getData(), d_KgLinear.getData(), d_ip_color_indexes.getData());
+            fIntegrator.IrregularBlocksMatrix().BlocksDev().dMatrixPosition.getData(), d_IA_to_sequence.getData(), d_JA_to_sequence.getData());
     }
+    timer.Stop();
+    std::cout << "Loops: " << timer.ElapsedTime() << std::endl;
     d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU
     #endif
 #else

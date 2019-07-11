@@ -174,13 +174,12 @@ void TPZCudaCalls::ComputeSigma(bool update_mem, int npts, REAL *glob_delta_stra
 }
 
 void TPZCudaCalls::MatrixAssemble(int nnz, REAL *Kg, int first_el, int last_el, int64_t *el_color_index, REAL *weight, int *dof_indexes,
-	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *ia_to_sequence, int *ja_to_sequence,
-	int *ia_to_sequence_linear, int *ja_to_sequence_linear, REAL *KgLinear, int64_t *ip_color_index) {
+	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *ia_to_sequence, int *ja_to_sequence) {
 	int nel = last_el - first_el;
 	int numBlocks = (nel + NT - 1) / NT;
 
 	MatrixAssembleKernel<<<numBlocks,NT>>> (nel, nnz, Kg, first_el, el_color_index, weight, dof_indexes, storage, rowsizes, colsizes, rowfirstindex, colfirstindex, matrixposition, 
-		ia_to_sequence, ja_to_sequence, ia_to_sequence_linear, ja_to_sequence_linear, KgLinear, ip_color_index);
+		ia_to_sequence, ja_to_sequence);
 	cudaDeviceSynchronize();
 	cudaError_t error = cudaGetLastError();
 	if (error != cudaSuccess) {
@@ -191,13 +190,12 @@ void TPZCudaCalls::MatrixAssemble(int nnz, REAL *Kg, int first_el, int last_el, 
 }
 
 void TPZCudaCalls::MatrixAssemble(REAL *K, int nnz, REAL *Kg, int first_el, int last_el, int64_t *el_color_index, int *dof_indexes,
-	int *colsizes, int *colfirstindex, int *ia_to_sequence, int *ja_to_sequence, int *ia_to_sequence_linear, int *ja_to_sequence_linear, 
-	REAL *KgLinear, int64_t *ip_color_index) {
+	int *colsizes, int *colfirstindex, int *ia_to_sequence, int *ja_to_sequence) {
 	int nel = last_el - first_el;
 	int numBlocks = (nel + NT - 1) / NT;
 
-	MatrixAssembleKernel<<<numBlocks,NT>>> (K, nel, nnz, Kg, el_color_index, dof_indexes, colsizes, colfirstindex, 
-    ia_to_sequence, ja_to_sequence, ia_to_sequence_linear, ja_to_sequence_linear, KgLinear, ip_color_index);
+	MatrixAssembleKernel<<<nel,1>>> (K, nel, nnz, Kg, el_color_index, dof_indexes, colsizes, colfirstindex, 
+    ia_to_sequence, ja_to_sequence);
 	cudaDeviceSynchronize();
 	cudaError_t error = cudaGetLastError();
 	if (error != cudaSuccess) {

@@ -113,7 +113,7 @@ __device__ int64_t me(int *ia_to_sequence, int *ja_to_sequence, int64_t & i_dest
 
 __global__ 
 void MatrixAssembleKernel(REAL *K, int nel, int nnz, REAL *Kg, int64_t *el_color_index, int *dof_indexes, int *colsizes, int *colfirstindex, 
-    int *ia_to_sequence, int *ja_to_sequence, int *ia_to_sequence_linear, int *ja_to_sequence_linear, REAL *KgLinear, int64_t *ip_color_indexes) {
+    int *ia_to_sequence, int *ja_to_sequence) {
 
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -122,10 +122,6 @@ void MatrixAssembleKernel(REAL *K, int nel, int nnz, REAL *Kg, int64_t *el_color
 
     if(tid < nel) {
         int iel = el_color_index[tid];
-#ifdef ColorbyIp_Q       
-
-        int ip = ip_color_indexes[tid];
-#endif 
 
         int el_dofs = colsizes[iel];
         int colpos = colfirstindex[iel];
@@ -142,21 +138,8 @@ void MatrixAssembleKernel(REAL *K, int nel, int nnz, REAL *Kg, int64_t *el_color
                 
                 if (i_dest <= j_dest) {
                     int index = me(ia_to_sequence, ja_to_sequence, i_dest, j_dest);
-                    int64_t  index_linear = me(ia_to_sequence_linear, ja_to_sequence_linear, i_dest, j_dest);
+                    Kg[index] += val;
 
-#ifdef ColorbyIp_Q            
-                    if(ip == 0) {
-                     STATE val_linear = KgLinear[index_linear];
-                       Kg[index+nnz*ip] += val + val_linear;
-                   }
-                   else  {
-                    Kg[index+nnz*ip] += val;
-
-                    }
-#else  
-                    STATE val_linear = KgLinear[index_linear];
-                    Kg[index] += val + val_linear;
-#endif  
 
                 }
             }
@@ -167,15 +150,12 @@ void MatrixAssembleKernel(REAL *K, int nel, int nnz, REAL *Kg, int64_t *el_color
 
 __global__ 
 void MatrixAssembleKernel(int nel, int nnz, REAL *Kg, int first_el, int64_t *el_color_index, REAL *weight, int *dof_indexes, 
-	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *ia_to_sequence, int *ja_to_sequence,
-    int *ia_to_sequence_linear, int *ja_to_sequence_linear, REAL *KgLinear, int64_t *ip_color_indexes) {
+	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *ia_to_sequence, int *ja_to_sequence) {
 
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
 	__shared__ int n_sigma_comps;
 	n_sigma_comps = 3;
-
-    // printf("nnz = %d\n", nnz);
 
 	if(tid < nel) {
         int iel = el_color_index[tid];
@@ -184,36 +164,21 @@ void MatrixAssembleKernel(int nel, int nnz, REAL *Kg, int first_el, int64_t *el_
         int ip = ip_color_indexes[tid];
 #endif 
 
-        // printf("iel = %d\n", iel);
-        // printf("nnz = %d\n", nnz);
-        // printf("ip = %d\n", ip);
-
         int el_npts = rowsizes[iel]/n_sigma_comps;
         int el_dofs = colsizes[iel];
         int colpos = colfirstindex[iel];
         int first_el_ip = rowfirstindex[iel]/n_sigma_comps;
         int matpos = matrixposition[iel];
 
-// int ndof;
-// #ifdef LINEAR
-// ndof = 8;
-// #elif QUADRATIC
-// ndof = 18;
-// #elif CUBIC
-// ndof = 32;
-// #endif
-REAL K[ndof * ndof];
+        // __shared__ REAL s_storage[8 * 12];
+        // for(int i = 0; i < 8 * 12; i++) s_storage[i] = storage[matpos + i];
+
+    REAL K[ndof * ndof];
         // REAL *K = (REAL*)malloc(el_dofs * el_dofs * sizeof(REAL));
         for(int i = 0; i < el_dofs * el_dofs; i++) K[i] = 0;
-#ifdef ColorbyIp_Q            
-        ComputeTangentMatrixDevice(ip, el_npts, el_dofs, &storage[matpos], &weight[first_el_ip], K);
-#else  
+ 
+        // ComputeTangentMatrixDevice(el_npts, el_dofs, s_storage, &weight[first_el_ip], K);
         ComputeTangentMatrixDevice(el_npts, el_dofs, &storage[matpos], &weight[first_el_ip], K);
-#endif  
-
-       // for(int k=0; k < el_dofs*el_dofs; k++ ) {
-       //      printf("k[%d] = %g\n",k, K[k]);
-       //  }
 
         for (int i_dof = 0; i_dof < el_dofs; i_dof++) {
 
@@ -226,22 +191,7 @@ REAL K[ndof * ndof];
                 
                 if (i_dest <= j_dest) {
                     int index = me(ia_to_sequence, ja_to_sequence, i_dest, j_dest);
-                    int64_t  index_linear = me(ia_to_sequence_linear, ja_to_sequence_linear, i_dest, j_dest);
-                    // printf("index = %d\n", index);
-                    // printf("%d\n", nnz*ip);
-#ifdef ColorbyIp_Q            
-                    if(ip == 0) {
-                     STATE val_linear = KgLinear[index_linear];
-                       Kg[index+nnz*ip] += val + val_linear;
-                   }
-                   else  {
-                    Kg[index+nnz*ip] += val;
-
-                    }
-#else  
-                    STATE val_linear = KgLinear[index_linear];
-                    Kg[index] += val + val_linear;
-#endif  
+                    Kg[index] += val;
 
                 }
             }

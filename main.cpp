@@ -77,9 +77,9 @@ int pOrder;
     
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
-    // std::string mesh = argv[1];
-    // std::string msh_file = source_dir + "/gmsh/wellbore_" + mesh + "k.msh";
-    std::string msh_file = source_dir + "/gmsh/wellbore_64k.msh";
+    std::string mesh = argv[1];
+    std::string msh_file = source_dir + "/gmsh/wellbore_" + mesh + ".msh";
+    // std::string msh_file = source_dir + "/gmsh/wellbore_64k.msh";
     // std::string msh_file = source_dir + "/gmsh/wellbore_64p516k.msh";
 //    std::string msh_file = source_dir + "/gmsh/wellbore_260k.msh";
 //    std::string msh_file = source_dir + "/gmsh/wellbore_1044p484k.msh";
@@ -238,12 +238,12 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance, bool modi
             std::cout << "Number of iterations = " << i + 1 << std::endl;
             break;
         }
-        // {
-//            timer.Start();
-//            analysis->Assemble();
-//            timer.Stop();
-//            std::cout << "Calling Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
-        // }
+        {
+           timer.Start();
+           analysis->Assemble();
+           timer.Stop();
+           std::cout << "Calling Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+        }
 
     }
 
