@@ -95,10 +95,10 @@ void MatrixAssembleKernel(int nel, int nnz, REAL *Kg, int first_el, int64_t *el_
         int matpos = matrixposition[iel];
 
 
-        int64_t dest[ndof];
+        __shared__ int64_t dest[64*ndof];
         REAL K[ndof * ndof];
         // REAL *K = (REAL*)malloc(el_dofs * el_dofs * sizeof(REAL));
-        for(int i = 0; i < el_dofs; i++) dest[i] = dof_indexes[colpos + i];
+        for(int i = 0; i < el_dofs; i++) dest[i + threadIdx.x * ndof] = dof_indexes[colpos + i];
         for(int i = 0; i < el_dofs * el_dofs; i++) K[i] = 0;
         __shared__ REAL s_storage[64 * ndof * 3]; // max allowed word is 48k
         for (int ip = 0; ip < el_npts; ip++) {
@@ -109,9 +109,9 @@ void MatrixAssembleKernel(int nel, int nnz, REAL *Kg, int first_el, int64_t *el_
         }
  
         for (int i_dof = 0; i_dof < el_dofs; i_dof++) {
-            int64_t i_dest = dest[i_dof];
+            int64_t i_dest = dest[i_dof + threadIdx.x * ndof];
             for (int j_dof = i_dof; j_dof < el_dofs; j_dof++) {
-                int64_t j_dest = dest[j_dof];
+                int64_t j_dest = dest[j_dof + threadIdx.x * ndof];
                 int64_t index = me(ia_to_sequence, ja_to_sequence, i_dest, j_dest);
                 Kg[index] += K[i_dof * el_dofs + j_dof];
             }
