@@ -23,9 +23,7 @@ TPZElastoPlasticIntPointsStructMatrix::TPZElastoPlasticIntPointsStructMatrix(TPZ
 
     #ifdef USING_CUDA
     d_IA_to_sequence.resize(0);    
-    d_JA_to_sequence.resize(0);     
-    d_IA_to_sequence_linear.resize(0);    
-    d_JA_to_sequence_linear.resize(0);  
+    d_JA_to_sequence.resize(0);
     d_el_color_indexes.resize(0); 
     d_Kg.resize(0);
     d_rhs.resize(0);
@@ -121,25 +119,12 @@ void TPZElastoPlasticIntPointsStructMatrix::TransferDataToGPU() {
     d_JA_to_sequence.resize(m_JA_to_sequence.size());
     d_JA_to_sequence.set(&m_JA_to_sequence[0], m_JA_to_sequence.size());
 
-    d_IA_to_sequence_linear.resize(m_IA_to_sequence_linear.size());
-    d_IA_to_sequence_linear.set(&m_IA_to_sequence_linear[0], m_IA_to_sequence_linear.size());
-
-    d_JA_to_sequence_linear.resize(m_JA_to_sequence_linear.size());
-    d_JA_to_sequence_linear.set(&m_JA_to_sequence_linear[0], m_JA_to_sequence_linear.size());
-
     d_el_color_indexes.resize(m_el_color_indexes.size());
     d_el_color_indexes.set(&m_el_color_indexes[0], m_el_color_indexes.size());
-
-    d_ip_color_indexes.resize(m_ip_color_indexes.size());
-    d_ip_color_indexes.set(&m_ip_color_indexes[0], m_ip_color_indexes.size());
-
-    d_KgLinear.resize(fSparseMatrixLinear->A().size());
-    d_KgLinear.set(&fSparseMatrixLinear->A()[0], fSparseMatrixLinear->A().size());
 
     d_RhsLinear.resize(fRhsLinear.Rows());
     d_RhsLinear.set(&fRhsLinear(0,0), fRhsLinear.Rows());
 
-    
 }
 #endif
 
@@ -723,8 +708,6 @@ void TPZElastoPlasticIntPointsStructMatrix::ColoredIndexes(TPZVec<int> &element_
         }
     }
     
-
-    
     std::map<int64_t, std::vector<int64_t> > color_map;
     for (int64_t iel = 0; iel < nblocks; iel++) {
         color_map[elemcolor[iel]].push_back(iel);
@@ -734,45 +717,23 @@ void TPZElastoPlasticIntPointsStructMatrix::ColoredIndexes(TPZVec<int> &element_
         DebugStop();
     }
     
-#ifndef ColorbyIp_Q
     m_el_color_indexes.resize(nblocks);
-#endif
-    
     m_first_color_index.resize(color_map.size()+1);
-    
-    
+
     int c_color = 0;
 
     m_first_color_index[c_color] = 0;
-    m_first_color_el_ip_index.push_back(0);
-    fMaxNPoints = 0;
     for (auto color_data : color_map) {
         int n_el_per_color = color_data.second.size();
         int iel = m_first_color_index[c_color];
-        int n_el_ip_per_color = 0;
         for (int i = 0; i < n_el_per_color ; i++) {
             int el_index = color_data.second[i];
-#ifndef ColorbyIp_Q
             m_el_color_indexes[iel] = el_index;
-#endif
-#ifdef ColorbyIp_Q
-            int npts = fIntegrator.IrregularBlocksMatrix().Blocks().fRowSizes[el_index]/3;
-            if(fMaxNPoints < npts) fMaxNPoints = npts;
-            for (int ip = 0; ip < npts; ip++) {
-                m_el_color_indexes.push_back(el_index);
-                m_ip_color_indexes.push_back(ip);
-                n_el_ip_per_color++;
-            }
-#endif
             iel++;
         }
         c_color++;
         m_first_color_index[c_color] = n_el_per_color + m_first_color_index[c_color-1];
-        m_first_color_el_ip_index.push_back(n_el_ip_per_color + m_first_color_el_ip_index[c_color-1]);
     }
     
     std::cout << "Number of colors = " << color_map.size() << std::endl;
-#ifdef ColorbyIp_Q
-    std::cout << "Number of colored integration points = " << m_ip_color_indexes.size() << std::endl;
-#endif
 }

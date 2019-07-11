@@ -79,8 +79,6 @@ private:
     
     int64_t me(TPZVec<int> &IA, TPZVec<int> &JA, int64_t & i_dest, int64_t & j_dest);
     
-    int64_t fMaxNPoints; // maximum number of integration points
-    
     TPZNumericalIntegrator fIntegrator;
 
     TPZVerySparseMatrix<STATE> fSparseMatrixLinear; //-> BC data
@@ -97,8 +95,6 @@ private:
     
     std::vector<int64_t> m_el_color_indexes;
     
-    std::vector<int64_t> m_ip_color_indexes;
-    
     std::vector<int64_t> m_first_color_index;
 
     #ifdef USING_CUDA
@@ -107,16 +103,8 @@ private:
     TPZVecGPU<int> d_IA_to_sequence;
     
     TPZVecGPU<int> d_JA_to_sequence;
-
-    TPZVecGPU<int> d_IA_to_sequence_linear;
-    
-    TPZVecGPU<int> d_JA_to_sequence_linear;
     
     TPZVecGPU<int64_t> d_el_color_indexes;
-
-    TPZVecGPU<int64_t> d_ip_color_indexes;
-
-    TPZVecGPU<REAL> d_KgLinear;
 
     TPZVecGPU<REAL> d_RhsLinear;
 
@@ -124,10 +112,6 @@ private:
 
     TPZVecGPU<REAL> d_rhs;
     #endif
-    
-    std::vector<int64_t> m_first_color_el_ip_index;
-    
-    
     
 };
 
