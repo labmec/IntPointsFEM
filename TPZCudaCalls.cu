@@ -176,9 +176,9 @@ void TPZCudaCalls::ComputeSigma(bool update_mem, int npts, REAL *glob_delta_stra
 void TPZCudaCalls::MatrixAssemble(int nnz, REAL *Kg, int first_el, int last_el, int64_t *el_color_index, REAL *weight, int *dof_indexes,
 	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *ia_to_sequence, int *ja_to_sequence) {
 	int nel = last_el - first_el;
-	int numBlocks = (nel + NT - 1) / NT;
+	int numBlocks = (nel + 250 - 1) / 250;
 
-	MatrixAssembleKernel<<<numBlocks,NT>>> (nel, nnz, Kg, first_el, el_color_index, weight, dof_indexes, storage, rowsizes, colsizes, rowfirstindex, colfirstindex, matrixposition, 
+	MatrixAssembleKernel<<<numBlocks,250>>>(nel, nnz, Kg, first_el, el_color_index, weight, dof_indexes, storage, rowsizes, colsizes, rowfirstindex, colfirstindex, matrixposition, 
 		ia_to_sequence, ja_to_sequence);
 	cudaDeviceSynchronize();
 	cudaError_t error = cudaGetLastError();
@@ -193,8 +193,7 @@ void TPZCudaCalls::MatrixAssemble(REAL *K, int nnz, REAL *Kg, int first_el, int 
 	int *colsizes, int *colfirstindex, int *ia_to_sequence, int *ja_to_sequence) {
 	int nel = last_el - first_el;
 	int numBlocks = (nel + NT - 1) / NT;
-
-	MatrixAssembleKernel<<<nel,1>>> (K, nel, nnz, Kg, el_color_index, dof_indexes, colsizes, colfirstindex, 
+	MatrixAssembleKernel<<<numBlocks,NT>>> (K, nel, nnz, Kg, el_color_index, dof_indexes, colsizes, colfirstindex, 
     ia_to_sequence, ja_to_sequence);
 	cudaDeviceSynchronize();
 	cudaError_t error = cudaGetLastError();
