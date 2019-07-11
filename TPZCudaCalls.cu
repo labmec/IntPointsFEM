@@ -7,7 +7,7 @@
 #include "MatrixAssembleKernel.h"
 
 
-#define NT          256
+#define NT          64
 
 // #if __CUDA_ARCH__ >= 200
 //     #define MY_KERNEL_MAX_THREADS  (2 * NT)
@@ -176,9 +176,9 @@ void TPZCudaCalls::ComputeSigma(bool update_mem, int npts, REAL *glob_delta_stra
 void TPZCudaCalls::MatrixAssemble(int nnz, REAL *Kg, int first_el, int last_el, int64_t *el_color_index, REAL *weight, int *dof_indexes,
 	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *ia_to_sequence, int *ja_to_sequence) {
 	int nel = last_el - first_el;
-	int numBlocks = (nel + 250 - 1) / 250;
+	int numBlocks = (nel + 64 - 1) / 64;
 
-	MatrixAssembleKernel<<<numBlocks,250>>>(nel, nnz, Kg, first_el, el_color_index, weight, dof_indexes, storage, rowsizes, colsizes, rowfirstindex, colfirstindex, matrixposition, 
+	MatrixAssembleKernel<<<numBlocks,64>>>(nel, nnz, Kg, first_el, el_color_index, weight, dof_indexes, storage, rowsizes, colsizes, rowfirstindex, colfirstindex, matrixposition, 
 		ia_to_sequence, ja_to_sequence);
 	cudaDeviceSynchronize();
 	cudaError_t error = cudaGetLastError();
