@@ -316,104 +316,98 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     // std::cout << Kg << std::endl;
     // DebugStop();
 #else
-    // #ifdef COMPUTE_K_GS
-    std::cout << "COMPUTE_K_CPU : augmented" << std::endl;
 
-    
-#ifndef ColorWordAssembly_Q
-      for (int ic = 0; ic < n_colors; ic++) {
-#else
-        int first = m_first_color_index[0];
-        int last = m_first_color_index[n_colors];
-        int el_dofs = el_n_dofs[0];
-        int nel_per_color = last - first;
-        TPZVec<REAL> Kc(m_color_l_sequence.size(),0.0);
-#endif
-        
+#ifdef COMPUTE_K_GS
+     std::cout << "COMPUTE_K_CPU_GS" << std::endl;
+     for (int ic = 0; ic < n_colors; ic++) {
 #ifdef ColorWordAssembly_Q
 #ifdef USING_TBB
-        tbb::parallel_for(size_t(0),size_t(nel_per_color),size_t(1),[&](size_t i)
-                          
+         tbb::parallel_for(size_t(0),size_t(nel_per_color),size_t(1),[&](size_t i)
 #else
         for (int i = 0; i < nel_per_color; i++)
 #endif
-#else
-        
-    #ifdef USING_TBB
-        tbb::parallel_for(size_t(m_first_color_index[ic]),size_t(m_first_color_index[ic+1]),size_t(1),[&](size_t i)
-
-    #else
-        for (int i = m_first_color_index[ic]; i < m_first_color_index[ic+1]; i++)
-    #endif
 #endif
-        {
-            
-              
-#ifdef ColorWordAssembly_Q
-            
-            int iel = m_el_color_indexes[first + i];
-                
-            // Compute Elementary Matrix.
-            TPZFMatrix<STATE> K;
-            fIntegrator.ComputeTangentMatrix(iel,K);
-            int stride = i*(el_dofs * el_dofs + el_dofs)/2;
-            int c = stride;
-            for(int i_dof = 0 ; i_dof < el_dofs; i_dof++){
-                for(int j_dof = i_dof; j_dof < el_dofs; j_dof++){
-                    Kc[c] += K(i_dof,j_dof);
-                    c++;
-                }
-            }
-#else
-            int iel = m_el_color_indexes[i];
-              
-            // Compute Elementary Matrix.
-            TPZFMatrix<STATE> K;
-            fIntegrator.ComputeTangentMatrix(iel,K);
-                
-            int el_dof = el_n_dofs[iel];
-            int pos = cols_first_index[iel];
-
-            for (int i_dof = 0; i_dof < el_dof; i_dof++) {
-
-                int64_t i_dest = indexes[pos + i_dof];
-
-                for (int j_dof = i_dof; j_dof < el_dof; j_dof++) {
-
-                    int64_t j_dest = indexes[pos + j_dof];
-                    STATE val = K(i_dof,j_dof);
-                    int64_t  index = me(m_IA_to_sequence, m_JA_to_sequence, i_dest, j_dest);
-                    Kg[index] += val;
-                    
-                }
-            }
-#endif
-                
-        }
+         {
+             
+             
+             
+             int iel = m_el_color_indexes[first + i];
+             
+             // Compute Elementary Matrix.
+             TPZFMatrix<STATE> K;
+             fIntegrator.ComputeTangentMatrix(iel,K);
+             int stride = i*(el_dofs * el_dofs + el_dofs)/2;
+             int c = stride;
+             for(int i_dof = 0 ; i_dof < el_dofs; i_dof++){
+                 for(int j_dof = i_dof; j_dof < el_dofs; j_dof++){
+                     Kc[c] += K(i_dof,j_dof);
+                     c++;
+                 }
+             }
+             
+         }
 #ifdef USING_TBB
 );
 #endif
-        
-#ifdef ColorWordAssembly_Q
-                          
-    for (int ic = 0; ic < n_colors; ic++) {
-      int first_l = m_first_color_l_index[ic];
-      int last_l = m_first_color_l_index[ic + 1];
-      int n_l_indexes = last_l - first_l;
-      /// Gather from Kg
-      TPZVec<REAL> aux(n_l_indexes);
-      cblas_dgthr(n_l_indexes, &Kg[0], &aux[0], &m_color_l_sequence[first_l]);
+         
+       for (int ic = 0; ic < n_colors; ic++) {
+           int first_l = m_first_color_l_index[ic];
+           int last_l = m_first_color_l_index[ic + 1];
+           int n_l_indexes = last_l - first_l;
+           /// Gather from Kg
+           TPZVec<REAL> aux(n_l_indexes);
+           cblas_dgthr(n_l_indexes, &Kg[0], &aux[0], &m_color_l_sequence[first_l]);
+           
+           // Contributing
+           cblas_daxpy(n_l_indexes, 1., &Kc[first_l], 1., &aux[0],1);
+           
+           /// Scatter to Kg
+           cblas_dsctr(n_l_indexes, &aux[0], &m_color_l_sequence[first_l], &Kg[0]);
+       }
 
-      // Contributing
-      cblas_daxpy(n_l_indexes, 1., &Kc[first_l], 1., &aux[0],1);
-        
-      /// Scatter to Kg
-      cblas_dsctr(n_l_indexes, &aux[0], &m_color_l_sequence[first_l], &Kg[0]);
-    }
+#else
+     std::cout << "COMPUTE_K_CPU" << std::endl;
+     
+      for (int ic = 0; ic < n_colors; ic++) {
+             
+          
+#ifdef USING_TBB
+       tbb::parallel_for(size_t(m_first_color_index[ic]),size_t(m_first_color_index[ic+1]),size_t(1),[&](size_t i)
+                                                 
+#else
+       for (int i = m_first_color_index[ic]; i < m_first_color_index[ic+1]; i++)
 #endif
-                        
-#ifndef ColorWordAssembly_Q
+       {
+             int iel = m_el_color_indexes[i];
+           
+             // Compute Elementary Matrix.
+             TPZFMatrix<STATE> K;
+             fIntegrator.ComputeTangentMatrix(iel,K);
+           
+             int el_dof = el_n_dofs[iel];
+             int pos = cols_first_index[iel];
+           
+             for (int i_dof = 0; i_dof < el_dof; i_dof++) {
+                 
+                 int64_t i_dest = indexes[pos + i_dof];
+                 
+                 for (int j_dof = i_dof; j_dof < el_dof; j_dof++) {
+                     
+                     int64_t j_dest = indexes[pos + j_dof];
+                     STATE val = K(i_dof,j_dof);
+                     int64_t  index = me(m_IA_to_sequence, m_JA_to_sequence, i_dest, j_dest);
+                     Kg[index] += val;
+                     
+                 }
+             }
+           
+         }
+#ifdef USING_TBB
+ );
+#endif
+          
 }
+         
 #endif
 
 #endif
