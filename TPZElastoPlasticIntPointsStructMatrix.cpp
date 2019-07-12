@@ -301,11 +301,22 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU
     #else
     std::cout << "COMPUTE_K_GPU" << std::endl;
-    
+    /// Serial by color
+    for (int ic = 0; ic < n_colors; ic++) {
+        int first = m_first_color_index[ic];
+        int last = m_first_color_index[ic + 1];
+        fCudaCalls.MatrixAssemble(d_Kg.getData(), first, last, &d_el_color_indexes.getData()[first], fIntegrator.ConstitutiveLawProcessor().WeightVectorDev().getData(),
+            fIntegrator.DoFIndexesDev().getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dStorage.getData(),
+            fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowSizes.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColSizes.getData(),
+            fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowFirstIndex.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColFirstIndex.getData(),
+            fIntegrator.IrregularBlocksMatrix().BlocksDev().dMatrixPosition.getData(), d_IA_to_sequence.getData(), d_JA_to_sequence.getData());
+    }
+    d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU    
     #endif
     // std::cout << Kg << std::endl;
     // DebugStop();
 #else
+    // #ifdef COMPUTE_K_GS
     std::cout << "COMPUTE_K_CPU : augmented" << std::endl;
 
     
