@@ -3,24 +3,15 @@
 #include "pzvec.h"
 
 // #include "MatMulKernels.h"
-#include "ComputeSigmaKernel.h"
-#include "MatrixAssembleKernel.h"
+#include "KernelsComputeSigma.h"
+#include "KernelsMatMul.h"
+#include "KernelsMatrixAssemble.h"
 
-
-#define NT          256
-
-// #if __CUDA_ARCH__ >= 200
-//     #define MY_KERNEL_MAX_THREADS  (2 * NT)
-//     #define MY_KERNEL_MIN_BLOCKS   3
-// #else
-//     #define MY_KERNEL_MAX_THREADS  NT
-//     #define MY_KERNEL_MIN_BLOCKS   2
-// #endif
+#define NT  64
 
 TPZCudaCalls::TPZCudaCalls() {
 	cusparse_h = false;
 	cublas_h = false;
-	heap_q = false;
 }
 
 TPZCudaCalls::~TPZCudaCalls() {
@@ -30,6 +21,18 @@ TPZCudaCalls::~TPZCudaCalls() {
 	if(cusparse_h == true) {
 		cusparseDestroy(handle_cusparse);			
 	}
+}
+
+TPZCudaCalls &TPZCudaCalls::operator=(const TPZCudaCalls &copy) {
+	if(&copy == this){
+		return *this;
+	}
+	handle_cusparse = copy.handle_cusparse;
+	cusparse_h = copy.cusparse_h;
+	handle_cublas = copy.handle_cublas;
+	cublas_h = copy.cublas_h;
+
+	return *this;
 }
 
 void TPZCudaCalls::Multiply(bool trans, int *m, int *n, int *k, REAL *A, int *strideA, 
@@ -162,8 +165,8 @@ void TPZCudaCalls::SpMSpM(int opt, int sym, int m, int n, int k, int nnzA, REAL 
 void TPZCudaCalls::ComputeSigma(bool update_mem, int npts, REAL *glob_delta_strain, REAL *glob_sigma, REAL lambda, REAL mu, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL *dPlasticStrain,  
 	REAL *dMType, REAL *dAlpha, REAL *dSigma, REAL *dStrain, REAL *weight) {
 	
-	int numBlocks = (npts + 256 - 1) / 256;
-	ComputeSigmaKernel<<<numBlocks,256>>> (update_mem, npts, glob_delta_strain, glob_sigma, lambda, mu, mc_phi, mc_psi, mc_cohesion, dPlasticStrain, dMType, dAlpha, dSigma, dStrain, weight);
+	int numBlocks = (npts + NT - 1) / NT;
+	ComputeSigmaKernel<<<numBlocks,NT>>> (update_mem, npts, glob_delta_strain, glob_sigma, lambda, mu, mc_phi, mc_psi, mc_cohesion, dPlasticStrain, dMType, dAlpha, dSigma, dStrain, weight);
 	cudaDeviceSynchronize();
 	cudaError_t error = cudaGetLastError();
 	if (error != cudaSuccess) {
@@ -173,13 +176,13 @@ void TPZCudaCalls::ComputeSigma(bool update_mem, int npts, REAL *glob_delta_stra
 	}
 }
 
-void TPZCudaCalls::MatrixAssemble(int nnz, REAL *Kg, int first_el, int last_el, int64_t *el_color_index, REAL *weight, int *dof_indexes,
-	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *ia_to_sequence, int *ja_to_sequence) {
+void TPZCudaCalls::MatrixAssembleGS(REAL *Kc, int first_el, int last_el, int64_t *el_color_index, REAL *weight, int *dof_indexes,
+	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition) {
 	int nel = last_el - first_el;
-	int numBlocks = (nel + 250 - 1) / 250;
+	int numBlocks = (nel + NT_sm - 1) / NT_sm;
 
-	MatrixAssembleKernel<<<numBlocks,250>>>(nel, nnz, Kg, first_el, el_color_index, weight, dof_indexes, storage, rowsizes, colsizes, rowfirstindex, colfirstindex, matrixposition, 
-		ia_to_sequence, ja_to_sequence);
+	MatrixAssembleKernelGS<<<numBlocks,NT_sm>>>(nel, Kc, el_color_index, weight, dof_indexes, 
+	storage, rowsizes, colsizes, rowfirstindex, colfirstindex, matrixposition);
 	cudaDeviceSynchronize();
 	cudaError_t error = cudaGetLastError();
 	if (error != cudaSuccess) {
@@ -189,12 +192,12 @@ void TPZCudaCalls::MatrixAssemble(int nnz, REAL *Kg, int first_el, int last_el, 
 	}
 }
 
-void TPZCudaCalls::MatrixAssemble(REAL *K, int nnz, REAL *Kg, int first_el, int last_el, int64_t *el_color_index, int *dof_indexes,
-	int *colsizes, int *colfirstindex, int *ia_to_sequence, int *ja_to_sequence) {
+void TPZCudaCalls::MatrixAssemble(REAL *Kg, int first_el, int last_el, int64_t *el_color_index,  REAL *weight, int *dof_indexes,
+	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *ia_to_sequence, int *ja_to_sequence) {
 	int nel = last_el - first_el;
-	int numBlocks = (nel + NT - 1) / NT;
-	MatrixAssembleKernel<<<numBlocks,NT>>> (K, nel, nnz, Kg, el_color_index, dof_indexes, colsizes, colfirstindex, 
-    ia_to_sequence, ja_to_sequence);
+	int numBlocks = (nel + NT_sm - 1) / NT_sm;
+	MatrixAssembleKernel<<<numBlocks,NT_sm>>> (nel, Kg, el_color_index, weight, dof_indexes, storage, rowsizes, colsizes, rowfirstindex, colfirstindex,
+	matrixposition, ia_to_sequence, ja_to_sequence); 
 	cudaDeviceSynchronize();
 	cudaError_t error = cudaGetLastError();
 	if (error != cudaSuccess) {
@@ -288,188 +291,3 @@ void TPZCudaCalls::SolveCG(int n, int nnzA, REAL *csrValA, int *csrRowPtrA, int 
     cudaFree(d_p);
     cudaFree(d_Ax);
 }
-
-// void assemble_poisson_matrix_coo(std::vector<float>& vals, std::vector<int>& row, std::vector<int>& col,
-//                      std::vector<float>& rhs, int Nrows, int Ncols) {
-
-//         //nnz: 5 entries per row (node) for nodes in the interior
-//     // 1 entry per row (node) for nodes on the boundary, since we set them explicitly to 1.
-//     int nnz = 5*Nrows*Ncols - (2*(Ncols-1) + 2*(Nrows-1))*4;
-//     vals.resize(nnz);
-//     row.resize(nnz);
-//     col.resize(nnz);
-//     rhs.resize(Nrows*Ncols);
-
-//     int counter = 0;
-//     for(int i = 0; i < Nrows; ++i) {
-//         for (int j = 0; j < Ncols; ++j) {
-//             int idx = j + Ncols*i;
-//             if (i == 0 || j == 0 || j == Ncols-1 || i == Nrows-1) {
-//                 vals[counter] = 1.;
-//                 row[counter] = idx;
-//                 col[counter] = idx;
-//                 counter++;
-//                 rhs[idx] = 1.;
-// //                if (i == 0) {
-// //                    rhs[idx] = 3.;
-// //                }
-//             } else { // -laplace stencil
-//                 // above
-//                 vals[counter] = -1.;
-//                 row[counter] = idx;
-//                 col[counter] = idx-Ncols;
-//                 counter++;
-//                 // left
-//                 vals[counter] = -1.;
-//                 row[counter] = idx;
-//                 col[counter] = idx-1;
-//                 counter++;
-//                 // center
-//                 vals[counter] = 4.;
-//                 row[counter] = idx;
-//                 col[counter] = idx;
-//                 counter++;
-//                 // right
-//                 vals[counter] = -1.;
-//                 row[counter] = idx;
-//                 col[counter] = idx+1;
-//                 counter++;
-//                 // below
-//                 vals[counter] = -1.;
-//                 row[counter] = idx;
-//                 col[counter] = idx+Ncols;
-//                 counter++;
-
-//                 rhs[idx] = 0;
-//             }
-//         }
-//     }
-// }
-
-// void TPZCudaCalls::Teste() {
-// 	    // --- create library handles:
-//     cusolverSpHandle_t cusolver_handle;
-//     cusolverStatus_t cusolver_status;
-//     cusolver_status = cusolverSpCreate(&cusolver_handle);
-//     std::cout << "status create cusolver handle: " << cusolver_status << std::endl;
-
-//     cusparseHandle_t cusparse_handle;
-//     cusparseStatus_t cusparse_status;
-//     cusparse_status = cusparseCreate(&cusparse_handle);
-//     std::cout << "status create cusparse handle: " << cusparse_status << std::endl;
-
-//     // --- prepare matrix:
-//     int Nrows = 4;
-//     int Ncols = 4;
-//     std::vector<float> csrVal;
-//     std::vector<int> cooRow;
-//     std::vector<int> csrColInd;
-//     std::vector<float> b;
-
-//     assemble_poisson_matrix_coo(csrVal, cooRow, csrColInd, b, Nrows, Ncols);
-
-//     int nnz = csrVal.size();
-//     int m = Nrows * Ncols;
-//     std::vector<int> csrRowPtr(m+1);
-
-//     // --- prepare solving and copy to GPU:
-//     std::vector<float> x(m);
-//     float tol = 1e-5;
-//     int reorder = 0;
-//     int singularity = 0;
-
-//     float *db, *dcsrVal, *dx;
-//     int *dcsrColInd, *dcsrRowPtr, *dcooRow;
-//     cudaMalloc((void**)&db, m*sizeof(float));
-//     cudaMalloc((void**)&dx, m*sizeof(float));
-//     cudaMalloc((void**)&dcsrVal, nnz*sizeof(float));
-//     cudaMalloc((void**)&dcsrColInd, nnz*sizeof(int));
-//     cudaMalloc((void**)&dcsrRowPtr, (m+1)*sizeof(int));
-//     cudaMalloc((void**)&dcooRow, nnz*sizeof(int));
-
-//     cudaMemcpy(db, b.data(), b.size()*sizeof(float), cudaMemcpyHostToDevice);
-//     cudaMemcpy(dcsrVal, csrVal.data(), csrVal.size()*sizeof(float), cudaMemcpyHostToDevice);
-//     cudaMemcpy(dcsrColInd, csrColInd.data(), csrColInd.size()*sizeof(int), cudaMemcpyHostToDevice);
-//     cudaMemcpy(dcooRow, cooRow.data(), cooRow.size()*sizeof(int), cudaMemcpyHostToDevice);
-
-//     cusparse_status = cusparseXcoo2csr(cusparse_handle, dcooRow, nnz, m,
-//                                        dcsrRowPtr, CUSPARSE_INDEX_BASE_ZERO);
-//     std::cout << "status cusparse coo2csr conversion: " << cusparse_status << std::endl;
-
-//     cudaDeviceSynchronize(); // matrix format conversion has to be finished!
-
-//     // --- everything ready for computation:
-
-//     cusparseMatDescr_t descrA;
-
-//     cusparse_status = cusparseCreateMatDescr(&descrA);
-//     std::cout << "status cusparse createMatDescr: " << cusparse_status << std::endl;
-
-//     // optional: print dense matrix that has been allocated on GPU
-
-//     std::vector<float> A(m*m, 0);
-//     float *dA;
-//     cudaMalloc((void**)&dA, A.size()*sizeof(float));
-
-//     cusparseScsr2dense(cusparse_handle, m, m, descrA, dcsrVal,
-//                        dcsrRowPtr, dcsrColInd, dA, m);
-
-//     cudaMemcpy(A.data(), dA, A.size()*sizeof(float), cudaMemcpyDeviceToHost);
-//     std::cout << "A: \n";
-//     for (int i = 0; i < m; ++i) {
-//         for (int j = 0; j < m; ++j) {
-//             std::cout << A[i*m + j] << " ";
-//         }
-//         std::cout << std::endl;
-//     }
-
-//     cudaFree(dA);
-
-//     std::cout << "b: \n";
-//     cudaMemcpy(b.data(), db, (m)*sizeof(int), cudaMemcpyDeviceToHost);
-//     for (auto a : b) {
-//         std::cout << a << ",";
-//     }
-//     std::cout << std::endl;
-
-
-//     // --- solving!!!!
-
-// // // does not work:
-// //    cusolver_status = cusolverSpScsrlsvchol(cusolver_handle, m, nnz, descrA, dcsrVal,
-// //                       dcsrRowPtr, dcsrColInd, db, tol, reorder, dx,
-// //                       &singularity);
-
-//      cusolver_status = cusolverSpScsrlsvqr(cusolver_handle, m, nnz, descrA, dcsrVal,
-//                         dcsrRowPtr, dcsrColInd, db, tol, reorder, dx,
-//                         &singularity);
-
-//     cudaDeviceSynchronize();
-
-//     std::cout << "singularity (should be -1): " << singularity << std::endl;
-
-//     std::cout << "status cusolver solving (!): " << cusolver_status << std::endl;
-
-//     cudaMemcpy(x.data(), dx, m*sizeof(float), cudaMemcpyDeviceToHost);
-
-//     cusparse_status = cusparseDestroy(cusparse_handle);
-//     std::cout << "status destroy cusparse handle: " << cusparse_status << std::endl;
-
-//     cusolver_status = cusolverSpDestroy(cusolver_handle);
-//     std::cout << "status destroy cusolver handle: " << cusolver_status << std::endl;
-
-//     for (auto a : x) {
-//         std::cout << a << " ";
-//     }
-//     std::cout << std::endl;
-
-
-//     cudaFree(db);
-//     cudaFree(dx);
-//     cudaFree(dcsrVal);
-//     cudaFree(dcsrColInd);
-//     cudaFree(dcsrRowPtr);
-//     cudaFree(dcooRow);
-
-
-// }

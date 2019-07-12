@@ -22,73 +22,88 @@
 class TPZNumericalIntegrator {
 
 public:
-    
+
     TPZNumericalIntegrator();
 
     TPZNumericalIntegrator(TPZIrregularBlocksMatrix &irregularBlocksMatrix);
 
     ~TPZNumericalIntegrator();
 
-    void SetIrregularBlocksMatrix(TPZIrregularBlocksMatrix & irregularBlocksMatrix);
-
     void Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &delta_strain);
 
     void MultiplyTranspose(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &res);
+
+    void ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZFMatrix<REAL> &rhs);
+
+    void ComputeConstitutiveMatrix(int64_t point_index, TPZFMatrix<STATE> &De);
+
+    void ComputeTangentMatrix(int64_t iel, TPZFMatrix<REAL> &K);
+
+    void ComputeTangentMatrix(int ip, int64_t iel, TPZFMatrix<REAL> &K);
 
 #ifdef USING_CUDA
     void Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &delta_strain);
     
     void MultiplyTranspose(TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL> &res); 
 
-    void TransferDataToGPU();
+    void ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZVecGPU<REAL> &rhs);
 #endif
+
+    void SetIrregularBlocksMatrix(TPZIrregularBlocksMatrix & irregularBlocksMatrix) {
+        fBlockMatrix = irregularBlocksMatrix;
+    }
+
+    TPZIrregularBlocksMatrix & IrregularBlocksMatrix() {
+        return fBlockMatrix;
+    }
+
+    void SetConstitutiveLawProcessor(TPZConstitutiveLawProcessor & processor){
+        fConstitutiveLawProcessor = processor;
+    }
+
+    TPZConstitutiveLawProcessor & ConstitutiveLawProcessor(){
+        return fConstitutiveLawProcessor;
+    }
 
     void SetDoFIndexes(TPZVec<int> dof_indexes) {
         fDoFIndexes = dof_indexes;
+    }
+
+    TPZVec<int> & DoFIndexes() {
+        return fDoFIndexes;
     }
 
     void SetColorIndexes(TPZVec<int> color_indexes) {
         fColorIndexes = color_indexes;
     }
     
-    TPZVec<int> & DoFIndexes() {
-        return fDoFIndexes;
-    }
-    
     TPZVec<int> & ColorIndexes() {
-       return fColorIndexes;
+     return fColorIndexes;
     }
 
     void SetNColors(int ncolor) {
         fNColor = ncolor;
     }
+
+    int NColors() {
+        return fNColor;
+    }
+
 #ifdef USING_CUDA
     TPZVecGPU<int> & DoFIndexesDev() {
         return dDoFIndexes;
     }
 
-    void ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZVecGPU<REAL> &rhs);
+    TPZVecGPU<int> & ColorIndexesDev() {
+        return dColorIndexes;
+    }
+
+    void TransferDataToGPU();
+
 #endif
 
-    TPZIrregularBlocksMatrix & IrregularBlocksMatrix() {
-        return fBlockMatrix;
-    }
-   
-    void ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZFMatrix<REAL> &rhs);
-    
-    void ComputeConstitutiveMatrix(int64_t point_index, TPZFMatrix<STATE> &De);
-    
-    void ComputeTangentMatrix(int64_t iel, TPZFMatrix<REAL> &K);
-    
-    void ComputeTangentMatrix(int ip, int64_t iel, TPZFMatrix<REAL> &K);
-
-    void SetConstitutiveLawProcessor(TPZConstitutiveLawProcessor & processor);
-    
-    TPZConstitutiveLawProcessor & ConstitutiveLawProcessor();
-    
-    
 private:
-    
+
     /// Irregular block matrix containing spatial gradients for scalar basis functions of order k
     TPZIrregularBlocksMatrix fBlockMatrix;
 

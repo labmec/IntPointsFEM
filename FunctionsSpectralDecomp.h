@@ -1,7 +1,10 @@
 #include "pzreal.h"
 #include "TPZTensor.h"
 
-__device__ void NormalizeDevice(REAL *sigma, REAL &maxel) {
+#ifdef __CUDACC__
+__device__ 
+#endif
+void Normalize(REAL *sigma, REAL &maxel) {
 	maxel = sigma[0];
 	for (int i = 1; i < 6; i++) {
 		if (fabs(sigma[i]) > fabs(maxel)) {
@@ -16,9 +19,12 @@ __device__ void NormalizeDevice(REAL *sigma, REAL &maxel) {
 
 }
 
-__device__ void IntervalDevice(REAL *sigma, REAL *interval) {
-	__shared__ REAL lower_vec[3];
-	__shared__ REAL upper_vec[3];
+#ifdef __CUDACC__
+__device__ 
+#endif
+void Interval(REAL *sigma, REAL *interval) {
+	 REAL lower_vec[3];
+	 REAL upper_vec[3];
 
 	//row 1 |sigma_xx sigma_xy 0|
 	REAL row_1 = sigma[_XY_] + sigma[_XZ_];
@@ -49,7 +55,10 @@ __device__ void IntervalDevice(REAL *sigma, REAL *interval) {
 	}
 }
 
-__device__ void NewtonIterationsDevice(REAL *interval, REAL *sigma, REAL *eigenvalues, REAL &maxel) {
+#ifdef __CUDACC__
+__device__ 
+#endif
+void NewtonIterations(REAL *interval, REAL *sigma, REAL *eigenvalues, REAL &maxel) {
 	int numiterations = 20;
 	REAL tol = 10e-12;
 
@@ -101,8 +110,11 @@ __device__ void NewtonIterationsDevice(REAL *interval, REAL *sigma, REAL *eigenv
 	}
 }
 
-__device__ void Multiplicity1Device(REAL *sigma, REAL eigenvalue, REAL *eigenvector) {
-	__shared__ REAL det[3];
+#ifdef __CUDACC__
+__device__ 
+#endif
+void Multiplicity1(REAL *sigma, REAL eigenvalue, REAL *eigenvector) {
+	 REAL det[3];
     det[0] = (sigma[_XX_] - eigenvalue) * (sigma[_YY_] - eigenvalue) - sigma[_XY_] * sigma[_XY_];
     det[1] = (sigma[_XX_] - eigenvalue) * (sigma[_ZZ_] - eigenvalue) - sigma[_XZ_] * sigma[_XZ_];
     det[2] = (sigma[_YY_] - eigenvalue) * (sigma[_ZZ_] - eigenvalue) - sigma[_YZ_] * sigma[_YZ_];
@@ -113,7 +125,7 @@ __device__ void Multiplicity1Device(REAL *sigma, REAL eigenvalue, REAL *eigenvec
 			maxdet = fabs(det[i]);
 		}
 	}
-	__shared__ REAL v[3];
+	 REAL v[3];
     if (maxdet == fabs(det[0])) {
         v[0] = 1 / det[0] * (-(sigma[_YY_] - eigenvalue) * sigma[_XZ_] + sigma[_XY_] * sigma[_YZ_]);
         v[1] = 1 / det[0] * (-(sigma[_XX_] - eigenvalue) * sigma[_YZ_] + sigma[_XY_] * sigma[_XZ_]);
@@ -137,9 +149,12 @@ __device__ void Multiplicity1Device(REAL *sigma, REAL eigenvalue, REAL *eigenvec
 	eigenvector[2] = v[2] / norm;
 }
 
-__device__ void Multiplicity2Device(REAL *sigma, REAL eigenvalue, REAL *eigenvector1,
+#ifdef __CUDACC__
+__device__ 
+#endif
+void Multiplicity2(REAL *sigma, REAL eigenvalue, REAL *eigenvector1,
 		REAL *eigenvector2) {
-	__shared__ REAL x[3];
+	 REAL x[3];
     x[0] = sigma[_XX_] - eigenvalue;
     x[1] = sigma[_YY_] - eigenvalue;
     x[2] = sigma[_ZZ_] - eigenvalue;
@@ -151,8 +166,8 @@ __device__ void Multiplicity2Device(REAL *sigma, REAL eigenvalue, REAL *eigenvec
 		}
 	}
 
-	__shared__ REAL v1[3];
-	__shared__ REAL v2[3];
+	 REAL v1[3];
+	 REAL v2[3];
 
     if (maxx == fabs(x[0])) {
         v1[0] = -sigma[_XY_] / x[0];
@@ -196,7 +211,10 @@ __device__ void Multiplicity2Device(REAL *sigma, REAL eigenvalue, REAL *eigenvec
 	eigenvector2[2] = v2[2] / norm2;
 }
 
-__device__ void EigenvectorsDevice(REAL *sigma, REAL *eigenvalues, REAL *eigenvectors,
+#ifdef __CUDACC__
+__device__ 
+#endif
+void Eigenvectors(REAL *sigma, REAL *eigenvalues, REAL *eigenvectors,
 		REAL &maxel) {
     sigma[_XX_]*=maxel;
     sigma[_YY_]*=maxel;
@@ -220,28 +238,31 @@ __device__ void EigenvectorsDevice(REAL *sigma, REAL *eigenvalues, REAL *eigenve
 		eigenvectors[8] = 1.;
 	} else {
 		if (eigenvalues[0] != eigenvalues[1] && eigenvalues[0] != eigenvalues[2]) {
-			Multiplicity1Device(sigma, eigenvalues[0], &eigenvectors[0]);
+			Multiplicity1(sigma, eigenvalues[0], &eigenvectors[0]);
 		} else if (eigenvalues[0] == eigenvalues[1]) {
-			Multiplicity2Device(sigma, eigenvalues[0], &eigenvectors[0], &eigenvectors[3]);
+			Multiplicity2(sigma, eigenvalues[0], &eigenvectors[0], &eigenvectors[3]);
 		} else if (eigenvalues[0] == eigenvalues[2]) {
-			Multiplicity2Device(sigma, eigenvalues[0], &eigenvectors[0], &eigenvectors[6]);
+			Multiplicity2(sigma, eigenvalues[0], &eigenvectors[0], &eigenvectors[6]);
 		}
 		if (eigenvalues[1] != eigenvalues[0] && eigenvalues[1] != eigenvalues[2]) {
-			Multiplicity1Device(sigma, eigenvalues[1], &eigenvectors[3]);
+			Multiplicity1(sigma, eigenvalues[1], &eigenvectors[3]);
 		} else if (eigenvalues[1] == eigenvalues[2]) {
-			Multiplicity2Device(sigma, eigenvalues[1], &eigenvectors[3], &eigenvectors[6]);
+			Multiplicity2(sigma, eigenvalues[1], &eigenvectors[3], &eigenvectors[6]);
 		}
 		if (eigenvalues[2] != eigenvalues[0] && eigenvalues[2] != eigenvalues[1]) {
-			Multiplicity1Device(sigma, eigenvalues[2], &eigenvectors[6]);
+			Multiplicity1(sigma, eigenvalues[2], &eigenvectors[6]);
 		}
 	}
 }
 
-__device__ void SpectralDecompositionDevice(REAL *sigma_trial, REAL *eigenvalues, REAL *eigenvectors) {
+#ifdef __CUDACC__
+__device__ 
+#endif
+void SpectralDecomposition(REAL *sigma_trial, REAL *eigenvalues, REAL *eigenvectors) {
 	REAL maxel;
 	REAL interval[2];
-	NormalizeDevice(sigma_trial, maxel);
-	IntervalDevice(sigma_trial, interval);
-	NewtonIterationsDevice(interval, sigma_trial, eigenvalues, maxel);
-	EigenvectorsDevice(sigma_trial, eigenvalues, eigenvectors, maxel);
+	Normalize(sigma_trial, maxel);
+	Interval(sigma_trial, interval);
+	NewtonIterations(interval, sigma_trial, eigenvalues, maxel);
+	Eigenvectors(sigma_trial, eigenvalues, eigenvectors, maxel);
 }

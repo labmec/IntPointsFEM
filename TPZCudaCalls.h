@@ -15,17 +15,7 @@ public:
 
 	~TPZCudaCalls();
 
-	TPZCudaCalls &operator=(const TPZCudaCalls &copy) {
-		if(&copy == this){
-			return *this;
-		}
-		handle_cusparse = copy.handle_cusparse;
-		cusparse_h = copy.cusparse_h;
-		handle_cublas = copy.handle_cublas;
-		cublas_h = copy.cublas_h;
-
-		return *this;
-	}
+	TPZCudaCalls &operator=(const TPZCudaCalls &copy);
 
 	void Multiply(bool trans, int *m, int *n, int *k, REAL *A, int *strideA, REAL *B, int *strideB,  REAL *C, int *strideC, REAL alpha, int nmatrices);
 
@@ -42,21 +32,13 @@ public:
 	void ComputeSigma(bool update_mem, int npts, REAL *glob_delta_strain, REAL *glob_sigma, REAL lambda, REAL mu, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL *dPlasticStrain,  
 		REAL *dMType, REAL *dAlpha, REAL *dSigma, REAL *dStrain, REAL *weight);
 
-	void MatrixAssemble(int nnz, REAL *K, int first_el, int last_el, int64_t *el_color_index, REAL *weight, int *dof_indexes,
-		REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *ia_to_sequence, int *ja_to_sequence);
+	void MatrixAssembleGS(REAL *Kc, int first_el, int last_el, int64_t *el_color_index, REAL *weight, int *dof_indexes,
+	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition);
 
-	void MatrixAssemble(REAL *K, int nnz, REAL *Kg, int first_el, int last_el, int64_t *el_color_index, int *dof_indexes,
-	int *colsizes, int *colfirstindex, int *ia_to_sequence, int *ja_to_sequence);
+	void MatrixAssemble(REAL *Kg, int first_el, int last_el, int64_t *el_color_index,  REAL *weight, int *dof_indexes,
+	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *ia_to_sequence, int *ja_to_sequence);
 
 	void SolveCG(int n, int nnzA, REAL *csrValA, int *csrRowPtrA, int *csrColIndA, REAL *b, REAL *x);
-
-	void SetHeapSize() {
-		if(heap_q == false) {
-			heap_q = true;
-			size_t size = 120000000;
-			cudaDeviceSetLimit(cudaLimitMallocHeapSize, size);
-		}
-	}
 
 	void DeToDevice(REAL lambda, REAL mu);
 	
@@ -66,8 +48,5 @@ private:
 	
 	cublasHandle_t handle_cublas;
 	bool cublas_h;
-
-	bool heap_q;
-
 };
 #endif

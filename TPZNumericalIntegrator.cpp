@@ -21,10 +21,6 @@ TPZNumericalIntegrator::~TPZNumericalIntegrator() {
 
 }
 
-void TPZNumericalIntegrator::SetIrregularBlocksMatrix(TPZIrregularBlocksMatrix & irregularBlocksMatrix) {
-    fBlockMatrix = irregularBlocksMatrix;
-}
-
 #ifdef USING_CUDA
 void TPZNumericalIntegrator::Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &delta_strain) {
 
@@ -68,7 +64,6 @@ void TPZNumericalIntegrator::MultiplyTranspose(TPZVecGPU<REAL> &sigma, TPZVecGPU
 
     fBlockMatrix.MultiplyVector(&sigma.getData()[0], &forces.getData()[0], true);
 
-    // Assemble forces
     fCudaCalls.ScatterOperation(cols, forces.getData(), res.getData(), dColorIndexes.getData());
 
     int64_t colorassemb = ncolor / 2.;
@@ -80,7 +75,6 @@ void TPZNumericalIntegrator::MultiplyTranspose(TPZVecGPU<REAL> &sigma, TPZVecGPU
         ncolor -= colorassemb;
         colorassemb = ncolor/2;
     }
-    // res.resize(neq);
 }
 #endif
 
@@ -96,7 +90,6 @@ void TPZNumericalIntegrator::MultiplyTranspose(TPZFMatrix<REAL> &sigma, TPZFMatr
 
     fBlockMatrix.MultiplyVector(&sigma(0, 0), &forces(0, 0), true);
 
-    // Assemble forces
     cblas_dsctr(cols, forces, &fColorIndexes[0], &res(0,0));
 
     int64_t colorassemb = ncolor / 2.;
@@ -118,7 +111,6 @@ void TPZNumericalIntegrator::ResidualIntegration(TPZFMatrix<REAL> & solution ,TP
     Multiply(solution, delta_strain);
     fConstitutiveLawProcessor.ComputeSigma(delta_strain, sigma);
     MultiplyTranspose(sigma, rhs); // Perform Residual integration using a global linear application B
-    // rhs.Print("rhsCPU = ", std::cout, EMathematicaInput);
 }
 
 #ifdef USING_CUDA
@@ -191,45 +183,4 @@ void TPZNumericalIntegrator::ComputeTangentMatrix(int64_t iel, TPZFMatrix<REAL> 
         De.Multiply(Bip, DeBip);
         Bip.MultAdd(DeBip, K, K, omega, 1.0, 1);
     }
-}
-
-void TPZNumericalIntegrator::ComputeTangentMatrix(int ip, int64_t iel, TPZFMatrix<REAL> &K){
-    
-    int n_sigma_comps = 3;
-    
-    int el_npts = fBlockMatrix.Blocks().fRowSizes[iel]/n_sigma_comps;
-    int el_dofs = fBlockMatrix.Blocks().fColSizes[iel];
-    int first_el_ip = fBlockMatrix.Blocks().fRowFirstIndex[iel]/n_sigma_comps;
-    
-    K.Resize(el_dofs, el_dofs);
-    K.Zero();
-    
-    if (ip >= el_npts ) { // Contribute with zero values.
-        return;
-    }
-    
-    int pos = fBlockMatrix.Blocks().fMatrixPosition[iel];
-    TPZFMatrix<STATE> De(3,3);
-    TPZFMatrix<STATE> Bip(n_sigma_comps,el_dofs,0.0);
-    TPZFMatrix<STATE> DeBip;
-    int c = 0;
-    for (int i = 0; i < n_sigma_comps; i++) {
-        for (int j = 0; j < el_dofs; j++) {
-            Bip(i,j) = fBlockMatrix.Blocks().fStorage[pos + c + n_sigma_comps*el_dofs*ip];
-            c++;
-        }
-    }
-    
-    REAL omega = fConstitutiveLawProcessor.fWeight[first_el_ip + ip];
-    ComputeConstitutiveMatrix(ip,De);
-    De.Multiply(Bip, DeBip);
-    Bip.MultAdd(DeBip, K, K, omega, 1.0, 1);
-}
-
-void TPZNumericalIntegrator::SetConstitutiveLawProcessor(TPZConstitutiveLawProcessor & processor){
-    fConstitutiveLawProcessor = processor;
-}
-
-TPZConstitutiveLawProcessor & TPZNumericalIntegrator::ConstitutiveLawProcessor(){
-    return fConstitutiveLawProcessor;
 }

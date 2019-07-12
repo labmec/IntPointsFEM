@@ -72,19 +72,12 @@ int pOrder;
     bool render_vtk_Q = false;
     bool modified_thomas_accel_Q = false;
     USING_CUDA_Q = true;
-
-
     
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
     std::string mesh = argv[1];
+    // std::string mesh = "1";
     std::string msh_file = source_dir + "/gmsh/wellbore_" + mesh + ".msh";
-    // std::string msh_file = source_dir + "/gmsh/wellbore_64k.msh";
-    // std::string msh_file = source_dir + "/gmsh/wellbore_64p516k.msh";
-//    std::string msh_file = source_dir + "/gmsh/wellbore_260k.msh";
-//    std::string msh_file = source_dir + "/gmsh/wellbore_1044p484k.msh";
-  // std::string msh_file = source_dir + "/gmsh/wellbore-coarse.msh";
-    // std::string msh_file = source_dir + "/gmsh/wellbore.msh";
     TPZGeoMesh *gmesh = ReadGeometry(msh_file);
 #ifdef PZDEBUG
     PrintGeometry(gmesh);
@@ -99,52 +92,54 @@ int pOrder;
     timer.TimerOption(Timer::EChrono);
     
     TPZCompMesh *cmesh;
-    // {
+    {
         timer.Start();
         cmesh = CmeshElastoplasticity(gmesh, pOrder, wellbore_material);
         timer.Stop();
         std::cout << "Calling CmeshElastoplasticity: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
-    // }
+    }
 
 
 // Defines the analysis
-    int n_threads = 24;
+    int n_threads = 32;
     // int n_threads = atoi(argv[2]);
     
 #ifdef USING_TBB
 #include "tbb/task_scheduler_init.h"
-//    tbb::task_scheduler_init init(tbb::task_scheduler_init::automatic); //max number of threads
     tbb::task_scheduler_init init(n_threads); //max number of threads
 #endif
     
     TPZAnalysis *analysis;
-    // {
+    {
         timer.Start();
-//        analysis = Analysis(cmesh,n_threads);
+#ifdef COMPUTE_WITH_PZ
+       analysis = Analysis(cmesh,n_threads);
+#else
         analysis = Analysis_IPFEM(cmesh,n_threads);
+#endif
         timer.Stop();
         std::cout << "Calling Analysis_IPFEM: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
-    // }
+    }
     
 // Calculates the solution using Newton method
     int n_iterations = 100;
     REAL tolerance = 1.e-7;
-    // {
+    {
         timer.Start();
         Solution(analysis, n_iterations, tolerance, modified_thomas_accel_Q);
         timer.Stop();
         std::cout << "Calling Solution: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
-    // }
+    }
 
 // Post process
    if (render_vtk_Q) {
        std::string vtk_file = "Approximation.vtk";
-       // {
+       {
            timer.Start();
            PostProcess(cmesh, wellbore_material, n_threads, vtk_file);
            timer.Stop();
            std::cout << "Calling PostProcess: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
-       // }
+       }
    }
     return 0;
 }
