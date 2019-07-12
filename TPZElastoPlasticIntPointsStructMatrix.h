@@ -68,14 +68,9 @@ private:
 
     void ColoredIndexes(TPZVec<int> &element_indexes, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor);
     
-    void FillLIndexes(TPZVec<int> & indexes,TPZVec<int> & el_n_dofs,TPZVec<int> & cols_first_index);
+    void FillLIndexes();
     
     int fDimension;
-    
-    struct intpoint_by_element {
-        int64_t fglob_el_index;
-        int64_t flocal_ip_index;
-    };
     
     int64_t me(TPZVec<int> &IA, TPZVec<int> &JA, int64_t & i_dest, int64_t & j_dest);
     
@@ -111,10 +106,6 @@ private:
     TPZVecGPU<int64_t> d_el_color_indexes;
 
     TPZVecGPU<REAL> d_RhsLinear;
-
-    TPZVecGPU<REAL> d_Kg;
-
-    TPZVecGPU<REAL> d_rhs;
     #endif
     
 };

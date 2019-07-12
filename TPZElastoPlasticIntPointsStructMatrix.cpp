@@ -25,8 +25,6 @@ TPZElastoPlasticIntPointsStructMatrix::TPZElastoPlasticIntPointsStructMatrix(TPZ
     d_IA_to_sequence.resize(0);    
     d_JA_to_sequence.resize(0);
     d_el_color_indexes.resize(0); 
-    d_Kg.resize(0);
-    d_rhs.resize(0);
     #endif
 }
 
@@ -61,11 +59,8 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
     for (int i = 0; i < stiff->JA().size(); ++i) {
         m_JA_to_sequence[i] = stiff->JA()[i];
     }
-    
-    TPZVec<int> & indexes = fIntegrator.DoFIndexes();
-    TPZVec<int> & el_n_dofs = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes;
-    TPZVec<int> & cols_first_index = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex;
-    FillLIndexes(indexes, el_n_dofs, cols_first_index);
+
+    FillLIndexes();
     
 #ifdef USING_CUDA
     Timer timer;   
@@ -82,7 +77,11 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
     return mat;
 }
 
-void TPZElastoPlasticIntPointsStructMatrix::FillLIndexes(TPZVec<int> & indexes,TPZVec<int> & el_n_dofs,TPZVec<int> & cols_first_index){
+void TPZElastoPlasticIntPointsStructMatrix::FillLIndexes(){
+
+    TPZVec<int> & indexes = fIntegrator.DoFIndexes();
+    TPZVec<int> & el_n_dofs = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes;
+    TPZVec<int> & cols_first_index = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex;
     
     int n_colors = m_first_color_index.size()-1;
     m_first_color_l_index.resize(n_colors+1);
@@ -222,7 +221,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     int n_colors = m_first_color_index.size()-1;
 
 #ifdef USING_CUDA      
-    d_Kg.resize(nnz);
+    TPZVecGPU<REAL> d_Kg(nnz);
     d_Kg.Zero();
     fIntegrator.ConstitutiveLawProcessor().De();
 #endif
@@ -414,7 +413,7 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TP
     rhs.Resize(neq, 1);
     rhs.Zero();  
 #ifdef USING_CUDA
-    d_rhs.resize(rhs.Rows());
+    TPZVecGPU<REAL> d_rhs(rhs.Rows());
     d_rhs.Zero();
     fIntegrator.ResidualIntegration(fMesh->Solution(),d_rhs);
     fCudaCalls.DaxpyOperation(neq, 1., d_RhsLinear.getData(), d_rhs.getData());
