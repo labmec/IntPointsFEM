@@ -42,11 +42,11 @@ public:
 	void ComputeSigma(bool update_mem, int npts, REAL *glob_delta_strain, REAL *glob_sigma, REAL lambda, REAL mu, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL *dPlasticStrain,  
 		REAL *dMType, REAL *dAlpha, REAL *dSigma, REAL *dStrain, REAL *weight);
 
-	void MatrixAssemble(int nnz, REAL *K, int first_el, int last_el, int64_t *el_color_index, REAL *weight, int *dof_indexes,
-		REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *ia_to_sequence, int *ja_to_sequence);
+	void MatrixAssembleGS(REAL *Kc, int first_el, int last_el, int64_t *el_color_index, REAL *weight, int *dof_indexes,
+	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition);
 
-	void MatrixAssemble(REAL *K, int nnz, REAL *Kg, int first_el, int last_el, int64_t *el_color_index, int *dof_indexes,
-	int *colsizes, int *colfirstindex, int *ia_to_sequence, int *ja_to_sequence);
+	void MatrixAssemble(REAL *Kg, int first_el, int last_el, int64_t *el_color_index,  REAL *weight, int *dof_indexes,
+	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *ia_to_sequence, int *ja_to_sequence);
 
 	void SolveCG(int n, int nnzA, REAL *csrValA, int *csrRowPtrA, int *csrColIndA, REAL *b, REAL *x);
 
