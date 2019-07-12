@@ -318,7 +318,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
         int nel_per_color = last - first;
         
         TPZVecGPU<REAL> d_Kc(m_color_l_sequence.size());
-std::cout << "begin K* is complete" << std::endl;
+        std::cout << "begin K* is complete" << std::endl;
         fCudaCalls.MatrixAssemble(nnz,d_Kc.getData(), first, last, &d_el_color_indexes.getData()[first], fIntegrator.ConstitutiveLawProcessor().WeightVectorDev().getData(),
             fIntegrator.DoFIndexesDev().getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dStorage.getData(),
             fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowSizes.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColSizes.getData(),
@@ -340,21 +340,17 @@ std::cout << "K* is complete" << std::endl;
     d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU
     #endif
 #else
-    std::cout << "COMPUTE_K_CPU" << std::endl;
-    for (int ic = 0; ic < n_colors; ic++) {
+    std::cout << "COMPUTE_K_CPU : augmented" << std::endl;
+
     
-#ifdef ColorWordAssembly_Q
-        int first = m_first_color_index[ic];
-        int last = m_first_color_index[ic + 1];
+#ifndef ColorWordAssembly_Q
+      for (int ic = 0; ic < n_colors; ic++) {
+#else
+        int first = m_first_color_index[0];
+        int last = m_first_color_index[n_colors];
         int el_dofs = el_n_dofs[0];
         int nel_per_color = last - first;
-        
-        int first_l = m_first_color_l_index[ic];
-        int last_l = m_first_color_l_index[ic + 1];
-        int n_l_indexes = last_l - first_l;
-        /// Gather from Kg
-        TPZVec<REAL> Kc(n_l_indexes);
-        cblas_dgthr(n_l_indexes, &Kg[0], &Kc[0], &m_color_l_sequence[first_l]);
+        TPZVec<REAL> Kc(m_color_l_sequence.size(),0.0);
 #endif
         
 #ifdef ColorWordAssembly_Q
@@ -373,7 +369,7 @@ std::cout << "K* is complete" << std::endl;
         for (int i = m_first_color_index[ic]; i < m_first_color_index[ic+1]; i++)
     #endif
 #endif
-            {
+        {
             
               
 #ifdef ColorWordAssembly_Q
@@ -417,20 +413,33 @@ std::cout << "K* is complete" << std::endl;
 #endif
                 
         }
-    #ifdef USING_TBB
-    );
-    #endif
-        
-#ifdef ColorWordAssembly_Q                          
-        /// Scatter to Kg
-        cblas_dsctr(n_l_indexes, &Kc[0], &m_color_l_sequence[first_l], &Kg[0]);
-                          
+#ifdef USING_TBB
+);
 #endif
-                        
         
+#ifdef ColorWordAssembly_Q
+                          
+    for (int ic = 0; ic < n_colors; ic++) {
+      int first_l = m_first_color_l_index[ic];
+      int last_l = m_first_color_l_index[ic + 1];
+      int n_l_indexes = last_l - first_l;
+      /// Gather from Kg
+      TPZVec<REAL> aux(n_l_indexes);
+      cblas_dgthr(n_l_indexes, &Kg[0], &aux[0], &m_color_l_sequence[first_l]);
+
+      // Contributing
+      cblas_daxpy(n_l_indexes, 1., &Kc[first_l], 1., &aux[0],1);
+        
+      /// Scatter to Kg
+      cblas_dsctr(n_l_indexes, &aux[0], &m_color_l_sequence[first_l], &Kg[0]);
     }
 #endif
+                        
+#ifndef ColorWordAssembly_Q
+}
+#endif
 
+#endif
      
     auto it_end = fSparseMatrixLinear.MapEnd();
     for (auto it = fSparseMatrixLinear.MapBegin(); it!=it_end; it++) {
