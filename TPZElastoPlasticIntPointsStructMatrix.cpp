@@ -174,6 +174,9 @@ void TPZElastoPlasticIntPointsStructMatrix::TransferDataToGPU() {
     d_RhsLinear.resize(fRhsLinear.Rows());
     d_RhsLinear.set(&fRhsLinear(0,0), fRhsLinear.Rows());
 
+    d_color_l_sequence.resize(m_color_l_sequence.size());
+    d_color_l_sequence.set(&m_color_l_sequence[0], m_color_l_sequence.size());
+
 }
 #endif
 
@@ -306,17 +309,29 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     }
     d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU
     #else
-
     std::cout << "COMPUTE_K_GPU" << std::endl;
     /// Serial by color
     for (int ic = 0; ic < n_colors; ic++) {
         int first = m_first_color_index[ic];
         int last = m_first_color_index[ic + 1];
-        fCudaCalls.MatrixAssemble(nnz,d_Kg.getData(), first, last, &d_el_color_indexes.getData()[first], fIntegrator.ConstitutiveLawProcessor().WeightVectorDev().getData(),
+        int el_dofs = el_n_dofs[0];
+        int nel_per_color = last - first;
+        
+        int first_l = m_first_color_l_index[ic];
+        int last_l = m_first_color_l_index[ic + 1];
+        int n_l_indexes = last_l - first_l;
+
+        TPZVecGPU<REAL> d_Kc(n_l_indexes);
+
+        fCudaCalls.GatherOperation(n_l_indexes, d_Kg.getData(), d_Kc.getData(), &d_color_l_sequence.getData()[first_l]);
+
+        fCudaCalls.MatrixAssemble(nnz,d_Kc.getData(), first, last, &d_el_color_indexes.getData()[first], fIntegrator.ConstitutiveLawProcessor().WeightVectorDev().getData(),
             fIntegrator.DoFIndexesDev().getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dStorage.getData(),
             fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowSizes.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColSizes.getData(),
             fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowFirstIndex.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColFirstIndex.getData(),
             fIntegrator.IrregularBlocksMatrix().BlocksDev().dMatrixPosition.getData(), d_IA_to_sequence.getData(), d_JA_to_sequence.getData());
+
+        fCudaCalls.ScatterOperation(n_l_indexes, d_Kc.getData(), d_Kg.getData(), &d_color_l_sequence.getData()[first_l]);
     }
     d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU
     #endif

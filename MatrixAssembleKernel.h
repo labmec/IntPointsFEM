@@ -79,7 +79,7 @@ void MatrixAssembleKernel(REAL *K, int nel, int nnz, REAL *Kg, int64_t *el_color
 
 
 __global__ 
-void MatrixAssembleKernel(int nel, int nnz, REAL *Kg, int first_el, int64_t *el_color_index, REAL *weight, int *dof_indexes, 
+void MatrixAssembleKernel(int nel, int nnz, REAL *Kc, int first_el, int64_t *el_color_index, REAL *weight, int *dof_indexes, 
 	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *ia_to_sequence, int *ja_to_sequence) {
 
 	// int tid = blockIdx.x;
@@ -107,15 +107,24 @@ void MatrixAssembleKernel(int nel, int nnz, REAL *Kg, int first_el, int64_t *el_
             }
             ComputeTangentMatrixDevice(el_npts, el_dofs, &s_storage[threadIdx.x * ndof * 3], weight[first_el_ip + ip], K);   
         }
- 
-        for (int i_dof = 0; i_dof < el_dofs; i_dof++) {
-            int64_t i_dest = dest[i_dof + threadIdx.x * ndof];
-            for (int j_dof = i_dof; j_dof < el_dofs; j_dof++) {
-                int64_t j_dest = dest[j_dof + threadIdx.x * ndof];
-                int64_t index = me(ia_to_sequence, ja_to_sequence, i_dest, j_dest);
-                Kg[index] += K[i_dof * el_dofs + j_dof];
+
+        int stride = tid*(el_dofs * el_dofs + el_dofs)/2;
+        int c = stride;
+        for(int i_dof = 0 ; i_dof < el_dofs; i_dof++){
+            for(int j_dof = i_dof; j_dof < el_dofs; j_dof++){
+                Kc[c] += K[i_dof * el_dofs + j_dof];
+                c++;
             }
-        }			
+        }
+ 
+        // for (int i_dof = 0; i_dof < el_dofs; i_dof++) {
+        //     int64_t i_dest = dest[i_dof + threadIdx.x * ndof];
+        //     for (int j_dof = i_dof; j_dof < el_dofs; j_dof++) {
+        //         int64_t j_dest = dest[j_dof + threadIdx.x * ndof];
+        //         int64_t index = me(ia_to_sequence, ja_to_sequence, i_dest, j_dest);
+        //         Kg[index] += K[i_dof * el_dofs + j_dof];
+        //     }
+        // }			
      }
 
 }

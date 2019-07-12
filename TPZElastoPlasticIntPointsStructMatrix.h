@@ -104,6 +104,8 @@ private:
     #ifdef USING_CUDA
     TPZCudaCalls fCudaCalls;
 
+    TPZVecGPU<int> d_color_l_sequence;
+
     TPZVecGPU<int> d_IA_to_sequence;
     
     TPZVecGPU<int> d_JA_to_sequence;
