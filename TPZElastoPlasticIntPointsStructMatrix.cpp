@@ -147,7 +147,6 @@ void TPZElastoPlasticIntPointsStructMatrix::TransferDataToGPU() {
 #endif
 
 int64_t TPZElastoPlasticIntPointsStructMatrix::me(TPZVec<int> &IA, TPZVec<int> &JA, int64_t & i_dest, int64_t & j_dest) {
-    // Get the matrix entry at (row,col) without bound checking
     int64_t row(i_dest),col(j_dest);
     if (i_dest > j_dest) {
         int64_t temp = i_dest;
@@ -482,11 +481,6 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZVec<int>
     blocksData.fRowFirstIndex[0] = 0;
     blocksData.fColFirstIndex[0] = 0;
 
-//    blocksData.fRowRowPosition.resize(nblocks + 1);
-//    blocksData.fColColPosition.resize(nblocks + 1);
-//    blocksData.fRowRowPosition[0] = 0;
-//    blocksData.fColColPosition[0] = 0;
-    
     // @TODO Candidate for TBB ParallelScan
     // Example with lambda expression https://www.threadingbuildingblocks.org/docs/help/reference/algorithms/parallel_scan_func.html
     for(int iel = 0; iel < nblocks; iel++) {
@@ -512,9 +506,6 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZVec<int>
         blocksData.fMatrixPosition[iel + 1] = blocksData.fMatrixPosition[iel] + blocksData.fRowSizes[iel] * blocksData.fColSizes[iel];
         blocksData.fRowFirstIndex[iel + 1] =  blocksData.fRowFirstIndex[iel] + blocksData.fRowSizes[iel];
         blocksData.fColFirstIndex[iel + 1] = blocksData.fColFirstIndex[iel] + blocksData.fColSizes[iel];
-
-//        blocksData.fRowRowPosition[iel + 1] = blocksData.fRowRowPosition[iel] + blocksData.fRowSizes[iel] * blocksData.fRowSizes[iel];
-//        blocksData.fColColPosition[iel + 1] = blocksData.fColColPosition[iel] + blocksData.fColSizes[iel] * blocksData.fColSizes[iel];
     }
 
     blocksData.fStorage.resize(blocksData.fMatrixPosition[nblocks]);
@@ -567,8 +558,6 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZVec<int>
             data.axes.Transpose();
             data.axes.Multiply(data.dphix, dphiXY);
 
-//            dphiXY.Print("b = ",std::cout,EMathematicaInput);
-            
             for (int j_dim = 0; j_dim < 2; j_dim++){
 
                 for (int i_dof = 0; i_dof < n_el_dof; i_dof++) {
@@ -583,7 +572,6 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZVec<int>
 
         }
         B_el.Transpose();
-//        B_el.Print("Bel = ",std::cout,EMathematicaInput);
         TPZFMatrix<REAL> B_el_loc(npts * n_sigma_entries, n_el_dof * fDimension, &blocksData.fStorage[pos_el], npts * n_sigma_entries * n_el_dof * fDimension);
         B_el_loc = B_el;
     }
