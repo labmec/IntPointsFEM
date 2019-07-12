@@ -71,9 +71,9 @@ void MatrixAssembleKernel(int nel, REAL *Kg, int64_t *el_color_index, REAL *weig
         }
  
         for (int i_dof = 0; i_dof < el_dofs; i_dof++) {
-            int64_t i_dest = dest[i_dof + threadIdx.x * ndof];
+            int64_t i_dest = dest[i_dof];
             for (int j_dof = i_dof; j_dof < el_dofs; j_dof++) {
-                int64_t j_dest = dest[j_dof + threadIdx.x * ndof];
+                int64_t j_dest = dest[j_dof];
                 int64_t index = me(ia_to_sequence, ja_to_sequence, i_dest, j_dest);
                 Kg[index] += K[i_dof * el_dofs + j_dof];
             }

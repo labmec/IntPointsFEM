@@ -254,10 +254,6 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 
 
 
-    Timer timer;   
-    timer.TimeUnit(Timer::ESeconds);
-    timer.TimerOption(Timer::EChrono);
-
     int n_colors = m_first_color_index.size()-1;
 
 #ifdef USING_CUDA      
@@ -265,11 +261,11 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     d_Kg.Zero();
     fIntegrator.ConstitutiveLawProcessor().De();
 #endif
-    Timer timer_tot;   
-    timer_tot.TimeUnit(Timer::ESeconds);
-    timer_tot.TimerOption(Timer::EChrono);
-    timer_tot.Start();
 
+    Timer timer;   
+    timer.TimeUnit(Timer::ESeconds);
+    timer.TimerOption(Timer::EChrono);
+    timer.Start();
 #ifdef USING_CUDA
     #ifdef COMPUTE_K_GS
     std::cout << "COMPUTE_K_GPU_GS" << std::endl;          
@@ -280,7 +276,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 
         TPZVecGPU<REAL> d_Kc(m_color_l_sequence.size());
         d_Kc.Zero();
-        fCudaCalls.MatrixAssemble(d_Kc.getData(), first, last, d_el_color_indexes.getData(), fIntegrator.ConstitutiveLawProcessor().WeightVectorDev().getData(),
+        fCudaCalls.MatrixAssembleGS(d_Kc.getData(), first, last, d_el_color_indexes.getData(), fIntegrator.ConstitutiveLawProcessor().WeightVectorDev().getData(),
             fIntegrator.DoFIndexesDev().getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dStorage.getData(),
             fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowSizes.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColSizes.getData(),
             fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowFirstIndex.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColFirstIndex.getData(),
@@ -294,13 +290,12 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
         fCudaCalls.GatherOperation(n_l_indexes, d_Kg.getData(), aux.getData(), &d_color_l_sequence.getData()[first_l]);
         fCudaCalls.DaxpyOperation(n_l_indexes, 1., &d_Kc.getData()[first_l], aux.getData());
         fCudaCalls.ScatterOperation(n_l_indexes, aux.getData(), d_Kg.getData(), &d_color_l_sequence.getData()[first_l]);
-
     }
     d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU
     #else
     std::cout << "COMPUTE_K_GPU" << std::endl;
-    /// Serial by color
-    for (int ic = 0; ic < n_colors; ic++) {
+    for (int ic = 0; ic < n_colors; ic++) /// Serial by color
+    {     
         int first = m_first_color_index[ic];
         int last = m_first_color_index[ic + 1];
         fCudaCalls.MatrixAssemble(d_Kg.getData(), first, last, &d_el_color_indexes.getData()[first], fIntegrator.ConstitutiveLawProcessor().WeightVectorDev().getData(),
@@ -311,10 +306,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     }
     d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU    
     #endif
-    // std::cout << Kg << std::endl;
-    // DebugStop();
 #else
-
 #ifdef COMPUTE_K_GS
      std::cout << "COMPUTE_K_CPU_GS" << std::endl;
      
@@ -410,8 +402,8 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 
 #endif
 
-    timer_tot.Stop();
-    std::cout << "K Assemble: Elasped time [sec] = " << timer_tot.ElapsedTime() << std::endl;
+    timer.Stop();
+    std::cout << "K Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
      
     auto it_end = fSparseMatrixLinear.MapEnd();
     for (auto it = fSparseMatrixLinear.MapBegin(); it!=it_end; it++) {
@@ -421,7 +413,6 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
       stiff.PutVal(row, col, val);
     }
 
-    // std::cout << Kg << std::endl;
     timer.Start();
     Assemble(rhs,guiInterface);
     timer.Stop();

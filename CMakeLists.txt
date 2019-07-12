@@ -90,18 +90,13 @@ if(USING_TBB)
 endif(USING_TBB)
 
 # Assembly options
-option(COMPUTE_K_HYBRID off)
-if(COMPUTE_K_HYBRID)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMPUTE_K_HYBRID")
-endif(COMPUTE_K_HYBRID)
-
-option(ColorbyIp_Q off)
-if(ColorbyIp_Q)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DColorbyIp_Q")
-endif(ColorbyIp_Q)
+option(COMPUTE_K_GS off)
+if(COMPUTE_K_GS)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMPUTE_K_GS")
+endif(COMPUTE_K_GS)
 
 # Polinomial order
-option(O_LINEAR off)
+option(O_LINEAR on)
 if(O_LINEAR)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DO_LINEAR")
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DO_LINEAR") 
