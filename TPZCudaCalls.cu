@@ -3,9 +3,9 @@
 #include "pzvec.h"
 
 // #include "MatMulKernels.h"
-#include "ComputeSigmaKernel.h"
-#include "MatrixAssembleKernel.h"
-
+#include "KernelsComputeSigma.h"
+#include "KernelsMatMul.h"
+#include "KernelsMatrixAssemble.h"
 
 #define NT  64
 

@@ -76,8 +76,8 @@ int pOrder;
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
     std::string mesh = argv[1];
+    // std::string mesh = "1";
     std::string msh_file = source_dir + "/gmsh/wellbore_" + mesh + ".msh";
-    // std::string msh_file = source_dir + "/gmsh/wellbore_0.msh";
     TPZGeoMesh *gmesh = ReadGeometry(msh_file);
 #ifdef PZDEBUG
     PrintGeometry(gmesh);
@@ -106,15 +106,17 @@ int pOrder;
     
 #ifdef USING_TBB
 #include "tbb/task_scheduler_init.h"
-//    tbb::task_scheduler_init init(tbb::task_scheduler_init::automatic); //max number of threads
     tbb::task_scheduler_init init(n_threads); //max number of threads
 #endif
     
     TPZAnalysis *analysis;
     {
         timer.Start();
-//        analysis = Analysis(cmesh,n_threads);
+#ifdef COMPUTE_WITH_PZ
+       analysis = Analysis(cmesh,n_threads);
+#else
         analysis = Analysis_IPFEM(cmesh,n_threads);
+#endif
         timer.Stop();
         std::cout << "Calling Analysis_IPFEM: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
     }

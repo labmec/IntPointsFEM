@@ -82,39 +82,6 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
     return mat;
 }
 
-void TPZElastoPlasticIntPointsStructMatrix::FillLIndexes(TPZVec<int> & indexes,TPZVec<int> & el_n_dofs,TPZVec<int> & cols_first_index, int ic){
-    
-    
-    int first = m_first_color_index[ic];
-    int last = m_first_color_index[ic + 1];
-    int nel_per_color = last - first;
-    int64_t c = 0;
-    for (int i = 0; i < nel_per_color; i++) {
-        int iel = m_el_color_indexes[first + i];
-        int el_dof = el_n_dofs[iel];
-        int n_entries = (el_dof*el_dof + el_dof)/2;
-        c += n_entries;
-    }
-    
-    m_color_l_sequence.resize(c);
-    c = 0;
-    for (int i = 0; i < nel_per_color; i++) {
-        int iel = m_el_color_indexes[first + i];
-        int el_dof = el_n_dofs[iel];
-        int pos = cols_first_index[iel];
-        for (int i_dof = 0; i_dof < el_dof; i_dof++) {
-            int64_t i_dest = indexes[pos + i_dof];
-            for (int j_dof = i_dof; j_dof < el_dof; j_dof++) {
-                int64_t j_dest = indexes[pos + j_dof];
-                int64_t l_index = me(m_IA_to_sequence, m_JA_to_sequence, i_dest, j_dest);
-                m_color_l_sequence[c] = l_index;
-                c++;
-            }
-        }
-    }
-    
-}
-
 void TPZElastoPlasticIntPointsStructMatrix::FillLIndexes(TPZVec<int> & indexes,TPZVec<int> & el_n_dofs,TPZVec<int> & cols_first_index){
     
     int n_colors = m_first_color_index.size()-1;

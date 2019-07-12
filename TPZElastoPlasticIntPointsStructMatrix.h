@@ -68,8 +68,6 @@ private:
 
     void ColoredIndexes(TPZVec<int> &element_indexes, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor);
     
-    void FillLIndexes(TPZVec<int> & indexes,TPZVec<int> & el_n_dofs,TPZVec<int> & cols_first_index, int ic);
-    
     void FillLIndexes(TPZVec<int> & indexes,TPZVec<int> & el_n_dofs,TPZVec<int> & cols_first_index);
     
     int fDimension;

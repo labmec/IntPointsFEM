@@ -4,9 +4,11 @@
 
 #include "TPZConstitutiveLawProcessor.h"
 #include "TPZMatWithMem.h"
-#include "SpectralDecomp.h"
-#include "SigmaProjection.h"
 #include <functional>
+
+#ifndef USING_CUDA
+#include "FunctionsStressStrain.h"
+#endif
 
 #ifdef USING_TBB
 #include "tbb/parallel_for.h"
@@ -126,14 +128,6 @@ void TPZConstitutiveLawProcessor::SetMaterial(TPZMaterial *material) {
     fMaterial = dynamic_cast<TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse> , TPZElastoPlasticMem> *>(material);
 }
 
-void TPZConstitutiveLawProcessor::ElasticStrain(TPZFMatrix<REAL> &plastic_strain, TPZFMatrix<REAL> & strain ,TPZFMatrix<REAL> &elastic_strain) {
-    elastic_strain = strain - plastic_strain;
-}
-
-void TPZConstitutiveLawProcessor::PlasticStrain(TPZFMatrix<REAL> &strain, TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &plastic_strain) {
-    plastic_strain = strain - elastic_strain;
-}
-
 void TPZConstitutiveLawProcessor::De(TPZFMatrix<REAL> & De){
     
     REAL lambda = fMaterial->GetPlasticModel().fER.Lambda();
@@ -159,73 +153,8 @@ void TPZConstitutiveLawProcessor::De(TPZFMatrix<REAL> & De){
     De(_ZZ_, _ZZ_) += mu;
 }
 
-void TPZConstitutiveLawProcessor::ComputeTrialStress(TPZFMatrix<REAL> &elastic_strain, TPZFMatrix<REAL> &sigma_trial) {
-    TPZFNMatrix<36,REAL> De(6,6,0.0);
-    this->De(De);
-
-    TPZFNMatrix<6,REAL> el_delta_strain, el_stress;
-    De.Multiply(elastic_strain, sigma_trial);
-}
-
-void TPZConstitutiveLawProcessor::ComputeStrain(TPZFMatrix<REAL> &sigma, TPZFMatrix<REAL> &elastic_strain) {
-    TPZFNMatrix<36,REAL> De(6,6,0.0);
-    TPZFNMatrix<36,REAL> DeInv(6,6,0.0);
-    this->De(De);
-
-    De.Inverse(DeInv,ENoDecompose);
-    DeInv.Multiply(sigma,elastic_strain);
-}
-
-void TPZConstitutiveLawProcessor::SpectralDecomposition(TPZFMatrix<REAL> &sigma_trial, TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &eigenvectors) {
-    TPZVec<REAL> interval(2);
-    REAL maxel;
-    Normalize(&sigma_trial(0, 0), maxel);
-    Interval(&sigma_trial(0, 0), &interval[0]);
-    NewtonIterations(&interval[0], &sigma_trial(0, 0), &eigenvalues(0, 0), maxel);
-    Eigenvectors(&sigma_trial(0, 0), &eigenvalues(0, 0), &eigenvectors(0,0),maxel);
-}
-
-void TPZConstitutiveLawProcessor::ProjectSigma(TPZFMatrix<REAL> &eigenvalues, TPZFMatrix<REAL> &sigma_projected, REAL &alpha, int &mtype) {
-    REAL mc_psi = fMaterial->GetPlasticModel().fYC.Psi();
-    REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();
-    REAL mc_cohesion = fMaterial->GetPlasticModel().fYC.Cohesion();
-    REAL K = fMaterial->GetPlasticModel().fER.K();
-    REAL G = fMaterial->GetPlasticModel().fER.G();
-
-    bool check = false;
-    mtype = 0;
-    check = PhiPlane(&eigenvalues(0, 0), &sigma_projected(0, 0), mc_phi, mc_cohesion); //elastic domain
-    if (!check) { //plastic domain
-        mtype = 1;
-        check = ReturnMappingMainPlane(&eigenvalues(0, 0), &sigma_projected(0, 0), alpha, mc_phi, mc_psi, mc_cohesion, K, G); //main plane
-        if (!check) { //edges or apex
-            if  (((1 - sin(mc_psi)) * eigenvalues(0, 0) - 2. * eigenvalues(1, 0) + (1 + sin(mc_psi)) * eigenvalues(2, 0)) > 0) { // right edge
-                check = ReturnMappingRightEdge(&eigenvalues(0, 0), &sigma_projected(0, 0), alpha, mc_phi, mc_psi, mc_cohesion, K, G);
-            } else { //left edge
-                check = ReturnMappingLeftEdge(&eigenvalues(0, 0), &sigma_projected(0, 0), alpha, mc_phi, mc_psi, mc_cohesion, K, G);
-            }
-            if (!check) { //apex
-                mtype = -1;
-                ReturnMappingApex(&eigenvalues(0, 0), &sigma_projected(0, 0), alpha, mc_phi, mc_psi, mc_cohesion, K);
-            }
-        }
-    }
-
-}
-
-void TPZConstitutiveLawProcessor::ReconstructStressTensor(TPZFMatrix<REAL> &sigma_projected, TPZFMatrix<REAL> &eigenvectors, TPZFMatrix<REAL> &sigma){
-    
-    sigma(_XX_, 0) = (sigma_projected(0,0)*eigenvectors(0,0)*eigenvectors(0,0) + sigma_projected(1,0)*eigenvectors(3,0)*eigenvectors(3,0) + sigma_projected(2,0)*eigenvectors(6,0)*eigenvectors(6,0));
-    sigma(_YY_, 0) = (sigma_projected(0,0)*eigenvectors(1,0)*eigenvectors(1,0) + sigma_projected(1,0)*eigenvectors(4,0)*eigenvectors(4,0) + sigma_projected(2,0)*eigenvectors(7,0)*eigenvectors(7,0));
-    sigma(_ZZ_, 0) = (sigma_projected(0,0)*eigenvectors(2,0)*eigenvectors(2,0) + sigma_projected(1,0)*eigenvectors(5,0)*eigenvectors(5,0) + sigma_projected(2,0)*eigenvectors(8,0)*eigenvectors(8,0));
-
-    sigma(_XY_, 0) = (sigma_projected(0,0)*eigenvectors(0,0)*eigenvectors(1,0) + sigma_projected(1,0)*eigenvectors(3,0)*eigenvectors(4,0) + sigma_projected(2,0)*eigenvectors(6,0)*eigenvectors(7,0));
-    sigma(_XZ_, 0) = (sigma_projected(0,0)*eigenvectors(0,0)*eigenvectors(2,0) + sigma_projected(1,0)*eigenvectors(3,0)*eigenvectors(5,0) + sigma_projected(2,0)*eigenvectors(6,0)*eigenvectors(8,0));
-    sigma(_YZ_, 0) = (sigma_projected(0,0)*eigenvectors(1,0)*eigenvectors(2,0) + sigma_projected(1,0)*eigenvectors(4,0)*eigenvectors(5,0) + sigma_projected(2,0)*eigenvectors(7,0)*eigenvectors(8,0));
-
-}
-
 void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> & glob_delta_strain, TPZFMatrix<REAL> & glob_sigma) {
+#ifndef USING_CUDA
     
     int64_t rows = glob_delta_strain.Rows();
     int64_t cols = glob_delta_strain.Cols();
@@ -239,12 +168,21 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> & glob_delta_str
 #ifdef USING_TBB
     
     tbb::parallel_for(size_t(0), size_t(fNpts), size_t(1) , [this, mat, & glob_delta_strain, & glob_sigma] (size_t & ipts) {
-        
+
         TPZFNMatrix<6,REAL> strain(6, 1, 0.);
         TPZFNMatrix<6,REAL> elastic_strain(6, 1, 0.);
         TPZFNMatrix<6,REAL> sigma(6, 1, 0.);
         TPZFNMatrix<6,REAL> plastic_strain(6, 1, 0.);
         TPZFNMatrix<3,REAL> aux_tensor(3, 1, 0.);
+
+        REAL lambda = fMaterial->GetPlasticModel().fER.Lambda();
+        REAL mu =  fMaterial->GetPlasticModel().fER.Mu();
+        REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();
+        REAL mc_psi = fMaterial->GetPlasticModel().fYC.Psi();
+        REAL mc_cohesion = fMaterial->GetPlasticModel().fYC.Cohesion();
+        REAL G = mu;
+        REAL K = lambda + 2 * mu/3;
+
         
         REAL alpha;
         int mtype;
@@ -256,7 +194,7 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> & glob_delta_str
         fStrain.GetSub(6 * ipts, 0, 6, 1, strain);
         
         // Translate and
-        ComposeStrain(aux_tensor, strain);
+        ComposeStrain(&aux_tensor(0,0), &strain(0,0));
         
         //Get from plastic strain vector
         fPlasticStrain.GetSub(6 * ipts, 0, 6, 1, plastic_strain);
@@ -265,23 +203,24 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> & glob_delta_str
         TPZFMatrix<REAL> sigma_projected(3, 1, 0.);
         
         // Return Mapping components
-        ElasticStrain(plastic_strain, strain, elastic_strain);
-        ComputeTrialStress(elastic_strain, sigma);
-        SpectralDecomposition(sigma, sigma_projected, eigenvectors);
-        ProjectSigma(sigma_projected, sigma_projected, alpha, mtype);
-        ReconstructStressTensor(sigma_projected, eigenvectors, sigma);
+        ElasticStrain(&plastic_strain(0,0), &strain(0,0), &elastic_strain(0,0));
+        ComputeTrialStress(&elastic_strain(0,0), &sigma(0,0), mu, lambda);
+        SpectralDecomposition(&sigma(0,0), &sigma_projected(0,0), &eigenvectors(0,0));
+        ProjectSigma(&sigma_projected(0,0), &sigma_projected(0,0), mtype, alpha, mc_phi, mc_psi, mc_cohesion, K, G);
+        ReconstructStressTensor(&sigma_projected(0,0), &eigenvectors(0,0), &sigma(0,0));
         
         // Update plastic strain
-        ComputeStrain(sigma, elastic_strain);
-        PlasticStrain(strain, elastic_strain, plastic_strain);
+        ComputeStrain(&sigma(0,0), &elastic_strain(0,0), mu, lambda);
+        PlasticStrain(&strain(0,0), &elastic_strain(0,0), &plastic_strain(0,0));
         
         //Copy to stress vector
-        TranslateStress(sigma, aux_tensor);
+        TranslateStress(&sigma(0,0), &aux_tensor(0,0));
         
         aux_tensor *= fWeight[ipts];
         glob_sigma.PutSub(3 * ipts, 0, aux_tensor);
         
         if (mat->GetUpdateMem()) {
+            
             fSigma.AddSub(6 * ipts, 0, sigma);
             
             //Accumulate to strain vector
@@ -304,11 +243,18 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> & glob_delta_str
     TPZFNMatrix<6,REAL> sigma(6, 1, 0.);
     TPZFNMatrix<6,REAL> plastic_strain(6, 1, 0.);
     TPZFNMatrix<3,REAL> aux_tensor(3, 1, 0.);
+
     
     // Lambda for evaluate flux, this is supposed to be implemented in GPU
     auto EvaluateFlux = [this, mat, & glob_delta_strain, & glob_sigma, & strain, & elastic_strain, & plastic_strain, & sigma, & aux_tensor] (int & ipts)
-    {
-        
+    {       
+        REAL lambda = fMaterial->GetPlasticModel().fER.Lambda();
+        REAL mu =  fMaterial->GetPlasticModel().fER.Mu();
+        REAL mc_phi = fMaterial->GetPlasticModel().fYC.Phi();
+        REAL mc_psi = fMaterial->GetPlasticModel().fYC.Psi();
+        REAL mc_cohesion = fMaterial->GetPlasticModel().fYC.Cohesion();
+        REAL G = mu;
+        REAL K = lambda + 2 * mu/3;
     
         REAL alpha;
         int mtype;
@@ -320,7 +266,7 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> & glob_delta_str
         fStrain.GetSub(6 * ipts, 0, 6, 1, strain);
         
         // Translate and
-        ComposeStrain(aux_tensor, strain);
+        ComposeStrain(&aux_tensor(0,0), &strain(0,0));
         
         //Get from plastic strain vector
         fPlasticStrain.GetSub(6 * ipts, 0, 6, 1, plastic_strain);
@@ -329,18 +275,18 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> & glob_delta_str
         TPZFMatrix<REAL> sigma_projected(3, 1, 0.);
         
         // Return Mapping components
-        ElasticStrain(plastic_strain, strain, elastic_strain);
-        ComputeTrialStress(elastic_strain, sigma);
-        SpectralDecomposition(sigma, sigma_projected, eigenvectors);
-        ProjectSigma(sigma_projected, sigma_projected, alpha, mtype);
-        ReconstructStressTensor(sigma_projected, eigenvectors, sigma);
+        ElasticStrain(&plastic_strain(0,0), &strain(0,0), &elastic_strain(0,0));
+        ComputeTrialStress(&elastic_strain(0,0), &sigma(0,0), mu, lambda);
+        SpectralDecomposition(&sigma(0,0), &sigma_projected(0,0), &eigenvectors(0,0));
+        ProjectSigma(&sigma_projected(0,0), &sigma_projected(0,0), mtype, alpha, mc_phi, mc_psi, mc_cohesion, K, G);
+        ReconstructStressTensor(&sigma_projected(0,0), &eigenvectors(0,0), &sigma(0,0));
         
         // Update plastic strain
-        ComputeStrain(sigma, elastic_strain);
-        PlasticStrain(strain, elastic_strain, plastic_strain);
+        ComputeStrain(&sigma(0,0), &elastic_strain(0,0), mu, lambda);
+        PlasticStrain(&strain(0,0), &elastic_strain(0,0), &plastic_strain(0,0));
         
         //Copy to stress vector
-        TranslateStress(sigma, aux_tensor);
+        TranslateStress(&sigma(0,0), &aux_tensor(0,0));
         
         aux_tensor *= fWeight[ipts];
         glob_sigma.PutSub(3 * ipts, 0, aux_tensor);
@@ -416,32 +362,7 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> & glob_delta_str
 #endif
     }
 
-}
-
-void TPZConstitutiveLawProcessor::ComposeStrain(TPZFMatrix<REAL> &delta_strain, TPZFMatrix<REAL> & strain){
-    
-    int dim = 2;
-    if (dim == 2) {
-        	strain(_XX_,0) += delta_strain(0,0);
-            strain(_XY_,0) += delta_strain(1,0);
-            strain(_YY_,0) += delta_strain(2,0);
-    }else{
-        strain += delta_strain;
-    }
-    
-}
-
-void TPZConstitutiveLawProcessor::TranslateStress(TPZFMatrix<REAL> &full_stress, TPZFMatrix<REAL> &stress){
-    
-    int dim = 2;
-    if (dim == 2) {
-            stress(0,0) =  full_stress(_XX_,0);
-            stress(1,0) =  full_stress(_XY_,0);
-            stress(2,0) =  full_stress(_YY_,0);
-    }else{
-        stress = full_stress;
-    }
-    
+#endif
 }
 
 #ifdef USING_CUDA
@@ -488,6 +409,9 @@ void TPZConstitutiveLawProcessor::ComputeSigma(TPZVecGPU<REAL> &glob_delta_strai
         }
                           );
 #else
+        TPZFNMatrix<6,REAL> strain(6, 1, 0.);
+        TPZFNMatrix<6,REAL> plastic_strain(6, 1, 0.);
+        TPZFNMatrix<6,REAL> sigma(6, 1, 0.);
         // Lambda expression to update memory
         auto UpdateElastoPlasticState = [this, mat, & strain, & plastic_strain, & sigma] (int ipts)
         {

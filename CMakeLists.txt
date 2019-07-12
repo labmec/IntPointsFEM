@@ -34,11 +34,6 @@ if(PTHREAD_LIB-NOTFOUND)
 endif()
 include_directories(${PTHREAD_INCLUDE})
 
-option(USING_SPARSE off)
-if(USING_SPARSE)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSING_SPARSE")
-endif(USING_SPARSE)
-
 #enabling TBB library
 option(USING_TBB "Whether the TBB library will be linked in" OFF)
 if(USING_TBB)
@@ -89,6 +84,12 @@ if(USING_TBB)
     endif(WIN32)
 endif(USING_TBB)
 
+# Residual option
+option(USING_SPARSE off)
+if(USING_SPARSE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSING_SPARSE")
+endif(USING_SPARSE)
+
 # Assembly options
 option(COMPUTE_K_GS off)
 if(COMPUTE_K_GS)
@@ -100,18 +101,24 @@ option(O_LINEAR on)
 if(O_LINEAR)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DO_LINEAR")
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DO_LINEAR") 
+    set(O_QUADRATIC off)
+    set(O_CUBIC off)
 endif(O_LINEAR)
 
 option(O_QUADRATIC off)
 if(O_QUADRATIC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DO_QUADRATIC")
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DO_QUADRATIC")
+    set(O_LINEAR off)
+    set(O_CUBIC off)
 endif(O_QUADRATIC)
 
 option(O_CUBIC off)
 if(O_CUBIC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DO_CUBIC")
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DO_CUBIC")
+    set(O_LINEAR off)
+    set(O_QUADRATIC off)
 endif(O_CUBIC)
 
 # Enabling CUDA
@@ -123,7 +130,6 @@ if(USING_CUDA)
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --default-stream per-thread  -ftz=true -Xcompiler -O3 --ptxas-options=-O3 -w -Wno-deprecated-gpu-targets -arch=compute_35 -rdc=true -lcudadevrt --use_fast_math")
 
     set(CMAKE_CUDA_STANDARD 11)
-#   set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}; -arch=compute_35 -rdc=true -lcudadevrt)
     set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} --default-stream per-thread  -ftz=true -Xcompiler -O3 --ptxas-options=-O3 -w -Wno-deprecated-gpu-targets -arch=compute_35 -rdc=true -lcudadevrt --use_fast_math")
 
     set(CUDA_SEPARABLE_COMPILATION ON)
@@ -140,6 +146,15 @@ else()
     file(GLOB headers *.h)
     set(main_SRCS ${sources} ${headers})
 endif(USING_CUDA)
+
+# K and R assembly using PZ
+option(COMPUTE_WITH_PZ off)
+if(COMPUTE_WITH_PZ)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMPUTE_WITH_PZ")
+    set(USING_SPARSE off)
+    set(COMPUTE_K_GS off)
+    set(USING_CUDA off)
+endif(COMPUTE_WITH_PZ)
 
 # Configure the path.h.in file.
 # This file can only use the @VARIABLE@ syntax in the file
