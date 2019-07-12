@@ -242,8 +242,6 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     AssembleBoundaryData();
 }
 
-#define ColorWordAssembly_Q
-
  void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
 
     TPZSYsmpMatrix<STATE> &stiff = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
@@ -319,18 +317,19 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 
 #ifdef COMPUTE_K_GS
      std::cout << "COMPUTE_K_CPU_GS" << std::endl;
-     for (int ic = 0; ic < n_colors; ic++) {
-#ifdef ColorWordAssembly_Q
+     
+     int first = m_first_color_index[0];
+     int last = m_first_color_index[n_colors];
+     int el_dofs = el_n_dofs[0];
+     int nel_per_color = last - first;
+     TPZVec<REAL> Kc(m_color_l_sequence.size(),0.0);
+     
 #ifdef USING_TBB
          tbb::parallel_for(size_t(0),size_t(nel_per_color),size_t(1),[&](size_t i)
 #else
         for (int i = 0; i < nel_per_color; i++)
 #endif
-#endif
          {
-             
-             
-             
              int iel = m_el_color_indexes[first + i];
              
              // Compute Elementary Matrix.
@@ -344,7 +343,6 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
                      c++;
                  }
              }
-             
          }
 #ifdef USING_TBB
 );
