@@ -252,8 +252,6 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     TPZVec<int> & el_n_dofs = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes;
     TPZVec<int> & cols_first_index = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex;
 
-
-
     int n_colors = m_first_color_index.size()-1;
 
 #ifdef USING_CUDA      

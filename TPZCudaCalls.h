@@ -15,17 +15,7 @@ public:
 
 	~TPZCudaCalls();
 
-	TPZCudaCalls &operator=(const TPZCudaCalls &copy) {
-		if(&copy == this){
-			return *this;
-		}
-		handle_cusparse = copy.handle_cusparse;
-		cusparse_h = copy.cusparse_h;
-		handle_cublas = copy.handle_cublas;
-		cublas_h = copy.cublas_h;
-
-		return *this;
-	}
+	TPZCudaCalls &operator=(const TPZCudaCalls &copy);
 
 	void Multiply(bool trans, int *m, int *n, int *k, REAL *A, int *strideA, REAL *B, int *strideB,  REAL *C, int *strideC, REAL alpha, int nmatrices);
 
@@ -50,14 +40,6 @@ public:
 
 	void SolveCG(int n, int nnzA, REAL *csrValA, int *csrRowPtrA, int *csrColIndA, REAL *b, REAL *x);
 
-	void SetHeapSize() {
-		if(heap_q == false) {
-			heap_q = true;
-			size_t size = 120000000;
-			cudaDeviceSetLimit(cudaLimitMallocHeapSize, size);
-		}
-	}
-
 	void DeToDevice(REAL lambda, REAL mu);
 	
 private:
@@ -66,8 +48,5 @@ private:
 	
 	cublasHandle_t handle_cublas;
 	bool cublas_h;
-
-	bool heap_q;
-
 };
 #endif
