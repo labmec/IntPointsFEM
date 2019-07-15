@@ -63,9 +63,9 @@ void MatrixAssembleKernel(int nel, REAL *Kg, int64_t *el_color_index, REAL *weig
             for(int i = 0; i < ndof * 3; i++) {
                s_storage[i + threadIdx.x * ndof * 3] = storage[matpos + i + ip * ndof * 3];
             }
+            __syncthreads();     
             ComputeTangentMatrixDevice(el_npts, el_dofs, &s_storage[threadIdx.x * ndof * 3], weight[first_el_ip + ip], K);   
         }
- 
         for (int i_dof = 0; i_dof < el_dofs; i_dof++) {
             int64_t i_dest = dest[i_dof];
             for (int j_dof = i_dof; j_dof < el_dofs; j_dof++) {
@@ -101,6 +101,7 @@ void MatrixAssembleKernelGS(int nel, REAL *Kc, int64_t *el_color_index, REAL *we
             for(int i = 0; i < ndof * 3; i++) {
                s_storage[i + threadIdx.x * ndof * 3] = storage[matpos + i + ip * ndof * 3];
             }
+            __syncthreads(); 
             ComputeTangentMatrixDevice(el_npts, el_dofs, &s_storage[threadIdx.x * ndof * 3], weight[first_el_ip + ip], K);   
         }
 
