@@ -55,10 +55,6 @@ void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData material, int n_threads,
 ///RK Approximation
 void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_material, int npoints, std::ostream &out, bool euler = false);
 
-static bool USING_CUDA_Q;
-
-static bool USING_Hybrid_Q;
-
 int main(int argc, char *argv[]) {
 int pOrder;
 #ifdef O_LINEAR
@@ -70,8 +66,13 @@ int pOrder;
 #endif
 
     bool render_vtk_Q = false;
-    bool modified_thomas_accel_Q = false;
-    USING_CUDA_Q = true;
+
+    bool modified_thomas_accel_Q;
+#ifdef COMPUTE_WITH_MODIFIED    
+    modified_thomas_accel_Q = true;
+#else
+    modified_thomas_accel_Q = false;
+#endif    
     
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
@@ -82,6 +83,26 @@ int pOrder;
 #ifdef PZDEBUG
     PrintGeometry(gmesh);
 #endif
+
+    std::cout << "MESH: " << mesh << std::endl;
+
+    std::cout << "PORDER: " << pOrder << std::endl;
+
+    std::string mod = "false";
+    if(modified_thomas_accel_Q) mod = "true";
+    std::cout << "COMPUTE_WITH_MODIFIED: " << mod << std::endl;
+
+    std::string type;
+    #ifdef USING_CUDA
+    type = "GPU_GS";
+    #elif COMPUTE_WITH_PZ
+    type = "PZ";
+    #else
+    type = "CPU_GS";
+    #endif
+    std::cout << "TESTE TYPE: "<< type << std::endl;
+    std::cout << std::endl;
+
 
 // Creates the computational mesh
 //    TElastoPlasticData wellbore_material = WellboreConfig(); /// NVB this one is for recurrent usage
@@ -125,10 +146,10 @@ int pOrder;
     int n_iterations = 100;
     REAL tolerance = 1.e-7;
     {
-        timer.Start();
+        // timer.Start();
         Solution(analysis, n_iterations, tolerance, modified_thomas_accel_Q);
-        timer.Stop();
-        std::cout << "Calling Solution: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+        // timer.Stop();
+        // std::cout << "Calling Solution: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
     }
 
 // Post process
@@ -167,7 +188,16 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance, bool modi
     timer.Start();
     analysis->Assemble();
     timer.Stop();
-    std::cout << "Calling CreateAssemble and Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+    std::cout << "Calling CreateAssemble and Assemble (ignore this): Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+
+    Timer timer_solution;
+    timer_solution.Start();
+
+
+    timer.Start();
+    analysis->Assemble();
+    timer.Stop();
+    std::cout << "Calling Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
 
     for (int i = 0; i < n_iterations; i++) {
 
@@ -233,14 +263,17 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance, bool modi
             std::cout << "Number of iterations = " << i + 1 << std::endl;
             break;
         }
-        {
-           timer.Start();
-           analysis->Assemble();
-           timer.Stop();
-           std::cout << "Calling Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
-        }
+        // {
+           // timer.Start();
+           // analysis->Assemble();
+           // timer.Stop();
+           // std::cout << "Calling Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+        // }
 
     }
+
+    timer_solution.Stop();
+    std::cout << "Solution process: Elasped time [sec] = " << timer_solution.ElapsedTime() << std::endl;
 
      if (stop_criterion_Q == false) {
          AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
@@ -363,7 +396,7 @@ TElastoPlasticData WellboreConfigRK(){
 
     /// Elastic verification -> true
     /// ElastoPlastic verification -> false
-    bool is_elastic_Q = true;
+    bool is_elastic_Q = false;
 
     TPZElasticResponse LER;
     REAL Ey = 2000.0;

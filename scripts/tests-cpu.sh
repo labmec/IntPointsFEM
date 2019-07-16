@@ -1,69 +1,70 @@
 #!/bin/bash
-rm -rf CPU
+test_type="CPU_NOT_MODIFIED"
 
-mkdir CPU
+cd ../../IntPointsFEM-build
 
-echo Configuring compilation options with CMake
-echo Test type:		CPU
-echo Polynomial order:	1	
-cmake -DCMAKE_BUILD_TYPE=Release -DUSING_CUDA=off -DUSING_TBB=on -DUSING_SPARSE=on -DCOMPUTE_K_HYBRID=off -DO_LINEAR=on -DO_QUADRATIC=off -DO_CUBIC=off . > any.txt
+rm -rf ${test_type}
+mkdir ${test_type}
 
-echo Compiling...
-make -j32 > any.txt
-
-for j in 3 15 64 260 1044
-do
-    echo "\nMesh:		$j k"
-    mkdir CPU/order1-mesh$j
-    for i in 1 2 3 4 5
-    do
-        echo $i of 5
-        ./IntPointsFEM $j > CPU/order1-mesh$j/out-$i.txt
-    done
-done
-
+p_order="1"
 echo ""
-echo Configuring compilation options with CMake
-echo Test type:         CPU
-echo Polynomial order:  2       
-cmake -DCMAKE_BUILD_TYPE=Release -DUSING_CUDA=off -DUSING_TBB=on -DUSING_SPARSE=on -DCOMPUTE_K_HYBRID=off -DO_LINEAR=off -DO_QUADRATIC=on -DO_CUBIC=off . > any.txt
+echo Test type:		${test_type}
+echo Polynomial order:	${p_order}	
+cmake -DCMAKE_BUILD_TYPE=Release -DUSING_CUDA=off -DUSING_TBB=on -DUSING_SPARSE=on -DO_LINEAR=on -DO_QUADRATIC=off -DO_CUBIC=off -DCOMPUTE_WITH_MODIFIED=off -DCOMPUTE_WITH_PZ=off -DCOMPUTE_K_GS=on ../IntPointsFEM > any.txt
 
-echo Compiling...
 make -j32 > any.txt
 
-for j in 3 15 64 260 1044
+for mesh_id in 1 2 3 4 5
 do
-    echo "\nMesh:               $j k"
-    mkdir CPU/order2-mesh$j
-    for i in 1 2 3 4 5
+    echo ""
+    echo "Mesh id:      $mesh_id"
+    mkdir ${test_type}/order${p_order}-mesh$mesh_id
+    for i in 1 2 3 4 5 
     do
         echo $i of 5
-        ./IntPointsFEM $j > CPU/order2-mesh$j/out-$i.txt
+        ./IntPointsFEM $mesh_id > ${test_type}/order${p_order}-mesh$mesh_id/out-$i.txt
     done
 done
 
-
+p_order="2"
 echo ""
-echo Configuring compilation options with CMake
-echo Test type:         CPU
-echo Polynomial order:  3       
-cmake -DCMAKE_BUILD_TYPE=Release -DUSING_CUDA=off -DUSING_TBB=on -DUSING_SPARSE=on -DCOMPUTE_K_HYBRID=off -DO_LINEAR=off -DO_QUADRATIC=off -DO_CUBIC=on . > any.txt
+echo Test type:     ${test_type}
+echo Polynomial order:  ${p_order}  
+cmake -DCMAKE_BUILD_TYPE=Release -DUSING_CUDA=off -DUSING_TBB=on -DUSING_SPARSE=on -DO_LINEAR=off -DO_QUADRATIC=on -DO_CUBIC=off -DCOMPUTE_WITH_MODIFIED=off -DCOMPUTE_WITH_PZ=off -DCOMPUTE_K_GS=on ../IntPointsFEM > any.txt
 
-echo Compiling...
 make -j32 > any.txt
 
-for j in 3 15 64 260
+for mesh_id in 1 2 3 4 5 
 do
-    echo "\nMesh:               $j k"
-    mkdir CPU/order3-mesh$j
-    for i in 1 2 3 4 5
+    echo ""
+    echo "Mesh id:      $mesh_id"
+    mkdir ${test_type}/order${p_order}-mesh$mesh_id
+    for i in 1 2 3 4 5 
     do
         echo $i of 5
-        ./IntPointsFEM $j > CPU/order3-mesh$j/out-$i.txt
+        ./IntPointsFEM $mesh_id > ${test_type}/order${p_order}-mesh$mesh_id/out-$i.txt
     done
 done
 
+p_order="3"
+echo ""
+echo Test type:     ${test_type}
+echo Polynomial order:  ${p_order}  
+cmake -DCMAKE_BUILD_TYPE=Release -DUSING_CUDA=off -DUSING_TBB=on -DUSING_SPARSE=on -DO_LINEAR=off -DO_QUADRATIC=off -DO_CUBIC=on -DCOMPUTE_WITH_MODIFIED=off -DCOMPUTE_WITH_PZ=off -DCOMPUTE_K_GS=on ../IntPointsFEM > any.txt
 
+make -j32 > any.txt
+
+for mesh_id in 1 2 3 4 
+do
+    echo ""
+    echo "Mesh id:      $mesh_id"
+    mkdir ${test_type}/order${p_order}-mesh$mesh_id
+    for i in 1 2 3 4 5 
+    do
+        echo $i of 5
+        ./IntPointsFEM $mesh_id > ${test_type}/order${p_order}-mesh$mesh_id/out-$i.txt
+    done
+done
 
 rm any.txt
 

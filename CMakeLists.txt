@@ -157,6 +157,11 @@ if(COMPUTE_WITH_PZ)
     set(USING_CUDA off)
 endif(COMPUTE_WITH_PZ)
 
+option(COMPUTE_WITH_MODIFIED off)
+if(COMPUTE_WITH_MODIFIED)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMPUTE_WITH_MODIFIED")
+endif(COMPUTE_WITH_MODIFIED)
+
 # Configure the path.h.in file.
 # This file can only use the @VARIABLE@ syntax in the file
 configure_file(path.h.in ${PROJECT_SOURCE_DIR}/path.h @ONLY)
