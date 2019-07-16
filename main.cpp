@@ -143,7 +143,7 @@ int pOrder;
     }
     
 // Calculates the solution using Newton method
-    int n_iterations = 100;
+    int n_iterations = 1000;
     REAL tolerance = 1.e-7;
     {
         // timer.Start();
