@@ -1,0 +1,104 @@
+Reading mesh format = 4.1 0 8
+Automatically associating fixed_x with material id 4
+Automatically associating fixed_y with material id 5
+Automatically associating bc_wellbore with material id 2
+Automatically associating bc_farfield with material id 3
+Automatically associating Omega with material id 1
+Read mesh physical entities = 5
+Read mesh entities = 25
+Read mesh entities with physical tags = 16
+Read mesh nodes = 3968
+Read mesh elements = 4096
+Read General Mesh Data -> done!
+Number of elements 4096
+Geometric Mesh Connectivity -> done!
+
+TPZGmshReader geometrical partition summary 
+File format         = 4.1
+Geometry dimension  = 2
+Number of volumes   = 0
+Number of surfaces  = 4
+Number of curves    = 12
+Number of points    = 9
+Number of volumes with physical tag     = 0
+Number of surfaces with physical tag    = 4
+Number of curves with physical tag      = 8
+Number of points with physical tag      = 4
+Number of elements by type : 
+Points          : 4
+Lines           : 248
+Triangles       : 0
+Quadrilaterals  : 3844
+Tetrahera       : 0
+Hexahedra       : 0
+Prism           : 0
+Pyramids        : 0
+Number of elements by dimension : 
+3D elements : 0
+2D elements : 3844
+1D elements : 248
+0D elements : 4
+Characteristic length = 1
+
+MESH: 1
+PORDER: 1
+COMPUTE_WITH_MODIFIED: true
+TESTE TYPE: CPU_GS
+
+Calling CmeshElastoplasticity: Elasped time [sec] = 0.0329148
+Calling Analysis_IPFEM: Elasped time [sec] = 0.0428265
+Solving a NLS with DOF = 7936
+Number of colors = 4
+COMPUTE_K_CPU_GS
+K Assemble: Elasped time [sec] = 0.014903
+R Assemble: Elasped time [sec] = 0.00288565
+Calling CreateAssemble and Assemble (ignore this): Elasped time [sec] = 0.125173
+COMPUTE_K_CPU_GS
+K Assemble: Elasped time [sec] = 0.00258159
+R Assemble: Elasped time [sec] = 0.00226857
+Calling Assemble: Elasped time [sec] = 0.00506139
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0488272
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.00261108
+Nonlinear process : delta_du norm = 0.0205713
+Nonlinear process : residue norm = 0.0356534
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.00320738
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.00236915
+Nonlinear process : delta_du norm = 0.00192907
+Nonlinear process : residue norm = 0.00694382
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.00314848
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.00232489
+Nonlinear process : delta_du norm = 0.000519025
+Nonlinear process : residue norm = 0.00100066
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.00315227
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.00214191
+Nonlinear process : delta_du norm = 7.8927e-05
+Nonlinear process : residue norm = 0.000101606
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.00313501
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.00212783
+Nonlinear process : delta_du norm = 8.25718e-06
+Nonlinear process : residue norm = 7.47846e-06
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.00312174
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.00215045
+Nonlinear process : delta_du norm = 6.21078e-07
+Nonlinear process : residue norm = 4.00312e-07
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.00312032
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.00213131
+Nonlinear process : delta_du norm = 3.36987e-08
+Nonlinear process : residue norm = 1.62011e-08
+Nonlinear process converged with residue norm = 1.62011e-08
+Number of iterations = 7
+Solution process: Elasped time [sec] = 0.142255

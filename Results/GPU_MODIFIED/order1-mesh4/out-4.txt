@@ -1,0 +1,119 @@
+Reading mesh format = 4.1 0 8
+Automatically associating fixed_x with material id 4
+Automatically associating fixed_y with material id 5
+Automatically associating bc_wellbore with material id 2
+Automatically associating bc_farfield with material id 3
+Automatically associating Omega with material id 1
+Read mesh physical entities = 5
+Read mesh entities = 25
+Read mesh entities with physical tags = 16
+Read mesh nodes = 261120
+Read mesh elements = 262144
+Read General Mesh Data -> done!
+Number of elements 262144
+Geometric Mesh Connectivity -> done!
+
+TPZGmshReader geometrical partition summary 
+File format         = 4.1
+Geometry dimension  = 2
+Number of volumes   = 0
+Number of surfaces  = 4
+Number of curves    = 12
+Number of points    = 9
+Number of volumes with physical tag     = 0
+Number of surfaces with physical tag    = 4
+Number of curves with physical tag      = 8
+Number of points with physical tag      = 4
+Number of elements by type : 
+Points          : 4
+Lines           : 2040
+Triangles       : 0
+Quadrilaterals  : 260100
+Tetrahera       : 0
+Hexahedra       : 0
+Prism           : 0
+Pyramids        : 0
+Number of elements by dimension : 
+3D elements : 0
+2D elements : 260100
+1D elements : 2040
+0D elements : 4
+Characteristic length = 1
+
+MESH: 4
+PORDER: 1
+COMPUTE_WITH_MODIFIED: true
+TESTE TYPE: GPU_GS
+
+Calling CmeshElastoplasticity: Elasped time [sec] = 1.84511
+virtual void TPZAnalysis::SetCompMesh(TPZCompMesh*, bool) optimizing bandwidth
+100000	Q.size = 3073, %done = 9.59288 maxpriority = 462
+200000	Q.size = 3073, %done = 19.1858 maxpriority = 413
+300000	Q.size = 3073, %done = 28.7786 maxpriority = 364
+400000	Q.size = 3075, %done = 38.3715 maxpriority = 315
+500000	Q.size = 3075, %done = 47.9644 maxpriority = 266
+600000	Q.size = 5634, %done = 57.5573 maxpriority = 235
+700000	Q.size = 4954, %done = 67.1501 maxpriority = 207
+800000	Q.size = 4168, %done = 76.743 maxpriority = 174
+900000	Q.size = 3190, %done = 86.3359 maxpriority = 133
+1000000	Q.size = 1732, %done = 95.9288 maxpriority = 73
+Applying Saddle Permute
+virtual void TPZAnalysis::SetCompMesh(TPZCompMesh*, bool) optimizing bandwidth finished
+Calling Analysis_IPFEM: Elasped time [sec] = 8.53337
+Solving a NLS with DOF = 522240
+Number of colors = 4
+Transfering data to GPU...
+Done! It took 0.0813947	s
+COMPUTE_K_GPU_GS
+K Assemble: Elasped time [sec] = 0.387877
+R Assemble: Elasped time [sec] = 0.0291027
+Calling CreateAssemble and Assemble (ignore this): Elasped time [sec] = 6.61124
+COMPUTE_K_GPU_GS
+K Assemble: Elasped time [sec] = 0.0567421
+R Assemble: Elasped time [sec] = 0.0287304
+Calling Assemble: Elasped time [sec] = 0.0949323
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 2.46063
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0393514
+Nonlinear process : delta_du norm = 0.149046
+Nonlinear process : residue norm = 0.0113538
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.224961
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0419499
+Nonlinear process : delta_du norm = 0.013965
+Nonlinear process : residue norm = 0.00235234
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.236362
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0394002
+Nonlinear process : delta_du norm = 0.00416713
+Nonlinear process : residue norm = 0.00020795
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.214276
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0393945
+Nonlinear process : delta_du norm = 0.000353803
+Nonlinear process : residue norm = 1.28546e-05
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.21438
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0394237
+Nonlinear process : delta_du norm = 2.55834e-05
+Nonlinear process : residue norm = 5.42043e-07
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.214522
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0393988
+Nonlinear process : delta_du norm = 9.98672e-07
+Nonlinear process : residue norm = 8.26485e-09
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.209213
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0394094
+Nonlinear process : delta_du norm = 9.9911e-09
+Nonlinear process : residue norm = 4.69721e-10
+Nonlinear process converged with residue norm = 4.69721e-10
+Number of iterations = 7
+Solution process: Elasped time [sec] = 7.01657

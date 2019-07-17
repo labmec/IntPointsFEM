@@ -1,0 +1,351 @@
+Reading mesh format = 4.1 0 8
+Automatically associating fixed_x with material id 4
+Automatically associating fixed_y with material id 5
+Automatically associating bc_wellbore with material id 2
+Automatically associating bc_farfield with material id 3
+Automatically associating Omega with material id 1
+Read mesh physical entities = 5
+Read mesh entities = 25
+Read mesh entities with physical tags = 16
+Read mesh nodes = 3968
+Read mesh elements = 4096
+Read General Mesh Data -> done!
+Number of elements 4096
+Geometric Mesh Connectivity -> done!
+
+TPZGmshReader geometrical partition summary 
+File format         = 4.1
+Geometry dimension  = 2
+Number of volumes   = 0
+Number of surfaces  = 4
+Number of curves    = 12
+Number of points    = 9
+Number of volumes with physical tag     = 0
+Number of surfaces with physical tag    = 4
+Number of curves with physical tag      = 8
+Number of points with physical tag      = 4
+Number of elements by type : 
+Points          : 4
+Lines           : 248
+Triangles       : 0
+Quadrilaterals  : 3844
+Tetrahera       : 0
+Hexahedra       : 0
+Prism           : 0
+Pyramids        : 0
+Number of elements by dimension : 
+3D elements : 0
+2D elements : 3844
+1D elements : 248
+0D elements : 4
+Characteristic length = 1
+
+MESH: 1
+PORDER: 3
+COMPUTE_WITH_MODIFIED: true
+TESTE TYPE: PZ
+
+Calling CmeshElastoplasticity: Elasped time [sec] = 0.0432529
+virtual void TPZAnalysis::SetCompMesh(TPZCompMesh*, bool) optimizing bandwidth
+virtual void TPZAnalysis::SetCompMesh(TPZCompMesh*, bool) optimizing bandwidth finished
+Calling Analysis_IPFEM: Elasped time [sec] = 0.0342422
+Solving a NLS with DOF = 69936
+Calling CreateAssemble and Assemble (ignore this): Elasped time [sec] = 0.27944
+Calling Assemble: Elasped time [sec] = 0.142948
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.438048
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.111814
+Nonlinear process : delta_du norm = 0.0206232
+Nonlinear process : residue norm = 0.0458546
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0267639
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.073184
+Nonlinear process : delta_du norm = 0.00194676
+Nonlinear process : residue norm = 0.00985993
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0267131
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0749225
+Nonlinear process : delta_du norm = 0.000520389
+Nonlinear process : residue norm = 0.00193123
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0302176
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0663565
+Nonlinear process : delta_du norm = 9.02685e-05
+Nonlinear process : residue norm = 0.000953459
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0258099
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0593021
+Nonlinear process : delta_du norm = 1.11903e-05
+Nonlinear process : residue norm = 0.000819177
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0261061
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0596942
+Nonlinear process : delta_du norm = 2.74512e-06
+Nonlinear process : residue norm = 0.000718108
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0217576
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0640155
+Nonlinear process : delta_du norm = 2.33283e-06
+Nonlinear process : residue norm = 0.000625387
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0262242
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0758002
+Nonlinear process : delta_du norm = 2.19214e-06
+Nonlinear process : residue norm = 0.000538386
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0259236
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0510886
+Nonlinear process : delta_du norm = 2.69101e-06
+Nonlinear process : residue norm = 0.000431975
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0256452
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0504364
+Nonlinear process : delta_du norm = 2.15267e-06
+Nonlinear process : residue norm = 0.000346261
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0259625
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0560008
+Nonlinear process : delta_du norm = 1.72366e-06
+Nonlinear process : residue norm = 0.000276971
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0223835
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0752243
+Nonlinear process : delta_du norm = 1.38728e-06
+Nonlinear process : residue norm = 0.0002206
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0249869
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0517276
+Nonlinear process : delta_du norm = 1.11695e-06
+Nonlinear process : residue norm = 0.000174706
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0227089
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0561404
+Nonlinear process : delta_du norm = 8.93985e-07
+Nonlinear process : residue norm = 0.000137561
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0225463
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0518196
+Nonlinear process : delta_du norm = 6.97431e-07
+Nonlinear process : residue norm = 0.000108265
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0217243
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0550848
+Nonlinear process : delta_du norm = 5.56409e-07
+Nonlinear process : residue norm = 8.46504e-05
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0188259
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0555075
+Nonlinear process : delta_du norm = 4.40973e-07
+Nonlinear process : residue norm = 6.57491e-05
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.02159
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0539941
+Nonlinear process : delta_du norm = 3.45687e-07
+Nonlinear process : residue norm = 5.07897e-05
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0222448
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0597663
+Nonlinear process : delta_du norm = 2.69908e-07
+Nonlinear process : residue norm = 3.90033e-05
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0220059
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.056985
+Nonlinear process : delta_du norm = 2.09456e-07
+Nonlinear process : residue norm = 2.97774e-05
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0181517
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0528943
+Nonlinear process : delta_du norm = 1.7263e-07
+Nonlinear process : residue norm = 2.21116e-05
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0176678
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0531653
+Nonlinear process : delta_du norm = 1.29281e-07
+Nonlinear process : residue norm = 1.6322e-05
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0179682
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0535031
+Nonlinear process : delta_du norm = 9.52828e-08
+Nonlinear process : residue norm = 1.20217e-05
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0220733
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0520317
+Nonlinear process : delta_du norm = 7.06987e-08
+Nonlinear process : residue norm = 8.80757e-06
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0175933
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0513897
+Nonlinear process : delta_du norm = 5.54258e-08
+Nonlinear process : residue norm = 6.27162e-06
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0178072
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0531536
+Nonlinear process : delta_du norm = 3.97357e-08
+Nonlinear process : residue norm = 4.44086e-06
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0222467
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0527599
+Nonlinear process : delta_du norm = 2.83031e-08
+Nonlinear process : residue norm = 3.12988e-06
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.021847
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0514918
+Nonlinear process : delta_du norm = 2.10394e-08
+Nonlinear process : residue norm = 2.14883e-06
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0183527
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0548023
+Nonlinear process : delta_du norm = 1.45375e-08
+Nonlinear process : residue norm = 1.46925e-06
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0220128
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0507319
+Nonlinear process : delta_du norm = 1.03694e-08
+Nonlinear process : residue norm = 9.79529e-07
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0221523
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0504584
+Nonlinear process : delta_du norm = 6.95368e-09
+Nonlinear process : residue norm = 6.54306e-07
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0221093
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0541993
+Nonlinear process : delta_du norm = 4.62373e-09
+Nonlinear process : residue norm = 4.30946e-07
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0179304
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0486514
+Nonlinear process : delta_du norm = 3.08574e-09
+Nonlinear process : residue norm = 2.96134e-07
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0221138
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0528603
+Nonlinear process : delta_du norm = 2.05399e-09
+Nonlinear process : residue norm = 2.0071e-07
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0177327
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0585621
+Nonlinear process : delta_du norm = 1.36405e-09
+Nonlinear process : residue norm = 2.03351e-07
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0184609
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0524916
+Nonlinear process : delta_du norm = 9.4819e-10
+Nonlinear process : residue norm = 2.57451e-07
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.021898
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0523828
+Nonlinear process : delta_du norm = 7.62292e-10
+Nonlinear process : residue norm = 4.28988e-07
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0177402
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0548403
+Nonlinear process : delta_du norm = 8.93138e-10
+Nonlinear process : residue norm = 6.66646e-07
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0182164
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0550172
+Nonlinear process : delta_du norm = 1.24052e-09
+Nonlinear process : residue norm = 1.01313e-06
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0221006
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0570759
+Nonlinear process : delta_du norm = 1.74801e-09
+Nonlinear process : residue norm = 1.43205e-06
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.018823
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0543939
+Nonlinear process : delta_du norm = 2.1893e-09
+Nonlinear process : residue norm = 1.72458e-06
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.018667
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0587636
+Nonlinear process : delta_du norm = 2.45849e-09
+Nonlinear process : residue norm = 1.935e-06
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0179133
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0547035
+Nonlinear process : delta_du norm = 2.57104e-09
+Nonlinear process : residue norm = 2.02611e-06
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0178111
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.054357
+Nonlinear process : delta_du norm = 2.22416e-09
+Nonlinear process : residue norm = 1.54477e-06
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0218231
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.058544
+Nonlinear process : delta_du norm = 1.54687e-09
+Nonlinear process : residue norm = 1.07414e-06
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0220558
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0629566
+Nonlinear process : delta_du norm = 9.72412e-10
+Nonlinear process : residue norm = 6.65532e-07
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0220512
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0533861
+Nonlinear process : delta_du norm = 5.68634e-10
+Nonlinear process : residue norm = 4.05602e-07
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0192283
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0528898
+Nonlinear process : delta_du norm = 3.16327e-10
+Nonlinear process : residue norm = 2.19789e-07
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.018012
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0582803
+Nonlinear process : delta_du norm = 1.31978e-10
+Nonlinear process : residue norm = 5.18013e-08
+Nonlinear process converged with residue norm = 5.18013e-08
+Number of iterations = 49
+Solution process: Elasped time [sec] = 8.97291

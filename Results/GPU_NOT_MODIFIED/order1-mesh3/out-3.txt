@@ -1,0 +1,173 @@
+Reading mesh format = 4.1 0 8
+Automatically associating fixed_x with material id 4
+Automatically associating fixed_y with material id 5
+Automatically associating bc_wellbore with material id 2
+Automatically associating bc_farfield with material id 3
+Automatically associating Omega with material id 1
+Read mesh physical entities = 5
+Read mesh entities = 25
+Read mesh entities with physical tags = 16
+Read mesh nodes = 65024
+Read mesh elements = 65536
+Read General Mesh Data -> done!
+Number of elements 65536
+Geometric Mesh Connectivity -> done!
+
+TPZGmshReader geometrical partition summary 
+File format         = 4.1
+Geometry dimension  = 2
+Number of volumes   = 0
+Number of surfaces  = 4
+Number of curves    = 12
+Number of points    = 9
+Number of volumes with physical tag     = 0
+Number of surfaces with physical tag    = 4
+Number of curves with physical tag      = 8
+Number of points with physical tag      = 4
+Number of elements by type : 
+Points          : 4
+Lines           : 1016
+Triangles       : 0
+Quadrilaterals  : 64516
+Tetrahera       : 0
+Hexahedra       : 0
+Prism           : 0
+Pyramids        : 0
+Number of elements by dimension : 
+3D elements : 0
+2D elements : 64516
+1D elements : 1016
+0D elements : 4
+Characteristic length = 1
+
+MESH: 3
+PORDER: 1
+COMPUTE_WITH_MODIFIED: false
+TESTE TYPE: GPU_GS
+
+Calling CmeshElastoplasticity: Elasped time [sec] = 0.510098
+virtual void TPZAnalysis::SetCompMesh(TPZCompMesh*, bool) optimizing bandwidth
+100000	Q.size = 1537, %done = 38.5981 maxpriority = 157
+200000	Q.size = 2052, %done = 77.1962 maxpriority = 86
+virtual void TPZAnalysis::SetCompMesh(TPZCompMesh*, bool) optimizing bandwidth finished
+Calling Analysis_IPFEM: Elasped time [sec] = 1.6253
+Solving a NLS with DOF = 130048
+Number of colors = 4
+Transfering data to GPU...
+Done! It took 0.0250343	s
+COMPUTE_K_GPU_GS
+K Assemble: Elasped time [sec] = 0.370539
+R Assemble: Elasped time [sec] = 0.0111149
+Calling CreateAssemble and Assemble (ignore this): Elasped time [sec] = 1.97835
+COMPUTE_K_GPU_GS
+K Assemble: Elasped time [sec] = 0.0164412
+R Assemble: Elasped time [sec] = 0.010023
+Calling Assemble: Elasped time [sec] = 0.0296626
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.577787
+Calling AssembleResidual: Elasped time [sec] = 0.0126458
+Nonlinear process : delta_du norm = 0.072042
+Nonlinear process : residue norm = 0.0537993
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0588632
+Calling AssembleResidual: Elasped time [sec] = 0.0125882
+Nonlinear process : delta_du norm = 0.00995261
+Nonlinear process : residue norm = 0.0164066
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0569483
+Calling AssembleResidual: Elasped time [sec] = 0.0126163
+Nonlinear process : delta_du norm = 0.00487607
+Nonlinear process : residue norm = 0.00752538
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0560223
+Calling AssembleResidual: Elasped time [sec] = 0.0126205
+Nonlinear process : delta_du norm = 0.00250776
+Nonlinear process : residue norm = 0.00393129
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0543557
+Calling AssembleResidual: Elasped time [sec] = 0.0126019
+Nonlinear process : delta_du norm = 0.00131874
+Nonlinear process : residue norm = 0.00197738
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0528335
+Calling AssembleResidual: Elasped time [sec] = 0.0125988
+Nonlinear process : delta_du norm = 0.00069951
+Nonlinear process : residue norm = 0.00111979
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0527827
+Calling AssembleResidual: Elasped time [sec] = 0.0125988
+Nonlinear process : delta_du norm = 0.00037564
+Nonlinear process : residue norm = 0.000608806
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0526725
+Calling AssembleResidual: Elasped time [sec] = 0.01255
+Nonlinear process : delta_du norm = 0.000201445
+Nonlinear process : residue norm = 0.00032694
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0527354
+Calling AssembleResidual: Elasped time [sec] = 0.01256
+Nonlinear process : delta_du norm = 0.00010801
+Nonlinear process : residue norm = 0.000175324
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0525644
+Calling AssembleResidual: Elasped time [sec] = 0.0126167
+Nonlinear process : delta_du norm = 5.79112e-05
+Nonlinear process : residue norm = 9.40036e-05
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0527202
+Calling AssembleResidual: Elasped time [sec] = 0.0126094
+Nonlinear process : delta_du norm = 3.10498e-05
+Nonlinear process : residue norm = 5.04012e-05
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0528123
+Calling AssembleResidual: Elasped time [sec] = 0.0126203
+Nonlinear process : delta_du norm = 1.66477e-05
+Nonlinear process : residue norm = 2.70232e-05
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0526044
+Calling AssembleResidual: Elasped time [sec] = 0.0126216
+Nonlinear process : delta_du norm = 8.92587e-06
+Nonlinear process : residue norm = 1.44888e-05
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0526905
+Calling AssembleResidual: Elasped time [sec] = 0.0126065
+Nonlinear process : delta_du norm = 4.78571e-06
+Nonlinear process : residue norm = 7.76835e-06
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0525382
+Calling AssembleResidual: Elasped time [sec] = 0.0126083
+Nonlinear process : delta_du norm = 2.56592e-06
+Nonlinear process : residue norm = 4.1651e-06
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0525883
+Calling AssembleResidual: Elasped time [sec] = 0.0126221
+Nonlinear process : delta_du norm = 1.37575e-06
+Nonlinear process : residue norm = 2.23317e-06
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0526526
+Calling AssembleResidual: Elasped time [sec] = 0.0125973
+Nonlinear process : delta_du norm = 7.37623e-07
+Nonlinear process : residue norm = 1.19734e-06
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0525759
+Calling AssembleResidual: Elasped time [sec] = 0.012615
+Nonlinear process : delta_du norm = 3.95485e-07
+Nonlinear process : residue norm = 6.41967e-07
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0525617
+Calling AssembleResidual: Elasped time [sec] = 0.0126051
+Nonlinear process : delta_du norm = 2.12044e-07
+Nonlinear process : residue norm = 3.44198e-07
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0573411
+Calling AssembleResidual: Elasped time [sec] = 0.0127478
+Nonlinear process : delta_du norm = 1.1369e-07
+Nonlinear process : residue norm = 1.84546e-07
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.051289
+Calling AssembleResidual: Elasped time [sec] = 0.012605
+Nonlinear process : delta_du norm = 6.09562e-08
+Nonlinear process : residue norm = 9.89465e-08
+Nonlinear process converged with residue norm = 9.89465e-08
+Number of iterations = 21
+Solution process: Elasped time [sec] = 2.1928

@@ -1,0 +1,106 @@
+Reading mesh format = 4.1 0 8
+Automatically associating fixed_x with material id 4
+Automatically associating fixed_y with material id 5
+Automatically associating bc_wellbore with material id 2
+Automatically associating bc_farfield with material id 3
+Automatically associating Omega with material id 1
+Read mesh physical entities = 5
+Read mesh entities = 25
+Read mesh entities with physical tags = 16
+Read mesh nodes = 16128
+Read mesh elements = 16384
+Read General Mesh Data -> done!
+Number of elements 16384
+Geometric Mesh Connectivity -> done!
+
+TPZGmshReader geometrical partition summary 
+File format         = 4.1
+Geometry dimension  = 2
+Number of volumes   = 0
+Number of surfaces  = 4
+Number of curves    = 12
+Number of points    = 9
+Number of volumes with physical tag     = 0
+Number of surfaces with physical tag    = 4
+Number of curves with physical tag      = 8
+Number of points with physical tag      = 4
+Number of elements by type : 
+Points          : 4
+Lines           : 504
+Triangles       : 0
+Quadrilaterals  : 15876
+Tetrahera       : 0
+Hexahedra       : 0
+Prism           : 0
+Pyramids        : 0
+Number of elements by dimension : 
+3D elements : 0
+2D elements : 15876
+1D elements : 504
+0D elements : 4
+Characteristic length = 1
+
+MESH: 2
+PORDER: 1
+COMPUTE_WITH_MODIFIED: true
+TESTE TYPE: CPU_GS
+
+Calling CmeshElastoplasticity: Elasped time [sec] = 0.109161
+virtual void TPZAnalysis::SetCompMesh(TPZCompMesh*, bool) optimizing bandwidth
+virtual void TPZAnalysis::SetCompMesh(TPZCompMesh*, bool) optimizing bandwidth finished
+Calling Analysis_IPFEM: Elasped time [sec] = 0.221611
+Solving a NLS with DOF = 32256
+Number of colors = 4
+COMPUTE_K_CPU_GS
+K Assemble: Elasped time [sec] = 0.0215413
+R Assemble: Elasped time [sec] = 0.0114767
+Calling CreateAssemble and Assemble (ignore this): Elasped time [sec] = 0.46831
+COMPUTE_K_CPU_GS
+K Assemble: Elasped time [sec] = 0.00940977
+R Assemble: Elasped time [sec] = 0.0099731
+Calling Assemble: Elasped time [sec] = 0.0201404
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.148589
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0117222
+Nonlinear process : delta_du norm = 0.038273
+Nonlinear process : residue norm = 0.024678
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0123775
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0115073
+Nonlinear process : delta_du norm = 0.00359585
+Nonlinear process : residue norm = 0.00486733
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0130339
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0110992
+Nonlinear process : delta_du norm = 0.000978624
+Nonlinear process : residue norm = 0.000789302
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.01241
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0104052
+Nonlinear process : delta_du norm = 0.000158583
+Nonlinear process : residue norm = 8.36338e-05
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0116688
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.010189
+Nonlinear process : delta_du norm = 1.76867e-05
+Nonlinear process : residue norm = 6.94374e-06
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0114741
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.00992531
+Nonlinear process : delta_du norm = 1.48932e-06
+Nonlinear process : residue norm = 4.26098e-07
+Pardiso:: linear solve complete. 
+Calling Linear Solve: Elasped time [sec] = 0.0114568
+Pardiso:: linear solve complete. 
+Calling AssembleResidual: Elasped time [sec] = 0.0098607
+Nonlinear process : delta_du norm = 9.33039e-08
+Nonlinear process : residue norm = 2.00211e-08
+Nonlinear process converged with residue norm = 2.00211e-08
+Number of iterations = 7
+Solution process: Elasped time [sec] = 0.538628
