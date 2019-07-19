@@ -307,14 +307,14 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
            int first_l = m_first_color_l_index[ic];
            int last_l = m_first_color_l_index[ic + 1];
            int n_l_indexes = last_l - first_l;
-           /// Gather from Kg
+           // Gather from Kg
            TPZVec<REAL> aux(n_l_indexes);
            cblas_dgthr(n_l_indexes, &Kg[0], &aux[0], &m_color_l_sequence[first_l]);
            
            // Contributing
            cblas_daxpy(n_l_indexes, 1., &Kc[first_l], 1., &aux[0],1);
            
-           /// Scatter to Kg
+           // Scatter to Kg
            cblas_dsctr(n_l_indexes, &aux[0], &m_color_l_sequence[first_l], &Kg[0]);
        }
 

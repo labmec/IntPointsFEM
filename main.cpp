@@ -55,6 +55,9 @@ void PostProcess(TPZCompMesh *cmesh, TElastoPlasticData material, int n_threads,
 ///RK Approximation
 void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_material, int npoints, std::ostream &out, bool euler = false);
 
+/// Compute characteristic h size
+void ComputeCharacteristicHElSize(TPZGeoMesh * geometry, REAL & h_min, REAL & rho_min);
+
 static bool USING_CUDA_Q;
 
 static bool USING_Hybrid_Q;
@@ -69,19 +72,29 @@ int pOrder;
     pOrder = 3; // Computational mesh order
 #endif
 
-    bool render_vtk_Q = false;
-    bool modified_thomas_accel_Q = false;
-    USING_CUDA_Q = true;
+    bool render_vtk_Q = true;
+    bool modified_thomas_accel_Q = true;
+    bool compute_h_Q = false;
+    USING_CUDA_Q = false;
     
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
-    std::string mesh = argv[1];
-    // std::string mesh = "1";
+//    std::string mesh = argv[1];
+     std::string mesh = "2";
     std::string msh_file = source_dir + "/gmsh/wellbore_" + mesh + ".msh";
+//    std::string msh_file = source_dir + "/gmsh/wellbore.msh";
     TPZGeoMesh *gmesh = ReadGeometry(msh_file);
 #ifdef PZDEBUG
     PrintGeometry(gmesh);
 #endif
+
+
+    if (compute_h_Q) {
+        REAL h,rho;
+        ComputeCharacteristicHElSize(gmesh,h,rho);
+        std::cout << "Characteristic size h     = " << h << std::endl;
+        std::cout << "Characteristic radius rho = " << rho << std::endl;
+    }
 
 // Creates the computational mesh
 //    TElastoPlasticData wellbore_material = WellboreConfig(); /// NVB this one is for recurrent usage
@@ -154,7 +167,7 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance, bool modi
     /// Thomas correction
     TPZFMatrix<REAL> delta_u_tilde;
     
-    /// Modified Thomas cceleration factor
+    /// Modified Thomas acceleration factor
     REAL mt_alpha = 1.0;
     
     Timer timer;   
@@ -363,7 +376,7 @@ TElastoPlasticData WellboreConfigRK(){
 
     /// Elastic verification -> true
     /// ElastoPlastic verification -> false
-    bool is_elastic_Q = true;
+    bool is_elastic_Q = false;
 
     TPZElasticResponse LER;
     REAL Ey = 2000.0;
@@ -389,7 +402,7 @@ TElastoPlasticData WellboreConfigRK(){
     bc_outer.SetId(3);
     bc_outer.SetType(6);
     bc_outer.SetInitialValue(-50.0); /// tr(sigma)/3
-    bc_outer.SetValue({-1.0*(-50.-bc_outer.InitialValue())+0.001}); /// tr(sigma)/3
+    bc_outer.SetValue({-1.0*(-50.-bc_outer.InitialValue())-0.00625}); /// tr(sigma)/3
 
     bc_ux_fixed.SetId(4);
     bc_ux_fixed.SetType(3);
@@ -411,7 +424,7 @@ TElastoPlasticData WellboreConfigRK(){
     rock.SetBoundaryData(bc_data);
 
 // Runge Kutta approximation
-    int np = 2000;
+    int np = 5000;
     bool euler = false;
 
     if(is_elastic_Q){
@@ -423,8 +436,8 @@ TElastoPlasticData WellboreConfigRK(){
         RKApproximation(u_re, simga_re, rock, np, rkfile, euler);
     }else{
         REAL u_re, simga_re;
-        u_re = 0.0000318827;
-        simga_re = 0.00130781;
+        u_re = 0.0000214094;
+        simga_re = -0.0062899;
         std::ofstream rkfile("ElastoPlasticRKdata.txt");
         RKApproximation(u_re, simga_re, rock, np, rkfile, euler);
     }
@@ -643,4 +656,38 @@ void RKApproximation (REAL u_re, REAL sigma_re, TElastoPlasticData wellbore_mate
     rkmethod.SetRadialStress(sigma_re);
     rkmethod.FillPointsMemory();
     rkmethod.RKProcess(out, euler);
+}
+
+void ComputeCharacteristicHElSize(TPZGeoMesh * geometry, REAL & h_min, REAL & rho_min){
+    
+    h_min   = 1.0;
+    rho_min = 1.0;
+    
+    REAL h;
+    REAL rho;
+    int nel = geometry->NElements();
+    for (int64_t iel = 0; iel < nel; iel++) {
+        TPZGeoEl * gel = geometry->Element(iel);
+        
+#ifdef PZDEBUG
+        if(!gel){
+            DebugStop();
+        }
+#endif
+        if (gel->Dimension() != geometry->Dimension() || gel->HasSubElement() == 1) {
+            continue;
+        }
+        
+        h = gel->CharacteristicSize();
+        rho = 2.0*gel->ElementRadius();
+        
+        if (h < h_min) {
+            h_min = h;
+        }
+        
+        if (rho < rho_min) {
+            rho_min = rho;
+        }
+    }
+    
 }
