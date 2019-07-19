@@ -253,7 +253,7 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance, bool modi
         std::cout << "Calling AssembleResidual: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
 
         norm_res = Norm(analysis->Rhs());
-        stop_criterion_Q = norm_res < tolerance & norm_delta_du < tolerance;
+        stop_criterion_Q = norm_res < tolerance /*& norm_delta_du < tolerance*/;
         std::cout << "Nonlinear process : delta_du norm = " << norm_delta_du << std::endl;
         std::cout << "Nonlinear process : residue norm = " << norm_res << std::endl;
         if (stop_criterion_Q) {
