@@ -7,6 +7,8 @@
 #include "KernelsMatMul.h"
 #include "KernelsMatrixAssemble.h"
 
+#include "magma_v2.h"
+
 #define NT  64
 
 TPZCudaCalls::TPZCudaCalls() {
@@ -290,4 +292,167 @@ void TPZCudaCalls::SolveCG(int n, int nnzA, REAL *csrValA, int *csrRowPtrA, int 
     }
     cudaFree(d_p);
     cudaFree(d_Ax);
+}
+
+__global__ void teste(double **a) {
+	int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if(tid < 4) {
+		printf("%g\n", a[0][tid]);
+	}
+	// if(tid < 4) {
+	// 	printf("%g\n", a[1][tid]);
+	// }
+
+	// if(tid < 4) {
+	// 	printf("%g\n", a[2][tid]);
+	// }
+}
+
+void TPZCudaCalls::CallMultiplyBatched() { 
+	magma_init();
+
+    magma_queue_t queue = NULL;
+    magma_int_t dev = 0; 
+
+    std::cout << "Creating queue ..." << std::endl;
+    magma_queue_create(dev, &queue);
+    std::cout << "done!" << std::endl;
+
+	int batch = 100000;
+	magma_trans_t transA = MagmaNoTrans;
+	magma_trans_t transB = MagmaNoTrans;
+
+	TPZVec<int> m(batch);
+	TPZVec<int> n(batch);
+	TPZVec<int> k(batch);
+
+	for (int i = 0; i < batch; i++)	{
+		m[i] = 8;
+		n[i] = 8;
+		k[i] = 8;
+	}
+
+	double alpha = 1.;
+	double beta = 0.;
+
+	TPZVec<REAL> A;
+	TPZVec<REAL> B;
+	TPZVec<REAL> C;
+
+	int sizeA = 0;
+	int sizeB = 0;
+	int sizeC = 0;
+	for (int i = 0; i < batch; i++)
+	{
+		sizeA += m[i] * k[i]; //sizeA
+		sizeB += k[i] * n[i]; //sizeB
+		sizeC += m[i] * n[i]; //sizeC
+	}
+
+	A.resize(sizeA);
+	B.resize(sizeB);
+	C.resize(sizeC);
+
+	for (int i = 0; i < sizeA; i++)
+	{
+		A[i] = i;
+	}
+
+	for (int i = 0; i < sizeB; i++)
+	{
+		B[i] = 2*i;
+	}
+
+	int *dm;
+	int *dn;
+	int *dk;
+
+    magma_imalloc(&dm, batch+1);
+    magma_imalloc(&dn, batch+1);
+    magma_imalloc(&dk, batch+1);
+    magma_setvector(batch+1, sizeof(magma_int_t), &m[0], 1, dm, 1, queue);
+    magma_setvector(batch+1, sizeof(magma_int_t), &n[0], 1, dn, 1, queue);
+    magma_setvector(batch+1, sizeof(magma_int_t), &k[0], 1, dk, 1, queue);
+
+	double **dA;
+	double **dB;
+	double **dC;
+
+    magma_malloc((void**)&dA, batch*sizeof(double*));
+    magma_malloc((void**)&dB, batch*sizeof(double*));
+    magma_malloc((void**)&dC, batch*sizeof(double*));
+
+	double *dA_i;
+	double *dB_i;
+	double *dC_i;		
+
+    magma_dmalloc(&dA_i, sizeA);
+    magma_dmalloc(&dB_i, sizeB);
+    magma_dmalloc(&dC_i, sizeC);
+
+    // magma_setvector(batch, sizeof(double*), &A[0], 1, dA, 1, queue);
+    // magma_setvector(batch, sizeof(double*), &B[0], 1, dB, 1, queue);
+    // magma_setvector(batch, sizeof(double*), &C[0], 1, dC, 1, queue);
+
+	cudaMalloc(&dA, batch * sizeof(double*));
+	cudaMalloc(&dB, batch * sizeof(double*));
+	cudaMalloc(&dC, batch * sizeof(double*));
+
+	int countA = 0;
+	int countB = 0;
+	std::cout << "transfering" << std::endl;
+	for (int i = 0; i < batch; i++)
+	{
+		int sizeA_i = m[i] * k[i];
+		int sizeB_i = k[i] * n[i];
+		int sizeC_i = m[i] * n[i];
+
+		cudaMalloc(&dA_i, sizeA_i * sizeof(double));
+		cudaMalloc(&dB_i, sizeB_i * sizeof(double));
+		cudaMalloc(&dC_i, sizeC_i * sizeof(double));
+
+		cudaMemcpy(dA_i, &A[countA], sizeA_i * sizeof(double), cudaMemcpyHostToDevice);
+		cudaMemcpy(dB_i, &B[countB], sizeB_i * sizeof(double), cudaMemcpyHostToDevice);
+		cudaMemset(dC_i, 0, sizeC_i * sizeof(double));
+
+		cudaMemcpy(&dA[i], &dA_i, sizeof(double*), cudaMemcpyHostToDevice);
+		cudaMemcpy(&dB[i], &dB_i, sizeof(double*), cudaMemcpyHostToDevice);
+		cudaMemcpy(&dC[i], &dC_i, sizeof(double*), cudaMemcpyHostToDevice);
+
+		// cudaFree(dA_i);
+		// cudaFree(dB_i);
+  //       cudaFree(dC_i);
+
+		countA += sizeA_i;
+		countB += sizeB_i;
+		
+	}
+
+	std::cout << "begin" << std::endl;
+	magmablas_dgemm_vbatched(transA, transB, dm, dn, dk, alpha, dA, dm, dB, dk, beta, dC, dm, batch, queue); 
+	std::cout << "Multiply done." << std::endl;
+	teste<<<1,4>>>(dC);
+
+
+	// magma_dgetmatrix(m[0], n[0], sizeof(double), &dC[0], m[0], &C[0], m[0], queue); 	
+
+
+
+	// TPZVec<TPZVec<REAL>> C1(1);
+	// C1[0].resize(30);
+
+ //  	cudaMemcpy(&C1[0][0], dA[0], sizeof(double*), cudaMemcpyDeviceToHost);
+ //      std::cout << C1 << std::endl;
+
+	cudaFree(dm);
+	cudaFree(dn);
+	cudaFree(dk);
+	cudaFree(dA);
+	cudaFree(dB);
+	cudaFree(dC);
+    magma_queue_destroy(queue); 
+
+
+
 }

@@ -209,177 +209,179 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 
  void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
 
-    TPZSYsmpMatrix<STATE> &stiff = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
-    TPZVec<STATE> &Kg = stiff.A();
-    int64_t nnz = Kg.size();
+    fCudaCalls.CallMultiplyBatched();
+
+//     TPZSYsmpMatrix<STATE> &stiff = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
+//     TPZVec<STATE> &Kg = stiff.A();
+//     int64_t nnz = Kg.size();
     
-    TPZVec<int> & indexes = fIntegrator.DoFIndexes();
-    TPZVec<int> & el_n_dofs = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes;
-    TPZVec<int> & cols_first_index = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex;
+//     TPZVec<int> & indexes = fIntegrator.DoFIndexes();
+//     TPZVec<int> & el_n_dofs = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes;
+//     TPZVec<int> & cols_first_index = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex;
 
-    int n_colors = m_first_color_index.size()-1;
+//     int n_colors = m_first_color_index.size()-1;
 
-#ifdef USING_CUDA      
-    TPZVecGPU<REAL> d_Kg(nnz);
-    d_Kg.Zero();
-    fIntegrator.ConstitutiveLawProcessor().De();
-#endif
+// #ifdef USING_CUDA      
+//     TPZVecGPU<REAL> d_Kg(nnz);
+//     d_Kg.Zero();
+//     fIntegrator.ConstitutiveLawProcessor().De();
+// #endif
 
-    Timer timer;   
-    timer.TimeUnit(Timer::ESeconds);
-    timer.TimerOption(Timer::EChrono);
-    timer.Start();
-#ifdef USING_CUDA
-    #ifdef COMPUTE_K_GS
-    std::cout << "COMPUTE_K_GPU_GS" << std::endl;          
-        int first = m_first_color_index[0];
-        int last = m_first_color_index[n_colors];
-        int el_dofs = el_n_dofs[0];
-        int nel_per_color = last - first;
+//     Timer timer;   
+//     timer.TimeUnit(Timer::ESeconds);
+//     timer.TimerOption(Timer::EChrono);
+//     timer.Start();
+// #ifdef USING_CUDA
+//     #ifdef COMPUTE_K_GS
+//     std::cout << "COMPUTE_K_GPU_GS" << std::endl;          
+//         int first = m_first_color_index[0];
+//         int last = m_first_color_index[n_colors];
+//         int el_dofs = el_n_dofs[0];
+//         int nel_per_color = last - first;        
 
-        TPZVecGPU<REAL> d_Kc(m_color_l_sequence.size());
-        d_Kc.Zero();
-        fCudaCalls.MatrixAssembleGS(d_Kc.getData(), first, last, d_el_color_indexes.getData(), fIntegrator.ConstitutiveLawProcessor().WeightVectorDev().getData(),
-            fIntegrator.DoFIndexesDev().getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dStorage.getData(),
-            fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowSizes.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColSizes.getData(),
-            fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowFirstIndex.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColFirstIndex.getData(),
-            fIntegrator.IrregularBlocksMatrix().BlocksDev().dMatrixPosition.getData());
+//         TPZVecGPU<REAL> d_Kc(m_color_l_sequence.size());
+//         d_Kc.Zero();
+//         fCudaCalls.MatrixAssembleGS(d_Kc.getData(), first, last, d_el_color_indexes.getData(), fIntegrator.ConstitutiveLawProcessor().WeightVectorDev().getData(),
+//             fIntegrator.DoFIndexesDev().getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dStorage.getData(),
+//             fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowSizes.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColSizes.getData(),
+//             fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowFirstIndex.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColFirstIndex.getData(),
+//             fIntegrator.IrregularBlocksMatrix().BlocksDev().dMatrixPosition.getData());
 
-    for (int ic = 0; ic < n_colors; ic++) {
-        int first_l = m_first_color_l_index[ic];
-        int last_l = m_first_color_l_index[ic + 1];
-        int n_l_indexes = last_l - first_l;
-        TPZVecGPU<REAL> aux(n_l_indexes);
-        fCudaCalls.GatherOperation(n_l_indexes, d_Kg.getData(), aux.getData(), &d_color_l_sequence.getData()[first_l]);
-        fCudaCalls.DaxpyOperation(n_l_indexes, 1., &d_Kc.getData()[first_l], aux.getData());
-        fCudaCalls.ScatterOperation(n_l_indexes, aux.getData(), d_Kg.getData(), &d_color_l_sequence.getData()[first_l]);
-    }
-    d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU
-    #else
-    std::cout << "COMPUTE_K_GPU" << std::endl;
-    for (int ic = 0; ic < n_colors; ic++) /// Serial by color
-    {     
-        int first = m_first_color_index[ic];
-        int last = m_first_color_index[ic + 1];
-        fCudaCalls.MatrixAssemble(d_Kg.getData(), first, last, &d_el_color_indexes.getData()[first], fIntegrator.ConstitutiveLawProcessor().WeightVectorDev().getData(),
-            fIntegrator.DoFIndexesDev().getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dStorage.getData(),
-            fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowSizes.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColSizes.getData(),
-            fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowFirstIndex.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColFirstIndex.getData(),
-            fIntegrator.IrregularBlocksMatrix().BlocksDev().dMatrixPosition.getData(), d_IA_to_sequence.getData(), d_JA_to_sequence.getData());
-    }
-    d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU    
-    #endif
-#else
-#ifdef COMPUTE_K_GS
-     std::cout << "COMPUTE_K_CPU_GS" << std::endl;
+//     for (int ic = 0; ic < n_colors; ic++) {
+//         int first_l = m_first_color_l_index[ic];
+//         int last_l = m_first_color_l_index[ic + 1];
+//         int n_l_indexes = last_l - first_l;
+//         TPZVecGPU<REAL> aux(n_l_indexes);
+//         fCudaCalls.GatherOperation(n_l_indexes, d_Kg.getData(), aux.getData(), &d_color_l_sequence.getData()[first_l]);
+//         fCudaCalls.DaxpyOperation(n_l_indexes, 1., &d_Kc.getData()[first_l], aux.getData());
+//         fCudaCalls.ScatterOperation(n_l_indexes, aux.getData(), d_Kg.getData(), &d_color_l_sequence.getData()[first_l]);
+//     }
+//     d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU
+//     #else
+//     std::cout << "COMPUTE_K_GPU" << std::endl;
+//     for (int ic = 0; ic < n_colors; ic++) /// Serial by color
+//     {     
+//         int first = m_first_color_index[ic];
+//         int last = m_first_color_index[ic + 1];
+//         fCudaCalls.MatrixAssemble(d_Kg.getData(), first, last, &d_el_color_indexes.getData()[first], fIntegrator.ConstitutiveLawProcessor().WeightVectorDev().getData(),
+//             fIntegrator.DoFIndexesDev().getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dStorage.getData(),
+//             fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowSizes.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColSizes.getData(),
+//             fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowFirstIndex.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColFirstIndex.getData(),
+//             fIntegrator.IrregularBlocksMatrix().BlocksDev().dMatrixPosition.getData(), d_IA_to_sequence.getData(), d_JA_to_sequence.getData());
+//     }
+//     d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU    
+//     #endif
+// #else
+// #ifdef COMPUTE_K_GS
+//      std::cout << "COMPUTE_K_CPU_GS" << std::endl;
      
-     int first = m_first_color_index[0];
-     int last = m_first_color_index[n_colors];
-     int el_dofs = el_n_dofs[0];
-     int nel_per_color = last - first;
-     TPZVec<REAL> Kc(m_color_l_sequence.size(),0.0);
+//      int first = m_first_color_index[0];
+//      int last = m_first_color_index[n_colors];
+//      int el_dofs = el_n_dofs[0];
+//      int nel_per_color = last - first;
+//      TPZVec<REAL> Kc(m_color_l_sequence.size(),0.0);
      
-#ifdef USING_TBB
-         tbb::parallel_for(size_t(0),size_t(nel_per_color),size_t(1),[&](size_t i)
-#else
-        for (int i = 0; i < nel_per_color; i++)
-#endif
-         {
-             int iel = m_el_color_indexes[first + i];
+// #ifdef USING_TBB
+//          tbb::parallel_for(size_t(0),size_t(nel_per_color),size_t(1),[&](size_t i)
+// #else
+//         for (int i = 0; i < nel_per_color; i++)
+// #endif
+//          {
+//              int iel = m_el_color_indexes[first + i];
              
-             // Compute Elementary Matrix.
-             TPZFMatrix<STATE> K;
-             fIntegrator.ComputeTangentMatrix(iel,K);
-             int stride = i*(el_dofs * el_dofs + el_dofs)/2;
-             int c = stride;
-             for(int i_dof = 0 ; i_dof < el_dofs; i_dof++){
-                 for(int j_dof = i_dof; j_dof < el_dofs; j_dof++){
-                     Kc[c] += K(i_dof,j_dof);
-                     c++;
-                 }
-             }
-         }
-#ifdef USING_TBB
-);
-#endif
+//              // Compute Elementary Matrix.
+//              TPZFMatrix<STATE> K;
+//              fIntegrator.ComputeTangentMatrix(iel,K);
+//              int stride = i*(el_dofs * el_dofs + el_dofs)/2;
+//              int c = stride;
+//              for(int i_dof = 0 ; i_dof < el_dofs; i_dof++){
+//                  for(int j_dof = i_dof; j_dof < el_dofs; j_dof++){
+//                      Kc[c] += K(i_dof,j_dof);
+//                      c++;
+//                  }
+//              }
+//          }
+// #ifdef USING_TBB
+// );
+// #endif
          
-       for (int ic = 0; ic < n_colors; ic++) {
-           int first_l = m_first_color_l_index[ic];
-           int last_l = m_first_color_l_index[ic + 1];
-           int n_l_indexes = last_l - first_l;
-           /// Gather from Kg
-           TPZVec<REAL> aux(n_l_indexes);
-           cblas_dgthr(n_l_indexes, &Kg[0], &aux[0], &m_color_l_sequence[first_l]);
+//        for (int ic = 0; ic < n_colors; ic++) {
+//            int first_l = m_first_color_l_index[ic];
+//            int last_l = m_first_color_l_index[ic + 1];
+//            int n_l_indexes = last_l - first_l;
+//            /// Gather from Kg
+//            TPZVec<REAL> aux(n_l_indexes);
+//            cblas_dgthr(n_l_indexes, &Kg[0], &aux[0], &m_color_l_sequence[first_l]);
            
-           // Contributing
-           cblas_daxpy(n_l_indexes, 1., &Kc[first_l], 1., &aux[0],1);
+//            // Contributing
+//            cblas_daxpy(n_l_indexes, 1., &Kc[first_l], 1., &aux[0],1);
            
-           /// Scatter to Kg
-           cblas_dsctr(n_l_indexes, &aux[0], &m_color_l_sequence[first_l], &Kg[0]);
-       }
+//            /// Scatter to Kg
+//            cblas_dsctr(n_l_indexes, &aux[0], &m_color_l_sequence[first_l], &Kg[0]);
+//        }
 
-#else
-     std::cout << "COMPUTE_K_CPU" << std::endl;
+// #else
+//      std::cout << "COMPUTE_K_CPU" << std::endl;
      
-      for (int ic = 0; ic < n_colors; ic++) {
+//       for (int ic = 0; ic < n_colors; ic++) {
              
           
-#ifdef USING_TBB
-       tbb::parallel_for(size_t(m_first_color_index[ic]),size_t(m_first_color_index[ic+1]),size_t(1),[&](size_t i)
+// #ifdef USING_TBB
+//        tbb::parallel_for(size_t(m_first_color_index[ic]),size_t(m_first_color_index[ic+1]),size_t(1),[&](size_t i)
                                                  
-#else
-       for (int i = m_first_color_index[ic]; i < m_first_color_index[ic+1]; i++)
-#endif
-       {
-             int iel = m_el_color_indexes[i];
+// #else
+//        for (int i = m_first_color_index[ic]; i < m_first_color_index[ic+1]; i++)
+// #endif
+//        {
+//              int iel = m_el_color_indexes[i];
            
-             // Compute Elementary Matrix.
-             TPZFMatrix<STATE> K;
-             fIntegrator.ComputeTangentMatrix(iel,K);
+//              // Compute Elementary Matrix.
+//              TPZFMatrix<STATE> K;
+//              fIntegrator.ComputeTangentMatrix(iel,K);
            
-             int el_dof = el_n_dofs[iel];
-             int pos = cols_first_index[iel];
+//              int el_dof = el_n_dofs[iel];
+//              int pos = cols_first_index[iel];
            
-             for (int i_dof = 0; i_dof < el_dof; i_dof++) {
+//              for (int i_dof = 0; i_dof < el_dof; i_dof++) {
                  
-                 int64_t i_dest = indexes[pos + i_dof];
+//                  int64_t i_dest = indexes[pos + i_dof];
                  
-                 for (int j_dof = i_dof; j_dof < el_dof; j_dof++) {
+//                  for (int j_dof = i_dof; j_dof < el_dof; j_dof++) {
                      
-                     int64_t j_dest = indexes[pos + j_dof];
-                     STATE val = K(i_dof,j_dof);
-                     int64_t  index = me(m_IA_to_sequence, m_JA_to_sequence, i_dest, j_dest);
-                     Kg[index] += val;
+//                      int64_t j_dest = indexes[pos + j_dof];
+//                      STATE val = K(i_dof,j_dof);
+//                      int64_t  index = me(m_IA_to_sequence, m_JA_to_sequence, i_dest, j_dest);
+//                      Kg[index] += val;
                      
-                 }
-             }
+//                  }
+//              }
            
-         }
-#ifdef USING_TBB
- );
-#endif
+//          }
+// #ifdef USING_TBB
+//  );
+// #endif
           
-}
+// }
          
-#endif
+// #endif
 
-#endif
+// #endif
 
-    timer.Stop();
-    std::cout << "K Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+//     timer.Stop();
+//     std::cout << "K Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
      
-    auto it_end = fSparseMatrixLinear.MapEnd();
-    for (auto it = fSparseMatrixLinear.MapBegin(); it!=it_end; it++) {
-      int64_t row = it->first.first;
-      int64_t col = it->first.second;
-      STATE val = it->second + stiff.GetVal(row, col);
-      stiff.PutVal(row, col, val);
-    }
+//     auto it_end = fSparseMatrixLinear.MapEnd();
+//     for (auto it = fSparseMatrixLinear.MapBegin(); it!=it_end; it++) {
+//       int64_t row = it->first.first;
+//       int64_t col = it->first.second;
+//       STATE val = it->second + stiff.GetVal(row, col);
+//       stiff.PutVal(row, col, val);
+//     }
 
-    timer.Start();
-    Assemble(rhs,guiInterface);
-    timer.Stop();
-    std::cout << "R Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+//     timer.Start();
+//     Assemble(rhs,guiInterface);
+//     timer.Stop();
+//     std::cout << "R Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
 }
 
 int TPZElastoPlasticIntPointsStructMatrix::StressRateVectorSize(){

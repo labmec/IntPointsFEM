@@ -199,86 +199,86 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance, bool modi
     timer.Stop();
     std::cout << "Calling Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
 
-    for (int i = 0; i < n_iterations; i++) {
+//     for (int i = 0; i < 1; i++) {
 
-        timer.Start();
-        analysis->Solve();
-        timer.Stop();
-        std::cout << "Calling Linear Solve: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+//         timer.Start();
+//         analysis->Solve();
+//         timer.Stop();
+//         std::cout << "Calling Linear Solve: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
 
-        delta_du = analysis->Mesh()->Solution();
+//         delta_du = analysis->Mesh()->Solution();
         
-        if (modified_thomas_accel_Q) { // Accelerated conventional initial stiffness method
-            du += mt_alpha*delta_du;
-            analysis->LoadSolution(du);
-            analysis->AssembleResidual();
-            analysis->Solve();
+//         if (modified_thomas_accel_Q) { // Accelerated conventional initial stiffness method
+//             du += mt_alpha*delta_du;
+//             analysis->LoadSolution(du);
+//             analysis->AssembleResidual();
+//             analysis->Solve();
             
-            delta_u_tilde = analysis->Solution();
-            norm_delta_du = Norm(mt_alpha*delta_du + delta_u_tilde);
+//             delta_u_tilde = analysis->Solution();
+//             norm_delta_du = Norm(mt_alpha*delta_du + delta_u_tilde);
             
-            int n_equ = delta_u_tilde.Rows();
-            REAL num = 0, dem = 0;
+//             int n_equ = delta_u_tilde.Rows();
+//             REAL num = 0, dem = 0;
             
-#ifdef USING_TBB
-            tbb::parallel_for(size_t(0), size_t(n_equ), size_t(1) , [& num, & dem, & mt_alpha, & delta_du, & delta_u_tilde] (size_t & i) {
-                num += (mt_alpha*delta_du(i,0))*(delta_u_tilde(i,0));
-                dem += (mt_alpha*delta_du(i,0))*(mt_alpha*delta_du(i,0));
-            }
-);
-#else
-            for (int i = 0; i < n_equ; i++) {
-                num += (mt_alpha*delta_du(i,0))*(delta_u_tilde(i,0));
-                dem += (mt_alpha*delta_du(i,0))*(mt_alpha*delta_du(i,0));
-            }
-#endif
+// #ifdef USING_TBB
+//             tbb::parallel_for(size_t(0), size_t(n_equ), size_t(1) , [& num, & dem, & mt_alpha, & delta_du, & delta_u_tilde] (size_t & i) {
+//                 num += (mt_alpha*delta_du(i,0))*(delta_u_tilde(i,0));
+//                 dem += (mt_alpha*delta_du(i,0))*(mt_alpha*delta_du(i,0));
+//             }
+// );
+// #else
+//             for (int i = 0; i < n_equ; i++) {
+//                 num += (mt_alpha*delta_du(i,0))*(delta_u_tilde(i,0));
+//                 dem += (mt_alpha*delta_du(i,0))*(mt_alpha*delta_du(i,0));
+//             }
+// #endif
             
-            REAL s = num/dem;
-            mt_alpha += s;
+//             REAL s = num/dem;
+//             mt_alpha += s;
         
-            du += delta_u_tilde;
-            analysis->LoadSolution(du);
+//             du += delta_u_tilde;
+//             analysis->LoadSolution(du);
             
-        }else{ // Conventional initial stiffness method
-            du += delta_du;
-            norm_delta_du = Norm(delta_du);
-            analysis->LoadSolution(du);
-        }
+//         }else{ // Conventional initial stiffness method
+//             du += delta_du;
+//             norm_delta_du = Norm(delta_du);
+//             analysis->LoadSolution(du);
+//         }
         
 
 
-        timer.Start();
-        analysis->AssembleResidual();
-        timer.Stop();
-        std::cout << "Calling AssembleResidual: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+//         timer.Start();
+//         analysis->AssembleResidual();
+//         timer.Stop();
+//         std::cout << "Calling AssembleResidual: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
 
-        norm_res = Norm(analysis->Rhs());
-        stop_criterion_Q = norm_res < tolerance /*& norm_delta_du < tolerance*/;
-        std::cout << "Nonlinear process : delta_du norm = " << norm_delta_du << std::endl;
-        std::cout << "Nonlinear process : residue norm = " << norm_res << std::endl;
-        if (stop_criterion_Q) {
-            AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
-            norm_res = Norm(analysis->Rhs());
-            std::cout << "Nonlinear process converged with residue norm = " << norm_res << std::endl;
-            std::cout << "Number of iterations = " << i + 1 << std::endl;
-            break;
-        }
-        // {
-           // timer.Start();
-           // analysis->Assemble();
-           // timer.Stop();
-           // std::cout << "Calling Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
-        // }
+//         norm_res = Norm(analysis->Rhs());
+//         stop_criterion_Q = norm_res < tolerance /*& norm_delta_du < tolerance*/;
+//         std::cout << "Nonlinear process : delta_du norm = " << norm_delta_du << std::endl;
+//         std::cout << "Nonlinear process : residue norm = " << norm_res << std::endl;
+//         if (stop_criterion_Q) {
+//             AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
+//             norm_res = Norm(analysis->Rhs());
+//             std::cout << "Nonlinear process converged with residue norm = " << norm_res << std::endl;
+//             std::cout << "Number of iterations = " << i + 1 << std::endl;
+//             break;
+//         }
+//         // {
+//            // timer.Start();
+//            // analysis->Assemble();
+//            // timer.Stop();
+//            // std::cout << "Calling Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+//         // }
 
-    }
+//     }
 
-    timer_solution.Stop();
-    std::cout << "Solution process: Elasped time [sec] = " << timer_solution.ElapsedTime() << std::endl;
+//     timer_solution.Stop();
+//     std::cout << "Solution process: Elasped time [sec] = " << timer_solution.ElapsedTime() << std::endl;
 
-     if (stop_criterion_Q == false) {
-         AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
-         std::cout << "Nonlinear process not converged with residue norm = " << norm_res << std::endl;
-     }
+//      if (stop_criterion_Q == false) {
+//          AcceptPseudoTimeStepSolution(analysis, analysis->Mesh());
+//          std::cout << "Nonlinear process not converged with residue norm = " << norm_res << std::endl;
+//      }
 }
 
 TPZAnalysis *Analysis(TPZCompMesh *cmesh, int n_threads) {

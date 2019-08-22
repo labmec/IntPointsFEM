@@ -41,6 +41,8 @@ public:
 	void SolveCG(int n, int nnzA, REAL *csrValA, int *csrRowPtrA, int *csrColIndA, REAL *b, REAL *x);
 
 	void DeToDevice(REAL lambda, REAL mu);
+
+	void CallMultiplyBatched(); 
 	
 private:
 	cusparseHandle_t handle_cusparse;
