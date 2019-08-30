@@ -176,13 +176,15 @@ void TPZCudaCalls::ComputeSigma(bool update_mem, int npts, REAL *glob_delta_stra
 	}
 }
 
-void TPZCudaCalls::MatrixAssembleGS(REAL *Kc, int first_el, int last_el, int64_t *el_color_index, REAL *weight, int *dof_indexes,
+void TPZCudaCalls::MatrixAssembleGS(REAL *Kc, int first_el, int last_el, int64_t *el_color_index, REAL *weight,
 	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition) {
 	int nel = last_el - first_el;
 	int numBlocks = (nel + NT_sm - 1) / NT_sm;
 
-	MatrixAssembleKernelGS<<<numBlocks,NT_sm>>>(nel, Kc, el_color_index, weight, dof_indexes, 
-	storage, rowsizes, colsizes, rowfirstindex, colfirstindex, matrixposition);
+	dim3 gridSize(nel, 1, 1);
+	dim3 blockSize(1, 1, 1);
+
+	MatrixAssembleKernelGS<<<gridSize,blockSize>>>(nel, Kc, el_color_index, weight, storage, rowsizes, colsizes, rowfirstindex, colfirstindex, matrixposition);
 	cudaDeviceSynchronize();
 	cudaError_t error = cudaGetLastError();
 	if (error != cudaSuccess) {
@@ -208,9 +210,26 @@ void TPZCudaCalls::MatrixAssemble(REAL *Kg, int first_el, int last_el, int64_t *
 }
 
 void TPZCudaCalls::DeToDevice(REAL lambda, REAL mu) {
-		REAL De_host[] = {lambda + 2.0*mu, 0, lambda, 0, mu, 0, lambda, 0, lambda + 2.0*mu};
-		cudaMemcpyToSymbol(De, &De_host, 9 * sizeof(REAL));
-	}
+	int npts;
+	if(ndof == 8) npts = 4;
+	if(ndof == 18) npts = 9;
+	if(ndof == 32) npts = 16;
+
+    REAL De_host[3 * 3 * npts * npts];
+    for(int i = 0; i < 3 * 3 * npts * npts; i++) De_host[i] = 0.;
+
+    for(int i = 0; i < npts; i++) {
+        int id = i * (9 * npts + 3);
+        De_host[id] = lambda + 2.0*mu;
+        De_host[id + 2] = lambda;
+        De_host[id + 1 * (npts - 1) * 3 + 4] = mu;
+        De_host[id + 2 * (npts - 1) * 3 + 6] = lambda;
+        De_host[id + 2 * (npts - 1) * 3 + 8] = lambda + 2.0*mu;
+    }
+
+	// REAL De_host[] = {lambda + 2.0*mu, 0, lambda, 0, mu, 0, lambda, 0, lambda + 2.0*mu};
+	cudaMemcpyToSymbol(De, &De_host, 3 * 3 * npts * npts * sizeof(REAL));
+}
 
 
 void TPZCudaCalls::SolveCG(int n, int nnzA, REAL *csrValA, int *csrRowPtrA, int *csrColIndA, REAL *r, REAL *x) {
