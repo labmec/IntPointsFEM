@@ -142,7 +142,7 @@ void TPZNumericalIntegrator::TransferDataToGPU() {
 #endif
 
 
-void TPZNumericalIntegrator::ComputeConstitutiveMatrix(int64_t point_index, TPZFMatrix<STATE> &De){
+void TPZNumericalIntegrator::ComputeConstitutiveMatrix(TPZFMatrix<STATE> &De){
     
     De.Zero();
     REAL lambda = 555.555555555556;
@@ -179,7 +179,7 @@ void TPZNumericalIntegrator::ComputeTangentMatrix(int64_t iel, TPZFMatrix<REAL> 
         }
         
         REAL omega = fConstitutiveLawProcessor.fWeight[first_el_ip + ip];
-        ComputeConstitutiveMatrix(ip,De);
+        ComputeConstitutiveMatrix(De);
         De.Multiply(Bip, DeBip);
         Bip.MultAdd(DeBip, K, K, omega, 1.0, 1);
     }

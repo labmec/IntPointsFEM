@@ -39,7 +39,7 @@ TPZMatrix<STATE> * TPZIntPointsStructMatrix::Create(){
 
     TPZStack<int64_t> elgraph;
     TPZVec<int64_t> elgraphindex;
-    fMesh->ComputeElGraph(elgraph,elgraphindex,fMaterialIds); // This method seems to be efficient.
+    fMesh->ComputeElGraph(elgraph,elgraphindex,fMaterialIds);
     TPZMatrix<STATE> * mat = SetupMatrixData(elgraph, elgraphindex);
 
     TPZFYsmpMatrix<STATE> *stiff = dynamic_cast<TPZFYsmpMatrix<STATE> *> (mat);
@@ -122,10 +122,6 @@ void TPZIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE
 }
 
 void TPZIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface){
-    int neq = fMesh->NEquations();
-
-    rhs.Resize(neq, 1);
-    rhs.Zero();
     fIntegrator.ResidualIntegration(fMesh->Solution(),rhs);
     rhs += fRhsLinear;
 }
@@ -157,7 +153,6 @@ void TPZIntPointsStructMatrix::SetUpDataStructure() {
 
     TPZVec<int> colored_element_indexes;
     int ncolor;
-
     ColoredIndexes(element_indexes, dof_indexes, colored_element_indexes, ncolor);
 
     fIntegrator.SetColorIndexes(colored_element_indexes);
