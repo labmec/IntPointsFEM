@@ -11,7 +11,7 @@
 
 #include "TPZConstitutiveLawProcessor.h"
 #include "TPZElastoPlasticIntPointsStructMatrix.h"
-#include "TPZIntPointsStructMatrix.h"
+#include "TPBrIntPointsStructMatrix.h"
 #include "TElastoPlasticData.h"
 #include "TRKSolution.h"
 #include "TPZElasticCriterion.h"
@@ -279,7 +279,7 @@ TPZAnalysis * Analysis_IPFEM(TPZCompMesh * cmesh, int n_threads){
     bool optimizeBandwidth = true;
     TPZAnalysis *analysis = new TPZAnalysis(cmesh, optimizeBandwidth);
 //    TPZElastoPlasticIntPointsStructMatrix struc_mat(cmesh);
-    TPZIntPointsStructMatrix< TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse> , TPZElastoPlasticMem > struc_mat(cmesh);
+    TPBrIntPointsStructMatrix< TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse> , TPZElastoPlasticMem > struc_mat(cmesh);
     struc_mat.SetNumThreads(n_threads);
     analysis->SetStructuralMatrix(struc_mat);
     TPZStepSolver<STATE> step;

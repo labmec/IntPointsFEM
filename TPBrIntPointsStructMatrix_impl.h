@@ -5,14 +5,14 @@
 #include <tbb/parallel_for.h>
 #endif
 
-#include "TPZIntPointsStructMatrix.h"
+#include "TPBrIntPointsStructMatrix.h"
 #include "pzskylstrmatrix.h"
 #include "pzbndcond.h"
 #include "pzintel.h"
 #include "pzsysmp.h"
 
 template<class T, class MEM>
-TPZIntPointsStructMatrix<T, MEM>::TPZIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZSpStructMatrix(cmesh), fSparseMatrixLinear(), fRhsLinear(), fIntegrator(), fBCMaterialIds() {
+TPBrIntPointsStructMatrix<T, MEM>::TPBrIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZSpStructMatrix(cmesh), fSparseMatrixLinear(), fRhsLinear(), fIntegrator(), fBCMaterialIds() {
 
     if (!cmesh->Reference()->Dimension()) {
         DebugStop();
@@ -25,17 +25,17 @@ TPZIntPointsStructMatrix<T, MEM>::TPZIntPointsStructMatrix(TPZCompMesh *cmesh) :
 }
 
 template<class T, class MEM>
-TPZIntPointsStructMatrix<T, MEM>::~TPZIntPointsStructMatrix() {
+TPBrIntPointsStructMatrix<T, MEM>::~TPBrIntPointsStructMatrix() {
 
 }
 
 template<class T, class MEM>
-TPZStructMatrix * TPZIntPointsStructMatrix<T, MEM>::Clone(){
-    return new TPZIntPointsStructMatrix(*this);
+TPZStructMatrix * TPBrIntPointsStructMatrix<T, MEM>::Clone(){
+    return new TPBrIntPointsStructMatrix(*this);
 }
 
 template<class T, class MEM>
-TPZMatrix<STATE> * TPZIntPointsStructMatrix<T, MEM>::Create(){
+TPZMatrix<STATE> * TPBrIntPointsStructMatrix<T, MEM>::Create(){
 
     if(!isBuilt()) {
         this->SetUpDataStructure(); // When basis functions are computed and storaged
@@ -55,7 +55,7 @@ TPZMatrix<STATE> * TPZIntPointsStructMatrix<T, MEM>::Create(){
 }
 
 template<class T, class MEM>
-TPZMatrix<STATE> *TPZIntPointsStructMatrix<T, MEM>::CreateAssemble(TPZFMatrix<STATE> &rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
+TPZMatrix<STATE> *TPBrIntPointsStructMatrix<T, MEM>::CreateAssemble(TPZFMatrix<STATE> &rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
 
     int64_t neq = fMesh->NEquations();
     TPZMatrix<STATE> *stiff = Create();
@@ -65,13 +65,13 @@ TPZMatrix<STATE> *TPZIntPointsStructMatrix<T, MEM>::CreateAssemble(TPZFMatrix<ST
 }
 
 template<class T, class MEM>
-bool TPZIntPointsStructMatrix<T, MEM>::isBuilt() {
+bool TPBrIntPointsStructMatrix<T, MEM>::isBuilt() {
     if(fIntegrator.IrregularBlocksMatrix().Rows() != 0) return true;
     else return false;
 }
 
 template<class T, class MEM>
-void TPZIntPointsStructMatrix<T, MEM>::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
+void TPBrIntPointsStructMatrix<T, MEM>::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
 
     TPZFYsmpMatrix<STATE> &stiff = dynamic_cast<TPZFYsmpMatrix<STATE> &> (mat);
     TPZVec<STATE> &Kg = stiff.A();
@@ -129,13 +129,13 @@ void TPZIntPointsStructMatrix<T, MEM>::Assemble(TPZMatrix<STATE> & mat, TPZFMatr
 }
 
 template<class T, class MEM>
-void TPZIntPointsStructMatrix<T, MEM>::Assemble(TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface){
+void TPBrIntPointsStructMatrix<T, MEM>::Assemble(TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface){
     fIntegrator.ResidualIntegration(fMesh->Solution(),rhs);
     rhs += fRhsLinear;
 }
 
 template<class T, class MEM>
-void TPZIntPointsStructMatrix<T, MEM>::SetUpDataStructure() {
+void TPBrIntPointsStructMatrix<T, MEM>::SetUpDataStructure() {
 
     if(isBuilt()) {
         std::cout << __PRETTY_FUNCTION__ << " Data structure has been setup." << std::endl;
@@ -147,12 +147,12 @@ void TPZIntPointsStructMatrix<T, MEM>::SetUpDataStructure() {
 
     ClassifyMaterialsByDimension();
 
-    TPZIrregularBlocksMatrix::IrregularBlocks blocksData;
+    TPBrIrregularBlocksMatrix::IrregularBlocks blocksData;
     SetUpIrregularBlocksData(element_indexes, blocksData);
 
     int64_t rows = blocksData.fRowFirstIndex[blocksData.fNumBlocks];
     int64_t cols = blocksData.fColFirstIndex[blocksData.fNumBlocks];
-    TPZIrregularBlocksMatrix blocksMatrix(rows, cols);
+    TPBrIrregularBlocksMatrix blocksMatrix(rows, cols);
     blocksMatrix.SetBlocks(blocksData);
     fIntegrator.SetIrregularBlocksMatrix(blocksMatrix);
 
@@ -173,7 +173,7 @@ void TPZIntPointsStructMatrix<T, MEM>::SetUpDataStructure() {
 }
 
 template<class T, class MEM>
-void TPZIntPointsStructMatrix<T, MEM>::ComputeDomainElementIndexes(TPZVec<int> &element_indexes) {
+void TPBrIntPointsStructMatrix<T, MEM>::ComputeDomainElementIndexes(TPZVec<int> &element_indexes) {
 
     TPZStack<int> el_indexes_loc;
     for (int64_t i = 0; i < fMesh->NElements(); i++) {
@@ -189,7 +189,7 @@ void TPZIntPointsStructMatrix<T, MEM>::ComputeDomainElementIndexes(TPZVec<int> &
 }
 
 template<class T, class MEM>
-void TPZIntPointsStructMatrix<T, MEM>::ClassifyMaterialsByDimension() {
+void TPBrIntPointsStructMatrix<T, MEM>::ClassifyMaterialsByDimension() {
 
     for (auto material : fMesh->MaterialVec()) {
         TPZBndCond * bc_mat = dynamic_cast<TPZBndCond *>(material.second);
@@ -203,7 +203,7 @@ void TPZIntPointsStructMatrix<T, MEM>::ClassifyMaterialsByDimension() {
 }
 
 template<class T, class MEM>
-void TPZIntPointsStructMatrix<T, MEM>::AssembleBoundaryData() {
+void TPBrIntPointsStructMatrix<T, MEM>::AssembleBoundaryData() {
 
     int64_t neq = fMesh->NEquations();
     TPZStructMatrix str(fMesh);
@@ -217,7 +217,7 @@ void TPZIntPointsStructMatrix<T, MEM>::AssembleBoundaryData() {
 }
 
 template<class T, class MEM>
-void TPZIntPointsStructMatrix<T, MEM>::SetUpIrregularBlocksData(TPZVec<int> &element_indexes, TPZIrregularBlocksMatrix::IrregularBlocks &blocksData) {
+void TPBrIntPointsStructMatrix<T, MEM>::SetUpIrregularBlocksData(TPZVec<int> &element_indexes, TPBrIrregularBlocksMatrix::IrregularBlocks &blocksData) {
 
     /// Number of elements
     int nblocks = element_indexes.size();
@@ -335,7 +335,7 @@ void TPZIntPointsStructMatrix<T, MEM>::SetUpIrregularBlocksData(TPZVec<int> &ele
 }
 
 template<class T, class MEM>
-int TPZIntPointsStructMatrix<T, MEM>::StressRateVectorSize(){
+int TPBrIntPointsStructMatrix<T, MEM>::StressRateVectorSize(){
 
     switch (fDimension) {
         case 1:{
@@ -360,7 +360,7 @@ int TPZIntPointsStructMatrix<T, MEM>::StressRateVectorSize(){
 }
 
 template<class T, class MEM>
-void TPZIntPointsStructMatrix<T, MEM>::SetUpIndexes(TPZVec<int> &element_indexes, TPZVec<int> & dof_indexes) {
+void TPBrIntPointsStructMatrix<T, MEM>::SetUpIndexes(TPZVec<int> &element_indexes, TPZVec<int> & dof_indexes) {
 
     int64_t nblocks = fIntegrator.IrregularBlocksMatrix().Blocks().fNumBlocks;
     int64_t rows = fIntegrator.IrregularBlocksMatrix().Rows();
@@ -429,7 +429,7 @@ void TPZIntPointsStructMatrix<T, MEM>::SetUpIndexes(TPZVec<int> &element_indexes
 }
 
 template<class T, class MEM>
-void TPZIntPointsStructMatrix<T, MEM>::ColoredIndexes(TPZVec<int> &element_indexes, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor) {
+void TPBrIntPointsStructMatrix<T, MEM>::ColoredIndexes(TPZVec<int> &element_indexes, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor) {
 
     int64_t nblocks = fIntegrator.IrregularBlocksMatrix().Blocks().fNumBlocks;
     int64_t cols = fIntegrator.IrregularBlocksMatrix().Cols();
@@ -522,7 +522,7 @@ void TPZIntPointsStructMatrix<T, MEM>::ColoredIndexes(TPZVec<int> &element_index
 }
 
 template<class T, class MEM>
-int64_t TPZIntPointsStructMatrix<T, MEM>::me(TPZVec<int64_t> &IA, TPZVec<int64_t> &JA, int64_t & i_dest, int64_t & j_dest) {
+int64_t TPBrIntPointsStructMatrix<T, MEM>::me(TPZVec<int64_t> &IA, TPZVec<int64_t> &JA, int64_t & i_dest, int64_t & j_dest) {
     for (int64_t k = IA[i_dest]; k < IA[i_dest + 1]; k++) {
         if (JA[k] == j_dest) {
             return k;

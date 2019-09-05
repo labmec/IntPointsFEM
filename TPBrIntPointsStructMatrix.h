@@ -2,8 +2,8 @@
 // Created by natalia on 03/09/2019.
 //
 
-#ifndef INTPOINTSFEM_TPZINTPOINTSSTRUCTMATRIX_H
-#define INTPOINTSFEM_TPZINTPOINTSSTRUCTMATRIX_H
+#ifndef INTPOINTSFEM_TPBRINTPOINTSSTRUCTMATRIX_H
+#define INTPOINTSFEM_TPBRINTPOINTSSTRUCTMATRIX_H
 
 #include "TPZSpStructMatrix.h"
 #include "TPZIrregularBlocksMatrix.h"
@@ -14,17 +14,17 @@
 #include "TPZElastoPlasticMem.h"
 
 template <class T, class MEM = TPZElastoPlasticMem>
-class TPZIntPointsStructMatrix : public TPZSpStructMatrix {
+class TPBrIntPointsStructMatrix : public TPZSpStructMatrix {
 
 public:
 
     // Default methods of a struct matrix
 
-    TPZIntPointsStructMatrix();
+    TPBrIntPointsStructMatrix();
 
-    TPZIntPointsStructMatrix(TPZCompMesh *cmesh);
+    TPBrIntPointsStructMatrix(TPZCompMesh *cmesh);
 
-    ~TPZIntPointsStructMatrix();
+    ~TPBrIntPointsStructMatrix();
 
     TPZStructMatrix *Clone();
 
@@ -49,7 +49,7 @@ private:
 
     void AssembleBoundaryData();
 
-    void SetUpIrregularBlocksData(TPZVec<int> &element_indexes, TPZIrregularBlocksMatrix::IrregularBlocks &blocksData);
+    void SetUpIrregularBlocksData(TPZVec<int> &element_indexes, TPBrIrregularBlocksMatrix::IrregularBlocks &blocksData);
 
     void SetUpIndexes(TPZVec<int> &element_indexes, TPZVec<int> & dof_indexes);
 
@@ -65,8 +65,7 @@ private:
 
     int fDimension;
 
-    TPZNumericalIntegrator fIntegrator;
-//    TPZNumericalIntegrator<T,MEM> fIntegrator;
+    TPBrNumericalIntegrator<T,MEM> fIntegrator;
 
     TPZVerySparseMatrix<STATE> fSparseMatrixLinear; //-> BC data
 
@@ -84,4 +83,4 @@ private:
 };
 
 
-#endif //INTPOINTSFEM_TPZINTPOINTSSTRUCTMATRIX_H
+#endif //INTPOINTSFEM_TPBRINTPOINTSSTRUCTMATRIX_H
