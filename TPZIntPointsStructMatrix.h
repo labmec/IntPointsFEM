@@ -7,10 +7,13 @@
 
 #include "TPZSpStructMatrix.h"
 #include "TPZIrregularBlocksMatrix.h"
+#include "TPBrIrregularBlocksMatrix.h"
 #include "TPZNumericalIntegrator.h"
+#include "TPBrNumericalIntegrator.h"
 #include "tpzverysparsematrix.h"
+#include "TPZElastoPlasticMem.h"
 
-template <class PlasticModel_t>
+template <class T, class MEM = TPZElastoPlasticMem>
 class TPZIntPointsStructMatrix : public TPZSpStructMatrix {
 
 public:
@@ -63,6 +66,7 @@ private:
     int fDimension;
 
     TPZNumericalIntegrator fIntegrator;
+//    TPZNumericalIntegrator<T,MEM> fIntegrator;
 
     TPZVerySparseMatrix<STATE> fSparseMatrixLinear; //-> BC data
 
@@ -77,8 +81,6 @@ private:
     TPZVec<int64_t> fElColorIndexes;
 
     TPZVec<int64_t> fFirstColorIndex;
-
-    PlasticModel_t fPlasticModel;
 };
 
 

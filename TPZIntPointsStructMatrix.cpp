@@ -8,4 +8,4 @@
 
 //template class TPZIntPointsStructMatrix<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse>>;
 
-template class TPZIntPointsStructMatrix<TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse>, TPZElastoPlasticMem>>;
+template class TPZIntPointsStructMatrix<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse>, TPZElastoPlasticMem >;

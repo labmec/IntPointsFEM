@@ -279,7 +279,7 @@ TPZAnalysis * Analysis_IPFEM(TPZCompMesh * cmesh, int n_threads){
     bool optimizeBandwidth = true;
     TPZAnalysis *analysis = new TPZAnalysis(cmesh, optimizeBandwidth);
 //    TPZElastoPlasticIntPointsStructMatrix struc_mat(cmesh);
-    TPZIntPointsStructMatrix<TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse>, TPZElastoPlasticMem>> struc_mat(cmesh);
+    TPZIntPointsStructMatrix< TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse> , TPZElastoPlasticMem > struc_mat(cmesh);
     struc_mat.SetNumThreads(n_threads);
     analysis->SetStructuralMatrix(struc_mat);
     TPZStepSolver<STATE> step;
@@ -559,6 +559,14 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int p_order, TElastoPlasti
     TPZElasticResponse ER = wellbore_material.ElasticResponse();
 
     TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse> LEMC;
+    
+    
+//    {
+//// 1        LEMC.fN. /// set the plastic state
+////        LEMC.ApplyStrainComputeSigma(<#const TPZTensor<REAL> &epsTotal#>, <#TPZTensor<REAL> &sigma#>)
+//        LEMC.f
+//    }
+    
     LEMC.SetElasticResponse(ER);
     LEMC.fYC.SetUp(mc_phi, mc_psi, mc_cohesion, ER);
     int PlaneStrain = 1;
