@@ -11,7 +11,8 @@
 #include "pzintel.h"
 #include "pzsysmp.h"
 
-TPZIntPointsStructMatrix::TPZIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZSpStructMatrix(cmesh), fSparseMatrixLinear(), fRhsLinear(), fIntegrator(), fBCMaterialIds() {
+template<class PlasticModel_t>
+TPZIntPointsStructMatrix<PlasticModel_t>::TPZIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZSpStructMatrix(cmesh), fSparseMatrixLinear(), fRhsLinear(), fIntegrator(), fBCMaterialIds() {
 
     if (!cmesh->Reference()->Dimension()) {
         DebugStop();
@@ -23,15 +24,18 @@ TPZIntPointsStructMatrix::TPZIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZSpSt
     fFirstColorIndex.resize(0);
 }
 
-TPZIntPointsStructMatrix::~TPZIntPointsStructMatrix() {
+template<class PlasticModel_t>
+TPZIntPointsStructMatrix<PlasticModel_t>::~TPZIntPointsStructMatrix() {
 
 }
 
-TPZStructMatrix * TPZIntPointsStructMatrix::Clone(){
+template<class PlasticModel_t>
+TPZStructMatrix * TPZIntPointsStructMatrix<PlasticModel_t>::Clone(){
     return new TPZIntPointsStructMatrix(*this);
 }
 
-TPZMatrix<STATE> * TPZIntPointsStructMatrix::Create(){
+template<class PlasticModel_t>
+TPZMatrix<STATE> * TPZIntPointsStructMatrix<PlasticModel_t>::Create(){
 
     if(!isBuilt()) {
         this->SetUpDataStructure(); // When basis functions are computed and storaged
@@ -50,7 +54,8 @@ TPZMatrix<STATE> * TPZIntPointsStructMatrix::Create(){
     return mat;
 }
 
-TPZMatrix<STATE> *TPZIntPointsStructMatrix::CreateAssemble(TPZFMatrix<STATE> &rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
+template<class PlasticModel_t>
+TPZMatrix<STATE> *TPZIntPointsStructMatrix<PlasticModel_t>::CreateAssemble(TPZFMatrix<STATE> &rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
 
     int64_t neq = fMesh->NEquations();
     TPZMatrix<STATE> *stiff = Create();
@@ -59,12 +64,14 @@ TPZMatrix<STATE> *TPZIntPointsStructMatrix::CreateAssemble(TPZFMatrix<STATE> &rh
     return stiff;
 }
 
-bool TPZIntPointsStructMatrix::isBuilt() {
+template<class PlasticModel_t>
+bool TPZIntPointsStructMatrix<PlasticModel_t>::isBuilt() {
     if(fIntegrator.IrregularBlocksMatrix().Rows() != 0) return true;
     else return false;
 }
 
-void TPZIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
+template<class PlasticModel_t>
+void TPZIntPointsStructMatrix<PlasticModel_t>::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
 
     TPZFYsmpMatrix<STATE> &stiff = dynamic_cast<TPZFYsmpMatrix<STATE> &> (mat);
     TPZVec<STATE> &Kg = stiff.A();
@@ -121,12 +128,14 @@ void TPZIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE
     Assemble(rhs,guiInterface);
 }
 
-void TPZIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface){
+template<class PlasticModel_t>
+void TPZIntPointsStructMatrix<PlasticModel_t>::Assemble(TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface){
     fIntegrator.ResidualIntegration(fMesh->Solution(),rhs);
     rhs += fRhsLinear;
 }
 
-void TPZIntPointsStructMatrix::SetUpDataStructure() {
+template<class PlasticModel_t>
+void TPZIntPointsStructMatrix<PlasticModel_t>::SetUpDataStructure() {
 
     if(isBuilt()) {
         std::cout << __PRETTY_FUNCTION__ << " Data structure has been setup." << std::endl;
@@ -161,7 +170,8 @@ void TPZIntPointsStructMatrix::SetUpDataStructure() {
     AssembleBoundaryData();
 }
 
-void TPZIntPointsStructMatrix::ComputeDomainElementIndexes(TPZVec<int> &element_indexes) {
+template<class PlasticModel_t>
+void TPZIntPointsStructMatrix<PlasticModel_t>::ComputeDomainElementIndexes(TPZVec<int> &element_indexes) {
 
     TPZStack<int> el_indexes_loc;
     for (int64_t i = 0; i < fMesh->NElements(); i++) {
@@ -176,7 +186,8 @@ void TPZIntPointsStructMatrix::ComputeDomainElementIndexes(TPZVec<int> &element_
     element_indexes = el_indexes_loc;
 }
 
-void TPZIntPointsStructMatrix::ClassifyMaterialsByDimension() {
+template<class PlasticModel_t>
+void TPZIntPointsStructMatrix<PlasticModel_t>::ClassifyMaterialsByDimension() {
 
     for (auto material : fMesh->MaterialVec()) {
         TPZBndCond * bc_mat = dynamic_cast<TPZBndCond *>(material.second);
@@ -189,7 +200,8 @@ void TPZIntPointsStructMatrix::ClassifyMaterialsByDimension() {
     }
 }
 
-void TPZIntPointsStructMatrix::AssembleBoundaryData() {
+template<class PlasticModel_t>
+void TPZIntPointsStructMatrix<PlasticModel_t>::AssembleBoundaryData() {
 
     int64_t neq = fMesh->NEquations();
     TPZStructMatrix str(fMesh);
@@ -202,7 +214,8 @@ void TPZIntPointsStructMatrix::AssembleBoundaryData() {
     str.Assemble(fSparseMatrixLinear, fRhsLinear, guiInterface);
 }
 
-void TPZIntPointsStructMatrix::SetUpIrregularBlocksData(TPZVec<int> &element_indexes, TPZIrregularBlocksMatrix::IrregularBlocks &blocksData) {
+template<class PlasticModel_t>
+void TPZIntPointsStructMatrix<PlasticModel_t>::SetUpIrregularBlocksData(TPZVec<int> &element_indexes, TPZIrregularBlocksMatrix::IrregularBlocks &blocksData) {
 
     /// Number of elements
     int nblocks = element_indexes.size();
@@ -319,7 +332,8 @@ void TPZIntPointsStructMatrix::SetUpIrregularBlocksData(TPZVec<int> &element_ind
 #endif
 }
 
-int TPZIntPointsStructMatrix::StressRateVectorSize(){
+template<class PlasticModel_t>
+int TPZIntPointsStructMatrix<PlasticModel_t>::StressRateVectorSize(){
 
     switch (fDimension) {
         case 1:{
@@ -343,7 +357,8 @@ int TPZIntPointsStructMatrix::StressRateVectorSize(){
     }
 }
 
-void TPZIntPointsStructMatrix::SetUpIndexes(TPZVec<int> &element_indexes, TPZVec<int> & dof_indexes) {
+template<class PlasticModel_t>
+void TPZIntPointsStructMatrix<PlasticModel_t>::SetUpIndexes(TPZVec<int> &element_indexes, TPZVec<int> & dof_indexes) {
 
     int64_t nblocks = fIntegrator.IrregularBlocksMatrix().Blocks().fNumBlocks;
     int64_t rows = fIntegrator.IrregularBlocksMatrix().Rows();
@@ -413,7 +428,8 @@ void TPZIntPointsStructMatrix::SetUpIndexes(TPZVec<int> &element_indexes, TPZVec
     fIntegrator.ConstitutiveLawProcessor().SetWeightVector(weight);
 }
 
-void TPZIntPointsStructMatrix::ColoredIndexes(TPZVec<int> &element_indexes, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor) {
+template<class PlasticModel_t>
+void TPZIntPointsStructMatrix<PlasticModel_t>::ColoredIndexes(TPZVec<int> &element_indexes, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor) {
 
     int64_t nblocks = fIntegrator.IrregularBlocksMatrix().Blocks().fNumBlocks;
     int64_t cols = fIntegrator.IrregularBlocksMatrix().Cols();
@@ -505,7 +521,8 @@ void TPZIntPointsStructMatrix::ColoredIndexes(TPZVec<int> &element_indexes, TPZV
     }
 }
 
-int64_t TPZIntPointsStructMatrix::me(TPZVec<int64_t> &IA, TPZVec<int64_t> &JA, int64_t & i_dest, int64_t & j_dest) {
+template<class PlasticModel_t>
+int64_t TPZIntPointsStructMatrix<PlasticModel_t>::me(TPZVec<int64_t> &IA, TPZVec<int64_t> &JA, int64_t & i_dest, int64_t & j_dest) {
     for (int64_t k = IA[i_dest]; k < IA[i_dest + 1]; k++) {
         if (JA[k] == j_dest) {
             return k;

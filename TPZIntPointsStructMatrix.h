@@ -10,7 +10,7 @@
 #include "TPZNumericalIntegrator.h"
 #include "tpzverysparsematrix.h"
 
-
+template <class PlasticModel_t>
 class TPZIntPointsStructMatrix : public TPZSpStructMatrix {
 
 public:
@@ -78,15 +78,7 @@ private:
 
     TPZVec<int64_t> fFirstColorIndex;
 
-
-
-
-
-
-
-
-
-
+    PlasticModel_t fPlasticModel;
 };
 
 
