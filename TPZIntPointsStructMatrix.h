@@ -8,6 +8,7 @@
 #include "TPZSpStructMatrix.h"
 #include "TPZIrregularBlocksMatrix.h"
 #include "TPZNumericalIntegrator.h"
+#include "tpzverysparsematrix.h"
 
 
 class TPZIntPointsStructMatrix : public TPZSpStructMatrix {
@@ -51,11 +52,14 @@ private:
 
     void ColoredIndexes(TPZVec<int> &element_indexes, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor);
 
-    int64_t me(TPZVec<int> &IA, TPZVec<int> &JA, int64_t & i_dest, int64_t & j_dest);
+    int StressRateVectorSize();
+
+    int64_t me(TPZVec<int64_t> &IA, TPZVec<int64_t> &JA, int64_t & i_dest, int64_t & j_dest);
 
 private:
 
     // Class members
+
     int fDimension;
 
     TPZNumericalIntegrator fIntegrator;
@@ -66,17 +70,13 @@ private:
 
     std::set<int> fBCMaterialIds;
 
-    TPZVec<int> m_IA_to_sequence;
+    TPZVec<int64_t> fIAToSequence;
 
-    TPZVec<int> m_JA_to_sequence;
+    TPZVec<int64_t> fJAToSequence;
 
-    TPZVec<int> m_color_l_sequence;
+    TPZVec<int64_t> fElColorIndexes;
 
-    TPZVec<int> m_first_color_l_index;
-
-    std::vector<int64_t> m_el_color_indexes;
-
-    std::vector<int64_t> m_first_color_index;
+    TPZVec<int64_t> fFirstColorIndex;
 
 
 

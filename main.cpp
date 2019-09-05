@@ -11,6 +11,7 @@
 
 #include "TPZConstitutiveLawProcessor.h"
 #include "TPZElastoPlasticIntPointsStructMatrix.h"
+#include "TPZIntPointsStructMatrix.h"
 #include "TElastoPlasticData.h"
 #include "TRKSolution.h"
 #include "TPZElasticCriterion.h"
@@ -72,7 +73,7 @@ int pOrder;
     pOrder = 3; // Computational mesh order
 #endif
 
-    bool render_vtk_Q = true;
+    bool render_vtk_Q = false;
     bool modified_thomas_accel_Q = true;
     bool compute_h_Q = false;
     USING_CUDA_Q = false;
@@ -114,7 +115,7 @@ int pOrder;
 
 
 // Defines the analysis
-    int n_threads = 32;
+    int n_threads = 0;
     // int n_threads = atoi(argv[2]);
     
 #ifdef USING_TBB
@@ -277,11 +278,12 @@ TPZAnalysis *Analysis(TPZCompMesh *cmesh, int n_threads) {
 TPZAnalysis * Analysis_IPFEM(TPZCompMesh * cmesh, int n_threads){
     bool optimizeBandwidth = true;
     TPZAnalysis *analysis = new TPZAnalysis(cmesh, optimizeBandwidth);
-    TPZElastoPlasticIntPointsStructMatrix struc_mat(cmesh);
+//    TPZElastoPlasticIntPointsStructMatrix struc_mat(cmesh);
+    TPZIntPointsStructMatrix struc_mat(cmesh);
     struc_mat.SetNumThreads(n_threads);
     analysis->SetStructuralMatrix(struc_mat);
     TPZStepSolver<STATE> step;
-    step.SetDirect(ELDLt);
+    step.SetDirect(ELU);
     analysis->SetSolver(step);
     return analysis;
 }
