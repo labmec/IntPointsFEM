@@ -168,6 +168,8 @@ void TPZIntPointsStructMatrix<PlasticModel_t>::SetUpDataStructure() {
     fIntegrator.SetNColors(ncolor);
 
     AssembleBoundaryData();
+
+//    fIntegrator.ConstitutiveLawProcessor().SetMaterial(fPlasticModel);
 }
 
 template<class PlasticModel_t>
@@ -422,8 +424,6 @@ void TPZIntPointsStructMatrix<PlasticModel_t>::SetUpIndexes(TPZVec<int> &element
     );
 #endif
 
-    TPZMaterial *material = fMesh->FindMaterial(1);
-    fIntegrator.ConstitutiveLawProcessor().SetMaterial(material);
     fIntegrator.ConstitutiveLawProcessor().SetUpDataByIntPoints(npts);
     fIntegrator.ConstitutiveLawProcessor().SetWeightVector(weight);
 }
