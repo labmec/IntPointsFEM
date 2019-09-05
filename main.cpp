@@ -115,7 +115,7 @@ int pOrder;
 
 
 // Defines the analysis
-    int n_threads = 0;
+    int n_threads = 8;
     // int n_threads = atoi(argv[2]);
     
 #ifdef USING_TBB

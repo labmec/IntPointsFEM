@@ -53,7 +53,7 @@ TPZMatrix<STATE> * TPZIntPointsStructMatrix::Create(){
 TPZMatrix<STATE> *TPZIntPointsStructMatrix::CreateAssemble(TPZFMatrix<STATE> &rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
 
     int64_t neq = fMesh->NEquations();
-    TPZMatrix<STATE> *stiff = Create(); // @TODO:: Requires optimization.
+    TPZMatrix<STATE> *stiff = Create();
     rhs.Redim(neq,1);
     Assemble(*stiff,rhs,guiInterface);
     return stiff;
@@ -252,14 +252,16 @@ void TPZIntPointsStructMatrix::SetUpIrregularBlocksData(TPZVec<int> &element_ind
 
     blocksData.fStorage.resize(blocksData.fMatrixPosition[nblocks]);
 
+#ifdef USING_TBB
+    tbb::parallel_for(size_t(0),size_t(nblocks),size_t(1),[&](size_t iel)
+#else
+    for (int iel = 0; iel < nblocks; iel++)
+#endif
+    {
 
-
-    TPZFNMatrix<8,REAL> dphiXY;
-    TPZMaterialData data;
-    TPZVec<REAL> qsi(fDimension);
-
-    // @TODO Candidate for TBB ParallelFor
-    for (int iel = 0; iel < nblocks; ++iel) {
+        TPZFNMatrix<8,REAL> dphiXY;
+        TPZMaterialData data;
+        TPZVec<REAL> qsi(fDimension);
 
         TPZCompEl *cel = fMesh->Element(element_indexes[iel]);
 
@@ -317,6 +319,9 @@ void TPZIntPointsStructMatrix::SetUpIrregularBlocksData(TPZVec<int> &element_ind
         TPZFMatrix<REAL> B_el_loc(npts * n_sigma_entries, n_el_dof * fDimension, &blocksData.fStorage[pos_el], npts * n_sigma_entries * n_el_dof * fDimension);
         B_el_loc = B_el;
     }
+#ifdef USING_TBB
+    );
+#endif
 }
 
 int TPZIntPointsStructMatrix::StressRateVectorSize(){
@@ -349,14 +354,18 @@ void TPZIntPointsStructMatrix::SetUpIndexes(TPZVec<int> &element_indexes, TPZVec
     int64_t rows = fIntegrator.IrregularBlocksMatrix().Rows();
     int64_t cols = fIntegrator.IrregularBlocksMatrix().Cols();
     TPZVec<int> & dof_positions = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex;
+    TPZVec<int> & npts_positions = fIntegrator.IrregularBlocksMatrix().Blocks().fRowFirstIndex;
 
     dof_indexes.resize(cols);
     int64_t npts = rows / StressRateVectorSize();
     TPZVec<REAL> weight(npts);
 
-    int64_t wit = 0;
-    for (int iel = 0; iel < nblocks; ++iel) {
-
+#ifdef USING_TBB
+    tbb::parallel_for(size_t(0),size_t(nblocks),size_t(1),[&](size_t iel)
+#else
+    for (int iel = 0; iel < nblocks; iel++)
+#endif
+    {
         int dof_pos = dof_positions[iel];
         TPZCompEl *cel = fMesh->Element(element_indexes[iel]);
 
@@ -373,12 +382,13 @@ void TPZIntPointsStructMatrix::SetUpIndexes(TPZVec<int> &element_indexes, TPZVec
 
         TPZFMatrix<REAL> jac,axes, jacinv;
         REAL detjac;
+        int64_t wit = 0;
         for (int64_t ipts = 0; ipts < el_npts; ipts++) {
             TPZVec<REAL> qsi(dim);
             REAL w;
             int_rule->Point(ipts, qsi, w);
             gel->Jacobian(qsi, jac, axes, detjac, jacinv);
-            weight[wit] = w * std::abs(detjac);
+            weight[npts_positions[iel]/3 + wit] = w * std::abs(detjac);
             wit++;
         }
 
@@ -398,6 +408,9 @@ void TPZIntPointsStructMatrix::SetUpIndexes(TPZVec<int> &element_indexes, TPZVec
 
         }
     }
+#ifdef USING_TBB
+    );
+#endif
 
     TPZMaterial *material = fMesh->FindMaterial(1);
     fIntegrator.ConstitutiveLawProcessor().SetMaterial(material);
@@ -451,7 +464,13 @@ void TPZIntPointsStructMatrix::ColoredIndexes(TPZVec<int> &element_indexes, TPZV
     ncolor = contcolor;
     coloredindexes.resize(cols);
     int64_t neq = fMesh->NEquations();
-    for (int64_t iel = 0; iel < nblocks; iel++) {
+
+#ifdef USING_TBB
+    tbb::parallel_for(size_t(0),size_t(nblocks),size_t(1),[&](size_t iel)
+#else
+    for (int iel = 0; iel < nblocks; iel++)
+#endif
+    {
         int64_t elem_col = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes[iel];
         int64_t cont_cols = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex[iel];
 
@@ -459,6 +478,9 @@ void TPZIntPointsStructMatrix::ColoredIndexes(TPZVec<int> &element_indexes, TPZV
             coloredindexes[cont_cols + icols] = indexes[cont_cols + icols] + elemcolor[iel]*neq;
         }
     }
+#ifdef USING_TBB
+    );
+#endif
 
     std::map<int64_t, std::vector<int64_t> > color_map;
     for (int64_t iel = 0; iel < nblocks; iel++) {
