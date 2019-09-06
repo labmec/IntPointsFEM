@@ -90,10 +90,7 @@ void TPBrIrregularBlocksMatrix::BlocksMultiplication(bool trans, TPZVec<int> &m,
             transpose = CblasTrans;
         }
 
-        const double beta = 0;
-
-        cblas_dgemv(CblasRowMajor, transpose, m_i, k_i, alpha, &A[strideA_i], lda_i, &B[strideB_i], 1, beta, &C[strideC_i], 1);
-//        cblas_dgemm(CblasRowMajor, transpose, CblasNoTrans, m_i, n_i, k_i, alpha, &A[strideA_i], lda_i,  &B[strideB_i], ldb_i, 0., &C[strideC_i], ldc_i);
+        cblas_dgemm(CblasRowMajor, transpose, CblasNoTrans, m_i, 1, k_i, alpha, &A[strideA_i], lda_i,  &B[strideB_i], 1, 0., &C[strideC_i], 1);
 
     }
 #ifdef USING_TBB

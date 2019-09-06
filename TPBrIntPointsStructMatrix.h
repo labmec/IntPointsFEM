@@ -47,6 +47,8 @@ private:
 
     void ComputeDomainElementIndexes(TPZVec<int> &element_indexes);
 
+    void SetPlasticModel();
+
     void AssembleBoundaryData();
 
     void SetUpIrregularBlocksData(TPZVec<int> &element_indexes, TPBrIrregularBlocksMatrix::IrregularBlocks &blocksData);

@@ -66,7 +66,7 @@ static bool USING_Hybrid_Q;
 int main(int argc, char *argv[]) {
 int pOrder;
 #ifdef O_LINEAR
-    pOrder = 1; // Computational mesh order
+    pOrder = 2; // Computational mesh order
 #elif O_QUADRATIC
     pOrder = 2; // Computational mesh order
 #elif O_CUBIC
@@ -81,7 +81,7 @@ int pOrder;
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
 //    std::string mesh = argv[1];
-     std::string mesh = "2";
+     std::string mesh = "0";
     std::string msh_file = source_dir + "/gmsh/wellbore_" + mesh + ".msh";
 //    std::string msh_file = source_dir + "/gmsh/wellbore.msh";
     TPZGeoMesh *gmesh = ReadGeometry(msh_file);
@@ -283,6 +283,7 @@ TPZAnalysis * Analysis_IPFEM(TPZCompMesh * cmesh, int n_threads){
     struc_mat.SetNumThreads(n_threads);
     analysis->SetStructuralMatrix(struc_mat);
     TPZStepSolver<STATE> step;
+//    step.SetDirect(ELDLt);
     step.SetDirect(ELU);
     analysis->SetSolver(step);
     return analysis;

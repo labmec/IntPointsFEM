@@ -169,7 +169,7 @@ void TPBrIntPointsStructMatrix<T, MEM>::SetUpDataStructure() {
 
     AssembleBoundaryData();
 
-//    fIntegrator.ConstitutiveLawProcessor().SetMaterial(fPlasticModel);
+    SetPlasticModel();
 }
 
 template<class T, class MEM>
@@ -200,6 +200,22 @@ void TPBrIntPointsStructMatrix<T, MEM>::ClassifyMaterialsByDimension() {
             fBCMaterialIds.insert(material.first);
         }
     }
+}
+
+template<class T, class MEM>
+void TPBrIntPointsStructMatrix<T, MEM>::SetPlasticModel() {
+
+    for (auto material : fMesh->MaterialVec()) {
+        TPZBndCond * bc_mat = dynamic_cast<TPZBndCond *>(material.second);
+        bool domain_material_Q = !bc_mat;
+        if (domain_material_Q) {
+            TPZMatElastoPlastic2D < T, MEM > *mat = dynamic_cast<TPZMatElastoPlastic2D < T, MEM > *>(material.second);
+            T plastic_model = mat->GetPlasticModel();
+            fIntegrator.ConstitutiveLawProcessor().SetPlasticModel(plastic_model);
+            break;
+        }
+    }
+
 }
 
 template<class T, class MEM>

@@ -70,18 +70,20 @@ void TPBrNumericalIntegrator<T, MEM>::ResidualIntegration(TPZFMatrix<REAL> & sol
     TPZFMatrix<REAL> sigma;
 
     Multiply(solution, delta_strain);
+    ofstream out("tpbr.txt");
+    delta_strain.Print(out);
+    out.flush();
     fConstitutiveLawProcessor.ComputeSigma(delta_strain, sigma);
     MultiplyTranspose(sigma, rhs); // Perform Residual integration using a global linear application B
 }
 
 template <class T, class MEM>
 void TPBrNumericalIntegrator<T, MEM>::ComputeConstitutiveMatrix(TPZFMatrix<REAL> &De) {
- // @TODO : get lambda and mu from the material
+//  @TODO : get lambda and mu from the material
 
-//    fConstitutiveLawProcessor.GetPlasticModel()
     De.Zero();
-    REAL lambda = 555.555555555556;
-    REAL mu = 833.333333333333;
+    REAL lambda = fConstitutiveLawProcessor.GetPlasticModel().fER.Lambda();
+    REAL mu = fConstitutiveLawProcessor.GetPlasticModel().fER.Mu();
 
     De(0,0) = lambda + 2.0*mu;
     De(1,1) = mu;
