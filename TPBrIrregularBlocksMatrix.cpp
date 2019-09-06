@@ -7,6 +7,9 @@
 
 #include "TPBrIrregularBlocksMatrix.h"
 #include "mkl.h"
+#ifdef USING_TBB
+#include <tbb/parallel_for.h>
+#endif
 
 TPBrIrregularBlocksMatrix::TPBrIrregularBlocksMatrix() : fBlocksInfo() {
     this->Resize(0,0);

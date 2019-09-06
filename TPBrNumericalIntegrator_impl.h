@@ -7,6 +7,11 @@
 
 #include "TPBrNumericalIntegrator.h"
 #include "mkl.h"
+#include "pzsysmp.h"
+
+#ifdef USING_TBB
+#include <tbb/parallel_for.h>
+#endif
 
 template <class T, class MEM>
 TPBrNumericalIntegrator<T, MEM>::TPBrNumericalIntegrator() : fBlockMatrix(0,0), fNColor(-1), fDoFIndexes(0), fColorIndexes(0), fConstitutiveLawProcessor(){
@@ -75,6 +80,55 @@ void TPBrNumericalIntegrator<T, MEM>::ResidualIntegration(TPZFMatrix<REAL> & sol
     out.flush();
     fConstitutiveLawProcessor.ComputeSigma(delta_strain, sigma);
     MultiplyTranspose(sigma, rhs); // Perform Residual integration using a global linear application B
+}
+
+template <class T, class MEM>
+void TPBrNumericalIntegrator<T, MEM>::KAssembly(TPZVec<STATE> &Kg, TPZVec<int64_t> & IAToSequence, TPZVec<int64_t> & JAToSequence){
+    
+    TPZVec<int> & dof_id = DoFIndexes();
+    TPZVec<int> & el_n_dofs = IrregularBlocksMatrix().Blocks().fColSizes;
+    TPZVec<int> & col_pos = IrregularBlocksMatrix().Blocks().fColFirstIndex;
+    
+    int n_colors = fFirstColorIndex.size() - 1;
+    
+    for (int ic = 0; ic < n_colors; ic++) { //Serial by color
+        
+#ifdef USING_TBB
+        tbb::parallel_for(size_t(fFirstColorIndex[ic]),size_t(fFirstColorIndex[ic+1]),size_t(1),[&](size_t i) // Each set of colors in parallel
+#else
+                          for (int i = fFirstColorIndex[ic]; i < fFirstColorIndex[ic+1]; i++)
+#endif
+                          {
+                              int iel = fElColorIndexes[i];
+                              
+                              TPZFMatrix<STATE> Kel;
+                              ComputeTangentMatrix(iel,Kel);
+                              
+                              int el_dof = el_n_dofs[iel];
+                              int pos = col_pos[iel];
+                              
+                              for (int i_dof = 0; i_dof < el_dof; i_dof++) {
+                                  int64_t i_dest = dof_id[pos + i_dof];
+                                  
+                                  for (int j_dof = 0; j_dof < el_dof; j_dof++) {
+                                      int64_t j_dest = dof_id[pos + j_dof];
+                                      
+                                      STATE val = Kel(i_dof,j_dof);
+                                      int64_t index = me(IAToSequence, JAToSequence, i_dest, j_dest);
+                                      Kg[index] += val;
+                                  }
+                              }
+                          }
+#ifdef USING_TBB
+                          );
+#endif
+    }
+    
+}
+
+template <class T, class MEM>
+int64_t TPBrNumericalIntegrator<T, MEM>::me(TPZVec<int64_t> &IA, TPZVec<int64_t> &JA, int64_t & i_dest, int64_t & j_dest){
+    
 }
 
 template <class T, class MEM>

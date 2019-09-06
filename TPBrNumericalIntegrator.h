@@ -41,6 +41,14 @@ public:
         return fBlockMatrix;
     }
 
+    void SetMaterial(TPZMatElastoPlastic2D < T, MEM > * material){
+        fMaterial = material;
+    }
+    
+    TPZMatElastoPlastic2D < T, MEM > * Material(){
+        return fMaterial;
+    }
+    
     void SetConstitutiveLawProcessor(TPBrConstitutiveLawProcessor<T, MEM> & processor){
         fConstitutiveLawProcessor = processor;
     }
@@ -72,7 +80,18 @@ public:
     int NColors() {
         return fNColor;
     }
+   ;
+    
+    void KAssembly(TPZVec<STATE> &Kg, TPZVec<int64_t> & IAToSequence, TPZVec<int64_t> & JAToSequence);
+    
+    int64_t me(TPZVec<int64_t> &IA, TPZVec<int64_t> &JA, int64_t & i_dest, int64_t & j_dest);
 
+public:
+    
+    TPZVec<int64_t> fElColorIndexes;
+    
+    TPZVec<int64_t> fFirstColorIndex;
+    
 private:
 
     /// Irregular block matrix containing spatial gradients for scalar basis functions of order k
@@ -86,8 +105,14 @@ private:
 
     /// Color indexes organized element by element with stride ndof
     TPZVec<int> fColorIndexes; //nedeed to scatter operation
+    
+//    TPZVec<int64_t> fElColorIndexes;
+//    
+//    TPZVec<int64_t> fFirstColorIndex;
 
     TPBrConstitutiveLawProcessor<T, MEM> fConstitutiveLawProcessor;
+    
+    TPZMatElastoPlastic2D < T, MEM > * fMaterial;
 };
 
 

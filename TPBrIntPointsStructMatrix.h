@@ -55,7 +55,7 @@ private:
 
     void SetUpIndexes(TPZVec<int> &element_indexes, TPZVec<int> & dof_indexes);
 
-    void ColoredIndexes(TPZVec<int> &element_indexes, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor);
+    void ColoredIndexes(TPZVec<int> &element_indexes, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor, TPZVec<int64_t> & MaterialRegionElColorIndexes, TPZVec<int64_t> & MaterialRegionFirstColorIndex);
 
     int StressRateVectorSize();
 
@@ -66,8 +66,10 @@ private:
     // Class members
 
     int fDimension;
+    
+    int fNMaterials;
 
-    TPBrNumericalIntegrator<T,MEM> fIntegrator;
+    TPZVec< TPBrNumericalIntegrator<T,MEM> > fIntegrator;
 
     TPZVerySparseMatrix<STATE> fSparseMatrixLinear; //-> BC data
 
@@ -79,9 +81,9 @@ private:
 
     TPZVec<int64_t> fJAToSequence;
 
-    TPZVec<int64_t> fElColorIndexes;
+//    TPZVec<int64_t> fElColorIndexes;
 
-    TPZVec<int64_t> fFirstColorIndex;
+//    TPZVec<int64_t> fFirstColorIndex;
 };
 
 

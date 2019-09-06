@@ -20,8 +20,6 @@ TPBrIntPointsStructMatrix<T, MEM>::TPBrIntPointsStructMatrix(TPZCompMesh *cmesh)
     fDimension = cmesh->Reference()->Dimension();
     fIAToSequence.resize(0);
     fJAToSequence.resize(0);
-    fElColorIndexes.resize(0);
-    fFirstColorIndex.resize(0);
 }
 
 template<class T, class MEM>
@@ -66,53 +64,24 @@ TPZMatrix<STATE> *TPBrIntPointsStructMatrix<T, MEM>::CreateAssemble(TPZFMatrix<S
 
 template<class T, class MEM>
 bool TPBrIntPointsStructMatrix<T, MEM>::isBuilt() {
-    if(fIntegrator.IrregularBlocksMatrix().Rows() != 0) return true;
-    else return false;
+    bool isBuilt_Q = false;
+    // for over all numerical integrators ...
+    for (auto & numerical_integrator : fIntegrator) {
+//        numerical_integrator.
+//        if(fIntegrator.IrregularBlocksMatrix().Rows() != 0) return true;
+//        else return false;
+    }
+    return isBuilt_Q;
 }
 
 template<class T, class MEM>
 void TPBrIntPointsStructMatrix<T, MEM>::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
 
-    TPZFYsmpMatrix<STATE> &stiff = dynamic_cast<TPZFYsmpMatrix<STATE> &> (mat);
-    TPZVec<STATE> &Kg = stiff.A();
-
-    TPZVec<int> & dof_id = fIntegrator.DoFIndexes();
-    TPZVec<int> & el_n_dofs = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes;
-    TPZVec<int> & col_pos = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex;
-
-    int n_colors = fFirstColorIndex.size() - 1;
-
-    for (int ic = 0; ic < n_colors; ic++) { //Serial by color
-
-        #ifdef USING_TBB
-            tbb::parallel_for(size_t(fFirstColorIndex[ic]),size_t(fFirstColorIndex[ic+1]),size_t(1),[&](size_t i) // Each set of colors in parallel
-        #else
-            for (int i = fFirstColorIndex[ic]; i < fFirstColorIndex[ic+1]; i++)
-        #endif
-            {
-                int iel = fElColorIndexes[i];
-
-                TPZFMatrix<STATE> Kel;
-                fIntegrator.ComputeTangentMatrix(iel,Kel);
-
-                int el_dof = el_n_dofs[iel];
-                int pos = col_pos[iel];
-
-                for (int i_dof = 0; i_dof < el_dof; i_dof++) {
-                    int64_t i_dest = dof_id[pos + i_dof];
-
-                    for (int j_dof = 0; j_dof < el_dof; j_dof++) {
-                        int64_t j_dest = dof_id[pos + j_dof];
-
-                        STATE val = Kel(i_dof,j_dof);
-                        int64_t index = me(fIAToSequence, fJAToSequence, i_dest, j_dest);
-                        Kg[index] += val;
-                    }
-                }
-            }
-        #ifdef USING_TBB
-            );
-        #endif
+    TPZFYsmpMatrix<STATE> & stiff = dynamic_cast<TPZFYsmpMatrix<STATE> &> (mat);
+    
+    // for over all numerical integrators ...
+    for (auto & numerical_integrator : fIntegrator) {
+        numerical_integrator.KAssembly(stiff.A(),fIAToSequence,fJAToSequence);
     }
 
     // Add boundary contribution
@@ -130,7 +99,8 @@ void TPBrIntPointsStructMatrix<T, MEM>::Assemble(TPZMatrix<STATE> & mat, TPZFMat
 
 template<class T, class MEM>
 void TPBrIntPointsStructMatrix<T, MEM>::Assemble(TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface){
-    fIntegrator.ResidualIntegration(fMesh->Solution(),rhs);
+    DebugStop();
+    //    fIntegrator.ResidualIntegration(fMesh->Solution(),rhs);
     rhs += fRhsLinear;
 }
 
@@ -144,32 +114,36 @@ void TPBrIntPointsStructMatrix<T, MEM>::SetUpDataStructure() {
 
     TPZVec<int> element_indexes;
     ComputeDomainElementIndexes(element_indexes);
-
     ClassifyMaterialsByDimension();
+    
+    // Setup over all numerical integrators
+    // for over all numerical integrators ...
+    for (auto & numerical_integrator : fIntegrator) {
+        TPBrIrregularBlocksMatrix::IrregularBlocks blocksData;
+        SetUpIrregularBlocksData(element_indexes, blocksData);
 
-    TPBrIrregularBlocksMatrix::IrregularBlocks blocksData;
-    SetUpIrregularBlocksData(element_indexes, blocksData);
+        int64_t rows = blocksData.fRowFirstIndex[blocksData.fNumBlocks];
+        int64_t cols = blocksData.fColFirstIndex[blocksData.fNumBlocks];
+        TPBrIrregularBlocksMatrix blocksMatrix(rows, cols);
+        blocksMatrix.SetBlocks(blocksData);
+        numerical_integrator.SetIrregularBlocksMatrix(blocksMatrix);
 
-    int64_t rows = blocksData.fRowFirstIndex[blocksData.fNumBlocks];
-    int64_t cols = blocksData.fColFirstIndex[blocksData.fNumBlocks];
-    TPBrIrregularBlocksMatrix blocksMatrix(rows, cols);
-    blocksMatrix.SetBlocks(blocksData);
-    fIntegrator.SetIrregularBlocksMatrix(blocksMatrix);
+        TPZVec<int> dof_indexes;
+        SetPlasticModel();
+        SetUpIndexes(element_indexes, dof_indexes);
+        numerical_integrator.SetDoFIndexes(dof_indexes);
 
-    TPZVec<int> dof_indexes;
-    SetUpIndexes(element_indexes, dof_indexes);
-    fIntegrator.SetDoFIndexes(dof_indexes);
+        TPZVec<int> colored_element_indexes;
+        int ncolor;
+        ColoredIndexes(element_indexes, dof_indexes, colored_element_indexes, ncolor, numerical_integrator.fElColorIndexes, numerical_integrator.fFirstColorIndex);
 
-    TPZVec<int> colored_element_indexes;
-    int ncolor;
-    ColoredIndexes(element_indexes, dof_indexes, colored_element_indexes, ncolor);
-
-    fIntegrator.SetColorIndexes(colored_element_indexes);
-    fIntegrator.SetNColors(ncolor);
-
+        numerical_integrator.SetColorIndexes(colored_element_indexes);
+        numerical_integrator.SetNColors(ncolor);
+    }
+    
     AssembleBoundaryData();
 
-    SetPlasticModel();
+
 }
 
 template<class T, class MEM>
@@ -211,11 +185,11 @@ void TPBrIntPointsStructMatrix<T, MEM>::SetPlasticModel() {
         if (domain_material_Q) {
             TPZMatElastoPlastic2D < T, MEM > *mat = dynamic_cast<TPZMatElastoPlastic2D < T, MEM > *>(material.second);
             T plastic_model = mat->GetPlasticModel();
-            fIntegrator.ConstitutiveLawProcessor().SetPlasticModel(plastic_model);
+            // for all numerical integrators
+//            fIntegrator.ConstitutiveLawProcessor().SetPlasticModel(plastic_model);
             break;
         }
     }
-
 }
 
 template<class T, class MEM>
@@ -445,7 +419,7 @@ void TPBrIntPointsStructMatrix<T, MEM>::SetUpIndexes(TPZVec<int> &element_indexe
 }
 
 template<class T, class MEM>
-void TPBrIntPointsStructMatrix<T, MEM>::ColoredIndexes(TPZVec<int> &element_indexes, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor) {
+void TPBrIntPointsStructMatrix<T, MEM>::ColoredIndexes(TPZVec<int> &element_indexes, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor, TPZVec<int64_t> & MaterialRegionElColorIndexes, TPZVec<int64_t> & MaterialRegionFirstColorIndex) {
 
     int64_t nblocks = fIntegrator.IrregularBlocksMatrix().Blocks().fNumBlocks;
     int64_t cols = fIntegrator.IrregularBlocksMatrix().Cols();
@@ -518,22 +492,22 @@ void TPBrIntPointsStructMatrix<T, MEM>::ColoredIndexes(TPZVec<int> &element_inde
         DebugStop();
     }
 
-    fElColorIndexes.resize(nblocks);
-    fFirstColorIndex.resize(color_map.size()+1);
+    MaterialRegionElColorIndexes.resize(nblocks);
+    MaterialRegionFirstColorIndex.resize(color_map.size()+1);
 
     int c_color = 0;
 
-    fFirstColorIndex[c_color] = 0;
+    MaterialRegionFirstColorIndex[c_color] = 0;
     for (auto color_data : color_map) {
         int n_el_per_color = color_data.second.size();
-        int iel = fFirstColorIndex[c_color];
+        int iel = MaterialRegionFirstColorIndex[c_color];
         for (int i = 0; i < n_el_per_color ; i++) {
             int el_index = color_data.second[i];
-            fElColorIndexes[iel] = el_index;
+            MaterialRegionElColorIndexes[iel] = el_index;
             iel++;
         }
         c_color++;
-        fFirstColorIndex[c_color] = n_el_per_color + fFirstColorIndex[c_color-1];
+        MaterialRegionFirstColorIndex[c_color] = n_el_per_color + MaterialRegionFirstColorIndex[c_color-1];
     }
 }
 
