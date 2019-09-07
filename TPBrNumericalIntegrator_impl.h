@@ -16,14 +16,9 @@
 #endif
 
 template<class T, class MEM>
-TPBrNumericalIntegrator<T, MEM>::TPBrNumericalIntegrator() : fBlockMatrix(0, 0), fNColor(-1), fDoFIndexes(0),
-                                                             fColorIndexes(0), fConstitutiveLawProcessor() {
-
-}
-
-template<class T, class MEM>
-TPBrNumericalIntegrator<T, MEM>::TPBrNumericalIntegrator(TPBrIrregularBlocksMatrix &irregularBlocksMatrix)
-        : fBlockMatrix(0, 0), fNColor(-1), fDoFIndexes(0), fColorIndexes(0), fConstitutiveLawProcessor() {
+TPBrNumericalIntegrator<T, MEM>::TPBrNumericalIntegrator() : fElementIndexes(0), fBlockMatrix(0, 0), fMaterial(), fConstitutiveLawProcessor(),
+                                                            fDoFIndexes(0), fColorIndexes(0), fNColor(-1), fMaterialRegionElColorIndexes(0),
+                                                             fMaterialRegionFirstColorIndex(0) {
 }
 
 template<class T, class MEM>
@@ -99,17 +94,15 @@ void TPBrNumericalIntegrator<T, MEM>::KAssembly(TPZVec<STATE> &Kg, TPZVec<int64_
     TPZVec<int> &el_n_dofs = IrregularBlocksMatrix().Blocks().fColSizes;
     TPZVec<int> &col_pos = IrregularBlocksMatrix().Blocks().fColFirstIndex;
 
-    int n_colors = fFirstColorIndex.size() - 1;
-
-    for (int ic = 0; ic < n_colors; ic++) { //Serial by color
+    for (int ic = 0; ic < fNColor; ic++) { //Serial by color
 
 #ifdef USING_TBB
         tbb::parallel_for(size_t(fFirstColorIndex[ic]),size_t(fFirstColorIndex[ic+1]),size_t(1),[&](size_t i) // Each set of colors in parallel
 #else
-        for (int i = fFirstColorIndex[ic]; i < fFirstColorIndex[ic + 1]; i++)
+        for (int i = fMaterialRegionFirstColorIndex[ic]; i < fMaterialRegionFirstColorIndex[ic + 1]; i++)
 #endif
         {
-            int iel = fElColorIndexes[i];
+            int iel = fMaterialRegionElColorIndexes[i];
 
             TPZFMatrix<STATE> Kel;
             ComputeTangentMatrix(iel, Kel);
@@ -148,8 +141,6 @@ TPBrNumericalIntegrator<T, MEM>::me(TPZVec<int64_t> &IA, TPZVec<int64_t> &JA, in
 
 template<class T, class MEM>
 void TPBrNumericalIntegrator<T, MEM>::ComputeConstitutiveMatrix(TPZFMatrix<REAL> &De) {
-//  @TODO : get lambda and mu from the material
-
     De.Zero();
     REAL lambda = fConstitutiveLawProcessor.GetPlasticModel().fER.Lambda();
     REAL mu = fConstitutiveLawProcessor.GetPlasticModel().fER.Mu();
@@ -189,6 +180,30 @@ void TPBrNumericalIntegrator<T, MEM>::ComputeTangentMatrix(int64_t iel, TPZFMatr
         REAL omega = fConstitutiveLawProcessor.WeightVector()[first_el_ip + ip];
         De.Multiply(Bip, DeBip);
         Bip.MultAdd(DeBip, K, K, omega, 1.0, 1);
+    }
+}
+
+template<class T, class MEM>
+int TPBrNumericalIntegrator<T, MEM>::StressRateVectorSize(int dim) {
+
+    switch (dim) {
+        case 1: {
+            return 1;
+        }
+            break;
+        case 2: {
+            return 3;
+        }
+            break;
+        case 3: {
+            return 6;
+        }
+            break;
+        default: {
+            DebugStop();
+            return 0;
+        }
+            break;
     }
 }
 
@@ -483,29 +498,5 @@ void TPBrNumericalIntegrator<T, MEM>::ColoredIndexes(TPZCompMesh * cmesh) {
         }
         c_color++;
         fMaterialRegionFirstColorIndex[c_color] = n_el_per_color + fMaterialRegionFirstColorIndex[c_color - 1];
-    }
-}
-
-template<class T, class MEM>
-int TPBrNumericalIntegrator<T, MEM>::StressRateVectorSize(int dim) {
-
-    switch (dim) {
-        case 1: {
-            return 1;
-        }
-            break;
-        case 2: {
-            return 3;
-        }
-            break;
-        case 3: {
-            return 6;
-        }
-            break;
-        default: {
-            DebugStop();
-            return 0;
-        }
-            break;
     }
 }

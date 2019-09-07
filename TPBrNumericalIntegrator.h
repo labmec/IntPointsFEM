@@ -19,9 +19,9 @@ public:
 
     TPBrNumericalIntegrator();
 
-    TPBrNumericalIntegrator(TPBrIrregularBlocksMatrix &irregularBlocksMatrix);
-
     ~TPBrNumericalIntegrator();
+
+    bool isBuilt();
 
     void Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &delta_strain);
 
@@ -29,19 +29,33 @@ public:
 
     void ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZFMatrix<REAL> &rhs);
 
+    void KAssembly(TPZVec<STATE> &Kg, TPZVec<int64_t> & IAToSequence, TPZVec<int64_t> & JAToSequence);
+
+    int64_t me(TPZVec<int64_t> &IA, TPZVec<int64_t> &JA, int64_t & i_dest, int64_t & j_dest);
+
     void ComputeConstitutiveMatrix(TPZFMatrix<REAL> &De);
 
     void ComputeTangentMatrix(int64_t iel, TPZFMatrix<REAL> &K);
 
-    void SetUpIrregularBlocksMatrix(TPZCompMesh * cmesh);
-
     int StressRateVectorSize(int dim);
+
+    void SetUpIrregularBlocksMatrix(TPZCompMesh * cmesh);
 
     void SetUpIndexes(TPZCompMesh * cmesh);
 
     void ColoredIndexes(TPZCompMesh * cmesh);
 
-    bool isBuilt();
+    void SetElementIndexes(TPZVec<int> &element_vec) {
+        fElementIndexes = element_vec;
+    }
+
+    TPZVec<int> & ElementIndexes() {
+        return fElementIndexes;
+    }
+
+    void SetIrregularBlocksMatrix(TPBrIrregularBlocksMatrix & blocksMatrix) {
+        fBlockMatrix = blocksMatrix;
+    }
 
     TPBrIrregularBlocksMatrix & IrregularBlocksMatrix() {
         return fBlockMatrix;
@@ -86,45 +100,48 @@ public:
     int NColors() {
         return fNColor;
     }
-   ;
-    
-    void KAssembly(TPZVec<STATE> &Kg, TPZVec<int64_t> & IAToSequence, TPZVec<int64_t> & JAToSequence);
-    
-    int64_t me(TPZVec<int64_t> &IA, TPZVec<int64_t> &JA, int64_t & i_dest, int64_t & j_dest);
 
-    void SetElementIndexes(TPZVec<int> &element_vec) {
-        fElementIndexes = element_vec;
+    void SetMaterialRegionElColorIndexes(TPZVec<int64_t> & elcolorindexes) {
+        fMaterialRegionElColorIndexes = elcolorindexes;
     }
 
-public:
-    
-    TPZVec<int64_t> fElColorIndexes;
-    
-    TPZVec<int64_t> fFirstColorIndex;
-    
-private:
+    TPZVec<int64_t> & MaterialRegionElColorIndexes() {
+        return fMaterialRegionElColorIndexes;
+    }
 
+    void SetMaterialRegionFirstColorIndex(TPZVec<int64_t> & firstcolorindexes) {
+        fMaterialRegionFirstColorIndex = firstcolorindexes;
+    }
+
+    TPZVec<int64_t> & MaterialRegionFirstColorIndex() {
+        return fMaterialRegionFirstColorIndex;
+    }
+
+private:
+    /// Element indexes
     TPZVec<int> fElementIndexes;
 
     /// Irregular block matrix containing spatial gradients for scalar basis functions of order k
     TPBrIrregularBlocksMatrix fBlockMatrix;
 
-    /// Number of colors grouping no adjacent elements
-    int64_t fNColor; //needed to do the assembly
+    /// Material type
+    TPZMatElastoPlastic2D < T, MEM > * fMaterial;
+
+    /// Constitutive law processor
+    TPBrConstitutiveLawProcessor<T, MEM> fConstitutiveLawProcessor;
 
     /// Degree of Freedom indexes organized element by element with stride ndof
-    TPZVec<int> fDoFIndexes; // needed to do the gather operation
+    TPZVec<int> fDoFIndexes;
 
     /// Color indexes organized element by element with stride ndof
-    TPZVec<int> fColorIndexes; //nedeed to scatter operation
-    
-    TPZVec<int64_t> fMaterialRegionElColorIndexes;
-//    
-    TPZVec<int64_t> fMaterialRegionFirstColorIndex;
+    TPZVec<int> fColorIndexes;
 
-    TPBrConstitutiveLawProcessor<T, MEM> fConstitutiveLawProcessor;
-    
-    TPZMatElastoPlastic2D < T, MEM > * fMaterial;
+    /// Number of colors grouping no adjacent elements
+    int64_t fNColor;
+
+    TPZVec<int64_t> fMaterialRegionElColorIndexes;
+
+    TPZVec<int64_t> fMaterialRegionFirstColorIndex;
 };
 
 
