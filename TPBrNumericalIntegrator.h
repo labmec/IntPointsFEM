@@ -33,9 +33,15 @@ public:
 
     void ComputeTangentMatrix(int64_t iel, TPZFMatrix<REAL> &K);
 
-    void SetIrregularBlocksMatrix(TPBrIrregularBlocksMatrix & irregularBlocksMatrix) {
-        fBlockMatrix = irregularBlocksMatrix;
-    }
+    void SetUpIrregularBlocksMatrix(TPZCompMesh * cmesh);
+
+    int StressRateVectorSize(int dim);
+
+    void SetUpIndexes(TPZCompMesh * cmesh);
+
+    void ColoredIndexes(TPZCompMesh * cmesh);
+
+    bool isBuilt();
 
     TPBrIrregularBlocksMatrix & IrregularBlocksMatrix() {
         return fBlockMatrix;
@@ -86,6 +92,10 @@ public:
     
     int64_t me(TPZVec<int64_t> &IA, TPZVec<int64_t> &JA, int64_t & i_dest, int64_t & j_dest);
 
+    void SetElementIndexes(TPZVec<int> &element_vec) {
+        fElementIndexes = element_vec;
+    }
+
 public:
     
     TPZVec<int64_t> fElColorIndexes;
@@ -93,6 +103,8 @@ public:
     TPZVec<int64_t> fFirstColorIndex;
     
 private:
+
+    TPZVec<int> fElementIndexes;
 
     /// Irregular block matrix containing spatial gradients for scalar basis functions of order k
     TPBrIrregularBlocksMatrix fBlockMatrix;
@@ -106,9 +118,9 @@ private:
     /// Color indexes organized element by element with stride ndof
     TPZVec<int> fColorIndexes; //nedeed to scatter operation
     
-//    TPZVec<int64_t> fElColorIndexes;
+    TPZVec<int64_t> fMaterialRegionElColorIndexes;
 //    
-//    TPZVec<int64_t> fFirstColorIndex;
+    TPZVec<int64_t> fMaterialRegionFirstColorIndex;
 
     TPBrConstitutiveLawProcessor<T, MEM> fConstitutiveLawProcessor;
     

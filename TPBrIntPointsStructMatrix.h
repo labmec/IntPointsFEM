@@ -41,25 +41,16 @@ private:
 
     void SetUpDataStructure();
 
-    bool isBuilt();
-
     void ClassifyMaterialsByDimension();
 
-    void ComputeDomainElementIndexes(TPZVec<int> &element_indexes);
+    void ComputeDomainElementIndexes(TPZVec<int> &element_indexes, int mat_id);
 
     void SetPlasticModel();
 
     void AssembleBoundaryData();
 
-    void SetUpIrregularBlocksData(TPZVec<int> &element_indexes, TPBrIrregularBlocksMatrix::IrregularBlocks &blocksData);
-
-    void SetUpIndexes(TPZVec<int> &element_indexes, TPZVec<int> & dof_indexes);
-
-    void ColoredIndexes(TPZVec<int> &element_indexes, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor, TPZVec<int64_t> & MaterialRegionElColorIndexes, TPZVec<int64_t> & MaterialRegionFirstColorIndex);
-
     int StressRateVectorSize();
 
-    int64_t me(TPZVec<int64_t> &IA, TPZVec<int64_t> &JA, int64_t & i_dest, int64_t & j_dest);
 
 private:
 
