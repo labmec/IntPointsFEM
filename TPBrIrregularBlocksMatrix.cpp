@@ -58,9 +58,6 @@ TPBrIrregularBlocksMatrix &TPBrIrregularBlocksMatrix::operator=(const TPBrIrregu
 void TPBrIrregularBlocksMatrix::MultiplyVector(TPZFMatrix <REAL> &A, REAL *res, int opt) {
     int nblocks = fBlocksInfo.fNumBlocks;
 
-    TPZVec<int> one(nblocks);
-    one.Fill(1);
-
     if(opt == 0) {
         BlocksMultiplication(opt, fBlocksInfo.fRowSizes, fBlocksInfo.fColSizes, fBlocksInfo.fStorage, fBlocksInfo.fMatrixPosition, A, fBlocksInfo.fColFirstIndex, res, fBlocksInfo.fRowFirstIndex, 1., nblocks);
     } else {
@@ -99,8 +96,4 @@ void TPBrIrregularBlocksMatrix::BlocksMultiplication(bool trans, TPZVec<int> &m,
 #ifdef USING_TBB
     );
 #endif
-}
-
-void TPBrIrregularBlocksMatrix::SetBlocks(struct IrregularBlocks & blocks) {
-    fBlocksInfo = blocks;
 }

@@ -48,19 +48,9 @@ TPBrConstitutiveLawProcessor<T, MEM>::operator=(const TPBrConstitutiveLawProcess
 }
 
 template<class T, class MEM>
-void TPBrConstitutiveLawProcessor<T, MEM>::SetWeightVector(TPZVec<REAL> &weight) {
-    fWeight = weight;
-}
-
-template<class T, class MEM>
 void TPBrConstitutiveLawProcessor<T, MEM>::SetUpDataByIntPoints(int npts) {
     fNpts = npts;
     fStateVec.resize(fNpts);
-}
-
-template<class T, class MEM>
-TPZVec<REAL> &TPBrConstitutiveLawProcessor<T, MEM>::WeightVector() {
-    return fWeight;
 }
 
 template<class T, class MEM>

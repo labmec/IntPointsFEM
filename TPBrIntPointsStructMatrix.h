@@ -45,19 +45,68 @@ private:
 
     void ComputeDomainElementIndexes(TPZVec<int> &element_indexes, int mat_id);
 
-    void SetPlasticModel();
-
     void AssembleBoundaryData();
 
-    int StressRateVectorSize();
+    void SetNMaterials(int nmaterials) {
+        fNMaterials = nmaterials;
+    }
 
+    int NMaterials() {
+        return fNMaterials;
+    }
+
+    void SetIntegratorVector(TPZVec< TPBrNumericalIntegrator<T,MEM> > & integrator) {
+        fIntegrator = integrator;
+    }
+
+    TPZVec< TPBrNumericalIntegrator<T,MEM> > & IntegratorVector() {
+        return fIntegrator;
+    }
+
+    void SetBCMatrix(TPZVerySparseMatrix<STATE> & bcMatrix) {
+        fSparseMatrixLinear = bcMatrix;
+    }
+
+    TPZVerySparseMatrix<STATE> & BCMatrix() {
+        return fSparseMatrixLinear;
+    }
+
+    void SetBCRhs (TPZFMatrix<STATE> &BCrhs) {
+        fRhsLinear = BCrhs;
+    }
+
+    TPZFMatrix<STATE> & BCRhs() {
+        return fRhsLinear;
+    }
+
+    void SetBCMaterialIds(std::set<int> &matids) {
+        fBCMaterialIds = matids;
+    }
+
+    std::set<int> & BCMaterialIds() {
+        return fBCMaterialIds;
+    }
+
+    void SetIA(TPZVec<int64_t>& ia) {
+        fIAToSequence = ia;
+    }
+
+    TPZVec<int64_t> &IA() {
+        return fIAToSequence;
+    }
+
+    void SetJA(TPZVec<int64_t>& ja) {
+        fJAToSequence = ja;
+    }
+
+    TPZVec<int64_t> &JA() {
+        return fJAToSequence;
+    }
 
 private:
 
     // Class members
 
-    int fDimension;
-    
     int fNMaterials;
 
     TPZVec< TPBrNumericalIntegrator<T,MEM> > fIntegrator;
@@ -71,10 +120,6 @@ private:
     TPZVec<int64_t> fIAToSequence;
 
     TPZVec<int64_t> fJAToSequence;
-
-//    TPZVec<int64_t> fElColorIndexes;
-
-//    TPZVec<int64_t> fFirstColorIndex;
 };
 
 

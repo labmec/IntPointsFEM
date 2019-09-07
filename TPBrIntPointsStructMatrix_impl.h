@@ -12,14 +12,12 @@
 #include "pzsysmp.h"
 
 template<class T, class MEM>
-TPBrIntPointsStructMatrix<T, MEM>::TPBrIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZSpStructMatrix(cmesh), fSparseMatrixLinear(), fRhsLinear(), fIntegrator(), fBCMaterialIds() {
+TPBrIntPointsStructMatrix<T, MEM>::TPBrIntPointsStructMatrix(TPZCompMesh *cmesh) : TPZSpStructMatrix(cmesh), fNMaterials(-1), fIntegrator(0), fSparseMatrixLinear(),
+                                                                                fRhsLinear(),fBCMaterialIds(), fIAToSequence(0), fJAToSequence(0) {
 
     if (!cmesh->Reference()->Dimension()) {
         DebugStop();
     }
-    fDimension = cmesh->Reference()->Dimension();
-    fIAToSequence.resize(0);
-    fJAToSequence.resize(0);
 }
 
 template<class T, class MEM>
@@ -35,6 +33,8 @@ TPZStructMatrix * TPBrIntPointsStructMatrix<T, MEM>::Clone(){
 template<class T, class MEM>
 TPZMatrix<STATE> * TPBrIntPointsStructMatrix<T, MEM>::Create(){
 
+    SetUpDataStructure();
+
     TPZStack<int64_t> elgraph;
     TPZVec<int64_t> elgraphindex;
     fMesh->ComputeElGraph(elgraph,elgraphindex,fMaterialIds);
@@ -44,8 +44,6 @@ TPZMatrix<STATE> * TPBrIntPointsStructMatrix<T, MEM>::Create(){
 
     fIAToSequence = stiff->IA();
     fJAToSequence = stiff->JA();
-
-    SetUpDataStructure();
 
     return mat;
 }
@@ -60,14 +58,11 @@ TPZMatrix<STATE> *TPBrIntPointsStructMatrix<T, MEM>::CreateAssemble(TPZFMatrix<S
     return stiff;
 }
 
-
-
 template<class T, class MEM>
 void TPBrIntPointsStructMatrix<T, MEM>::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
 
     TPZFYsmpMatrix<STATE> & stiff = dynamic_cast<TPZFYsmpMatrix<STATE> &> (mat);
-    
-    // for over all numerical integrators ...
+
     for (auto & numerical_integrator : fIntegrator) {
         numerical_integrator.KAssembly(stiff.A(),fIAToSequence,fJAToSequence);
     }
@@ -87,8 +82,11 @@ void TPBrIntPointsStructMatrix<T, MEM>::Assemble(TPZMatrix<STATE> & mat, TPZFMat
 
 template<class T, class MEM>
 void TPBrIntPointsStructMatrix<T, MEM>::Assemble(TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface){
-    DebugStop();
-    //    fIntegrator.ResidualIntegration(fMesh->Solution(),rhs);
+    for (auto & numerical_integrator : fIntegrator) {
+        TPZFMatrix<REAL> rhs_mat(fMesh->NEquations(), 1);
+        numerical_integrator.ResidualIntegration(fMesh->Solution(), rhs_mat);
+        rhs += rhs_mat;
+    }
     rhs += fRhsLinear;
 }
 
@@ -99,8 +97,7 @@ void TPBrIntPointsStructMatrix<T, MEM>::SetUpDataStructure() {
     ClassifyMaterialsByDimension();
     fNMaterials = fMaterialIds.size();
     fIntegrator.resize(fNMaterials);
-    // Setup over all numerical integrators
-    // for over all numerical integrators ...
+
     int imat = 0;
     std::set<int>::iterator it;
     for (it = fMaterialIds.begin(); it != fMaterialIds.end(); it++) {
@@ -122,8 +119,6 @@ void TPBrIntPointsStructMatrix<T, MEM>::SetUpDataStructure() {
     }
     
     AssembleBoundaryData();
-
-
 }
 
 template<class T, class MEM>
@@ -156,21 +151,6 @@ void TPBrIntPointsStructMatrix<T, MEM>::ClassifyMaterialsByDimension() {
     }
 }
 
-template<class T, class MEM>
-void TPBrIntPointsStructMatrix<T, MEM>::SetPlasticModel() {
-
-    for (auto material : fMesh->MaterialVec()) {
-        TPZBndCond * bc_mat = dynamic_cast<TPZBndCond *>(material.second);
-        bool domain_material_Q = !bc_mat;
-        if (domain_material_Q) {
-            TPZMatElastoPlastic2D < T, MEM > *mat = dynamic_cast<TPZMatElastoPlastic2D < T, MEM > *>(material.second);
-            T plastic_model = mat->GetPlasticModel();
-            // for all numerical integrators
-//            fIntegrator.ConstitutiveLawProcessor().SetPlasticModel(plastic_model);
-            break;
-        }
-    }
-}
 
 template<class T, class MEM>
 void TPBrIntPointsStructMatrix<T, MEM>::AssembleBoundaryData() {

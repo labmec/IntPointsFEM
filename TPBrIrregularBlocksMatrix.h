@@ -40,7 +40,9 @@ public:
 
     void BlocksMultiplication(bool trans, TPZVec<int> &m, TPZVec<int> &k, TPZVec<REAL> &A, TPZVec<int> &strideA, TPZFMatrix<REAL> &B, TPZVec<int> &strideB, REAL *C, TPZVec<int> &strideC, REAL alpha, int nmatrices);
 
-    void SetBlocks(struct IrregularBlocks & blocks);
+    void SetBlocks(struct IrregularBlocks & blocks) {
+        fBlocksInfo = blocks;
+    }
 
     struct IrregularBlocks & Blocks() {
         return fBlocksInfo;

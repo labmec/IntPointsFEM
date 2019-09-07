@@ -29,20 +29,40 @@ public:
 
     TPBrConstitutiveLawProcessor &operator=(const TPBrConstitutiveLawProcessor &copy);
 
-    void SetWeightVector(TPZVec<REAL> &weight);
-
     void SetUpDataByIntPoints(int npts);
-
-    TPZVec<REAL> &WeightVector();
 
     void ComputeSigma(TPZFMatrix<REAL> & glob_delta_strain, TPZFMatrix<REAL> & glob_sigma);
 
-    T & GetPlasticModel() {
-        return fPlasticModel;
+    void SetWeightVector(TPZVec<REAL> &weight) {
+        fWeight = weight;
+    }
+
+    TPZVec<REAL> &WeightVector() {
+        return fWeight;
+    }
+
+    void SetNumIntPoints(int npts) {
+        fNpts = npts;
+    }
+
+    int NumIntPoints() {
+        return fNpts;
+    }
+
+    void SetStateVector(TPZVec<TPZPlasticState<STATE>> & state) {
+        fStateVec = state;
+    }
+
+    TPZVec<TPZPlasticState<STATE>> & StateVector() {
+        return fStateVec;
     }
 
     void SetPlasticModel(T & model) {
         fPlasticModel = model;
+    }
+
+    T & GetPlasticModel() {
+        return fPlasticModel;
     }
 
 private:
