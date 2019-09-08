@@ -97,7 +97,7 @@ void TPBrNumericalIntegrator<T, MEM>::KAssembly(TPZVec<STATE> &Kg, TPZVec<int64_
     for (int ic = 0; ic < fNColor; ic++) { //Serial by color
 
 #ifdef USING_TBB
-        tbb::parallel_for(size_t(fFirstColorIndex[ic]),size_t(fFirstColorIndex[ic+1]),size_t(1),[&](size_t i) // Each set of colors in parallel
+        tbb::parallel_for(size_t(fMaterialRegionFirstColorIndex[ic]),size_t(fMaterialRegionFirstColorIndex[ic+1]),size_t(1),[&](size_t i) // Each set of colors in parallel
 #else
         for (int i = fMaterialRegionFirstColorIndex[ic]; i < fMaterialRegionFirstColorIndex[ic + 1]; i++)
 #endif
@@ -235,7 +235,7 @@ void TPBrNumericalIntegrator<T, MEM>::SetUpIrregularBlocksMatrix(TPZCompMesh *cm
         if (!cel_inter) DebugStop();
 #ifdef PZDEBUG
         int dim = cel->Reference()->Dimension();
-        if (dim !=fDimension) {
+        if (dim !=dimension) {
             DebugStop();
         }
 #endif
@@ -281,7 +281,7 @@ void TPBrNumericalIntegrator<T, MEM>::SetUpIrregularBlocksMatrix(TPZCompMesh *cm
 
 #ifdef PZDEBUG
         int dim = cel->Reference()->Dimension();
-        if (dim !=fDimension) {
+        if (dim !=dimension) {
             DebugStop();
         }
 #endif
