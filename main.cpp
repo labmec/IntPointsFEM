@@ -81,7 +81,7 @@ int pOrder;
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
 //    std::string mesh = argv[1];
-     std::string mesh = "0";
+     std::string mesh = "1";
     std::string msh_file = source_dir + "/gmsh/wellbore_" + mesh + ".msh";
 //    std::string msh_file = source_dir + "/gmsh/wellbore.msh";
     TPZGeoMesh *gmesh = ReadGeometry(msh_file);
@@ -379,7 +379,7 @@ TElastoPlasticData WellboreConfigRK(){
 
     /// Elastic verification -> true
     /// ElastoPlastic verification -> false
-    bool is_elastic_Q = true;
+    bool is_elastic_Q = false;
 
     TPZElasticResponse LER;
     REAL Ey = 2000.0;
