@@ -64,18 +64,22 @@ TPBrConstitutiveLawProcessor<T, MEM>::ComputeSigma(TPZFMatrix<REAL> &glob_delta_
         TPZTensor<REAL> sigma;
 
         epsTotal[_XX_] = glob_delta_strain(3 * ipts + 0, 0);
-        epsTotal[_XY_] = glob_delta_strain(3 * ipts + 1, 0);
+        epsTotal[_XY_] = glob_delta_strain(3 * ipts + 1, 0)/2;
         epsTotal[_XZ_] = 0;
         epsTotal[_YY_] = glob_delta_strain(3 * ipts + 2, 0);
         epsTotal[_YZ_] = 0;
         epsTotal[_ZZ_] = 0;
 
         fPlasticModel.SetState(fStateVec[ipts]);
+
+        epsTotal.Add(fStateVec[ipts].m_eps_t, 1.);
+
         fPlasticModel.ApplyStrainComputeSigma(epsTotal, sigma);
+
         sigma.operator*=(fWeight[ipts]);
 
         glob_sigma(3 * ipts + 0, 0) = sigma[_XX_];
-        glob_sigma(3 * ipts + 1, 0) = sigma[_XY_] / 2;
+        glob_sigma(3 * ipts + 1, 0) = sigma[_XY_];
         glob_sigma(3 * ipts + 2, 0) = sigma[_YY_];
     }
 }

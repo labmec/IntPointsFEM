@@ -109,9 +109,6 @@ void TPZNumericalIntegrator::ResidualIntegration(TPZFMatrix<REAL> & solution ,TP
     TPZFMatrix<REAL> sigma;
 
     Multiply(solution, delta_strain);
-    ofstream out("tpz.txt");
-    delta_strain.Print(out);
-    out.flush();
     fConstitutiveLawProcessor.ComputeSigma(delta_strain, sigma);
     MultiplyTranspose(sigma, rhs); // Perform Residual integration using a global linear application B
 }

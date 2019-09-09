@@ -79,9 +79,6 @@ void TPBrNumericalIntegrator<T, MEM>::ResidualIntegration(TPZFMatrix<REAL> &solu
     TPZFMatrix<REAL> sigma;
 
     Multiply(solution, delta_strain);
-    ofstream out("tpbr.txt");
-    delta_strain.Print(out);
-    out.flush();
     fConstitutiveLawProcessor.ComputeSigma(delta_strain, sigma);
     MultiplyTranspose(sigma, rhs); // Perform Residual integration using a global linear application B
 }

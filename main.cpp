@@ -66,7 +66,7 @@ static bool USING_Hybrid_Q;
 int main(int argc, char *argv[]) {
 int pOrder;
 #ifdef O_LINEAR
-    pOrder = 2; // Computational mesh order
+    pOrder =1; // Computational mesh order
 #elif O_QUADRATIC
     pOrder = 2; // Computational mesh order
 #elif O_CUBIC
@@ -74,7 +74,7 @@ int pOrder;
 #endif
 
     bool render_vtk_Q = true;
-    bool modified_thomas_accel_Q = true;
+    bool modified_thomas_accel_Q = false;
     bool compute_h_Q = false;
     USING_CUDA_Q = false;
     
@@ -115,7 +115,7 @@ int pOrder;
 
 
 // Defines the analysis
-    int n_threads = 8;
+    int n_threads = 0;
     // int n_threads = atoi(argv[2]);
     
 #ifdef USING_TBB
