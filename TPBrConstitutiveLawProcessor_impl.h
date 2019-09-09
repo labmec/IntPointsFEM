@@ -7,6 +7,10 @@
 #include "TPBrConstitutiveLawProcessor.h"
 #include "TPZMatWithMem.h"
 
+#ifdef USING_TBB
+#include "tbb/parallel_for.h"
+#endif
+
 template<class T, class MEM>
 TPBrConstitutiveLawProcessor<T, MEM>::TPBrConstitutiveLawProcessor() : fPlasticModel(), fMatMem() {
     fNpts = -1;
@@ -62,7 +66,12 @@ TPBrConstitutiveLawProcessor<T, MEM>::ComputeSigma(TPZFMatrix<REAL> &glob_delta_
 
     glob_sigma.Resize(3 * fNpts, 1);
 
-    for (int ipts = 0; ipts < fNpts; ipts++) {
+#ifdef USING_TBB
+    tbb::parallel_for(size_t(0),size_t(fNpts),size_t(1),[&](size_t ipts)
+#else
+    for (int ipts = 0; ipts < fNpts; ipts++)
+#endif
+    {
         TPZTensor<REAL> epsTotal;
         TPZTensor<REAL> sigma;
 
@@ -92,4 +101,7 @@ TPBrConstitutiveLawProcessor<T, MEM>::ComputeSigma(TPZFMatrix<REAL> &glob_delta_
             fMatMem->MemItem(ipts).m_ER = fPlasticModel.GetElasticResponse();
         }
     }
+#ifdef USING_TBB
+    );
+#endif
 }
