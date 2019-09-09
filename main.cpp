@@ -74,7 +74,7 @@ int pOrder;
 #endif
 
     bool render_vtk_Q = true;
-    bool modified_thomas_accel_Q = false;
+    bool modified_thomas_accel_Q = true;
     bool compute_h_Q = false;
     USING_CUDA_Q = false;
     
@@ -558,15 +558,7 @@ TPZCompMesh *CmeshElastoplasticity(TPZGeoMesh *gmesh, int p_order, TElastoPlasti
     // ElastoPlastic Material using Mohr Coulomb
     // Elastic predictor
     TPZElasticResponse ER = wellbore_material.ElasticResponse();
-
     TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse> LEMC;
-    
-    
-//    {
-//// 1        LEMC.fN. /// set the plastic state
-////        LEMC.ApplyStrainComputeSigma(<#const TPZTensor<REAL> &epsTotal#>, <#TPZTensor<REAL> &sigma#>)
-//        LEMC.f
-//    }
     
     LEMC.SetElasticResponse(ER);
     LEMC.fYC.SetUp(mc_phi, mc_psi, mc_cohesion, ER);

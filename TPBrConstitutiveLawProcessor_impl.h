@@ -89,11 +89,9 @@ TPBrConstitutiveLawProcessor<T, MEM>::ComputeSigma(TPZFMatrix<REAL> &glob_delta_
 
         fPlasticModel[ipts].ApplyStrainComputeSigma(epsTotal, sigma);
 
-        sigma.operator*=(fWeight[ipts]);
-
-        glob_sigma(3 * ipts + 0, 0) = sigma[_XX_];
-        glob_sigma(3 * ipts + 1, 0) = sigma[_XY_];
-        glob_sigma(3 * ipts + 2, 0) = sigma[_YY_];
+        glob_sigma(3 * ipts + 0, 0) = sigma[_XX_]*fWeight[ipts];
+        glob_sigma(3 * ipts + 1, 0) = sigma[_XY_]*fWeight[ipts];
+        glob_sigma(3 * ipts + 2, 0) = sigma[_YY_]*fWeight[ipts];
 
         if (fMatMem->GetUpdateMem()) {
             fMatMem->MemItem(ipts).m_sigma        = sigma;
