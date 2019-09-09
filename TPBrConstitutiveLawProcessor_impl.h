@@ -12,7 +12,7 @@
 #endif
 
 template<class T, class MEM>
-TPBrConstitutiveLawProcessor<T, MEM>::TPBrConstitutiveLawProcessor() : fPlasticModel(), fMatMem() {
+TPBrConstitutiveLawProcessor<T, MEM>::TPBrConstitutiveLawProcessor() : fPlasticModel(0), fMatMem() {
     fNpts = -1;
     fWeight.Resize(0);
     fStateVec.resize(0);
@@ -58,6 +58,7 @@ template<class T, class MEM>
 void TPBrConstitutiveLawProcessor<T, MEM>::SetUpDataByIntPoints(int npts) {
     fNpts = npts;
     fStateVec.resize(fNpts);
+    fPlasticModel.resize(fNpts);
 }
 
 template<class T, class MEM>
@@ -82,11 +83,11 @@ TPBrConstitutiveLawProcessor<T, MEM>::ComputeSigma(TPZFMatrix<REAL> &glob_delta_
         epsTotal[_YZ_] = 0;
         epsTotal[_ZZ_] = 0;
 
-        fPlasticModel.SetState(fStateVec[ipts]);
+        fPlasticModel[ipts].SetState(fStateVec[ipts]);
 
         epsTotal.Add(fStateVec[ipts].m_eps_t, 1.);
 
-        fPlasticModel.ApplyStrainComputeSigma(epsTotal, sigma);
+        fPlasticModel[ipts].ApplyStrainComputeSigma(epsTotal, sigma);
 
         sigma.operator*=(fWeight[ipts]);
 
@@ -96,9 +97,9 @@ TPBrConstitutiveLawProcessor<T, MEM>::ComputeSigma(TPZFMatrix<REAL> &glob_delta_
 
         if (fMatMem->GetUpdateMem()) {
             fMatMem->MemItem(ipts).m_sigma        = sigma;
-            fMatMem->MemItem(ipts).m_elastoplastic_state = fPlasticModel.GetState();
-            fMatMem->MemItem(ipts).m_plastic_steps = fPlasticModel.IntegrationSteps();
-            fMatMem->MemItem(ipts).m_ER = fPlasticModel.GetElasticResponse();
+            fMatMem->MemItem(ipts).m_elastoplastic_state = fPlasticModel[ipts].GetState();
+            fMatMem->MemItem(ipts).m_plastic_steps = fPlasticModel[ipts].IntegrationSteps();
+            fMatMem->MemItem(ipts).m_ER = fPlasticModel[ipts].GetElasticResponse();
         }
     }
 #ifdef USING_TBB

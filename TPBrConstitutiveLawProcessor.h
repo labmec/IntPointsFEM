@@ -58,10 +58,12 @@ public:
     }
 
     void SetPlasticModel(T & model) {
-        fPlasticModel = model;
+        for (int i = 0; i < fNpts; ++i) {
+            fPlasticModel[i] = model;
+        }
     }
 
-    T & GetPlasticModel() {
+    TPZVec<T> & GetPlasticModel() {
         return fPlasticModel;
     }
 
@@ -81,7 +83,7 @@ private:
 
     TPZVec<TPZPlasticState<STATE>> fStateVec;
 
-    T fPlasticModel;
+    TPZVec<T> fPlasticModel;
 
     TPZMatWithMem<MEM> *fMatMem;
 };

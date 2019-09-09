@@ -172,8 +172,8 @@ TPBrNumericalIntegrator<T, MEM>::me(TPZVec<int64_t> &IA, TPZVec<int64_t> &JA, in
 template<class T, class MEM>
 void TPBrNumericalIntegrator<T, MEM>::ComputeConstitutiveMatrix(TPZFMatrix<REAL> &De) {
     De.Zero();
-    REAL lambda = fConstitutiveLawProcessor.GetPlasticModel().fER.Lambda();
-    REAL mu = fConstitutiveLawProcessor.GetPlasticModel().fER.Mu();
+    REAL lambda = fMaterial->GetPlasticModel().fER.Lambda();
+    REAL mu = fMaterial->GetPlasticModel().fER.Mu();
 
     De(0, 0) = lambda + 2.0 * mu;
     De(1, 1) = mu;
@@ -436,9 +436,9 @@ void TPBrNumericalIntegrator<T, MEM>::SetUpIndexes(TPZCompMesh * cmesh) {
 
     TPZMatWithMem<MEM> * matmem = dynamic_cast<TPZMatWithMem<TPZElastoPlasticMem> *>(fMaterial);
 
+    fConstitutiveLawProcessor.SetUpDataByIntPoints(npts);
     fConstitutiveLawProcessor.SetMemory(matmem);
     fConstitutiveLawProcessor.SetPlasticModel(fMaterial->GetPlasticModel());
-    fConstitutiveLawProcessor.SetUpDataByIntPoints(npts);
     fConstitutiveLawProcessor.SetWeightVector(weight);
 }
 
