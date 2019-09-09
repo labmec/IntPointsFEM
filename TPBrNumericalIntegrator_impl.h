@@ -27,6 +27,39 @@ TPBrNumericalIntegrator<T, MEM>::~TPBrNumericalIntegrator() {
 }
 
 template<class T, class MEM>
+TPBrNumericalIntegrator<T, MEM>::TPBrNumericalIntegrator(const TPBrNumericalIntegrator &copy) {
+    fElementIndexes = copy.fElementIndexes;
+    fBlockMatrix = copy.fBlockMatrix;
+    fMaterial = copy.fMaterial;
+    fConstitutiveLawProcessor = copy.fConstitutiveLawProcessor;
+    fDoFIndexes = copy.fDoFIndexes;
+    fColorIndexes = copy.fColorIndexes;
+    fNColor = copy.fNColor;
+    fMaterialRegionElColorIndexes = copy.fMaterialRegionElColorIndexes;
+    fMaterialRegionFirstColorIndex = copy.fMaterialRegionFirstColorIndex;
+}
+
+template<class T, class MEM>
+TPBrNumericalIntegrator<T, MEM> &
+TPBrNumericalIntegrator<T, MEM>::operator=(const TPBrNumericalIntegrator &copy){
+    if (&copy == this) {
+        return *this;
+    }
+
+    fElementIndexes = copy.fElementIndexes;
+    fBlockMatrix = copy.fBlockMatrix;
+    fMaterial = copy.fMaterial;
+    fConstitutiveLawProcessor = copy.fConstitutiveLawProcessor;
+    fDoFIndexes = copy.fDoFIndexes;
+    fColorIndexes = copy.fColorIndexes;
+    fNColor = copy.fNColor;
+    fMaterialRegionElColorIndexes = copy.fMaterialRegionElColorIndexes;
+    fMaterialRegionFirstColorIndex = copy.fMaterialRegionFirstColorIndex;
+
+    return *this;
+}
+
+template<class T, class MEM>
 bool TPBrNumericalIntegrator<T, MEM>::isBuilt() {
     if (fBlockMatrix.Rows() != 0) return true;
     else return false;

@@ -31,6 +31,7 @@ TPBrConstitutiveLawProcessor<T, MEM>::TPBrConstitutiveLawProcessor(const TPBrCon
     fWeight = copy.fWeight;
     fPlasticModel = copy.fPlasticModel;
     fStateVec = copy.fStateVec;
+    fMatMem = copy.fMatMem;
 }
 
 template<class T, class MEM>
@@ -44,6 +45,7 @@ TPBrConstitutiveLawProcessor<T, MEM>::operator=(const TPBrConstitutiveLawProcess
     fWeight = copy.fWeight;
     fPlasticModel = copy.fPlasticModel;
     fStateVec = copy.fStateVec;
+    fMatMem = copy.fMatMem;
 
     return *this;
 }

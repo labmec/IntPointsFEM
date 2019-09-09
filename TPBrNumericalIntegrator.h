@@ -21,6 +21,10 @@ public:
 
     ~TPBrNumericalIntegrator();
 
+    TPBrNumericalIntegrator(const TPBrNumericalIntegrator &copy);
+
+    TPBrNumericalIntegrator &operator=(const TPBrNumericalIntegrator &copy);
+
     bool isBuilt();
 
     void Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &delta_strain);
