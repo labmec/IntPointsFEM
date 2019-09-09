@@ -401,6 +401,9 @@ void TPBrNumericalIntegrator<T, MEM>::SetUpIndexes(TPZCompMesh * cmesh) {
     );
 #endif
 
+    TPZMatWithMem<MEM> * matmem = dynamic_cast<TPZMatWithMem<TPZElastoPlasticMem> *>(fMaterial);
+
+    fConstitutiveLawProcessor.SetMemory(matmem);
     fConstitutiveLawProcessor.SetPlasticModel(fMaterial->GetPlasticModel());
     fConstitutiveLawProcessor.SetUpDataByIntPoints(npts);
     fConstitutiveLawProcessor.SetWeightVector(weight);

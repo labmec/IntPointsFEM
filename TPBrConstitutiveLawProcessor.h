@@ -65,6 +65,14 @@ public:
         return fPlasticModel;
     }
 
+    void SetMemory(TPZMatWithMem<MEM> * memory) {
+        fMatMem = memory;
+    }
+
+    TPZMatWithMem<MEM> * GetMemory() {
+        return fMatMem;
+    }
+
 private:
 
     TPZVec<REAL> fWeight;
@@ -74,5 +82,7 @@ private:
     TPZVec<TPZPlasticState<STATE>> fStateVec;
 
     T fPlasticModel;
+
+    TPZMatWithMem<MEM> *fMatMem;
 };
 #endif /* TPBrConstitutiveLawProcessor_h */

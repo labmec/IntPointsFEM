@@ -5,9 +5,10 @@
 //  Created by Omar Durán on 9/5/19.
 //
 #include "TPBrConstitutiveLawProcessor.h"
+#include "TPZMatWithMem.h"
 
 template<class T, class MEM>
-TPBrConstitutiveLawProcessor<T, MEM>::TPBrConstitutiveLawProcessor() : fPlasticModel() {
+TPBrConstitutiveLawProcessor<T, MEM>::TPBrConstitutiveLawProcessor() : fPlasticModel(), fMatMem() {
     fNpts = -1;
     fWeight.Resize(0);
     fStateVec.resize(0);
@@ -81,5 +82,12 @@ TPBrConstitutiveLawProcessor<T, MEM>::ComputeSigma(TPZFMatrix<REAL> &glob_delta_
         glob_sigma(3 * ipts + 0, 0) = sigma[_XX_];
         glob_sigma(3 * ipts + 1, 0) = sigma[_XY_];
         glob_sigma(3 * ipts + 2, 0) = sigma[_YY_];
+
+        if (fMatMem->GetUpdateMem()) {
+            fMatMem->MemItem(ipts).m_sigma        = sigma;
+            fMatMem->MemItem(ipts).m_elastoplastic_state = fPlasticModel.GetState();
+            fMatMem->MemItem(ipts).m_plastic_steps = fPlasticModel.IntegrationSteps();
+            fMatMem->MemItem(ipts).m_ER = fPlasticModel.GetElasticResponse();
+        }
     }
 }
