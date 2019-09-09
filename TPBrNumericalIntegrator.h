@@ -33,13 +33,13 @@ public:
 
     void ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZFMatrix<REAL> &rhs);
 
-    void KAssembly(TPZVec<STATE> &Kg, TPZVec<int64_t> & IAToSequence, TPZVec<int64_t> & JAToSequence);
+    void KAssembly(TPZFMatrix<REAL> &solution, TPZFMatrix<REAL> &rhs, TPZVec<STATE> &Kg, TPZVec<int64_t> &IAToSequence, TPZVec<int64_t> &JAToSequence);
 
     int64_t me(TPZVec<int64_t> &IA, TPZVec<int64_t> &JA, int64_t & i_dest, int64_t & j_dest);
 
     void ComputeConstitutiveMatrix(TPZFMatrix<REAL> &De);
 
-    void ComputeTangentMatrix(int64_t iel, TPZFMatrix<REAL> &K);
+    void ComputeTangentMatrix(TPZFMatrix<REAL> &glob_dep, int64_t iel, TPZFMatrix<REAL> &K);
 
     int StressRateVectorSize(int dim);
 

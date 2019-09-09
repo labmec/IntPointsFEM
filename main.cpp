@@ -81,7 +81,7 @@ int pOrder;
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
 //    std::string mesh = argv[1];
-     std::string mesh = "1";
+     std::string mesh = "3";
     std::string msh_file = source_dir + "/gmsh/wellbore_" + mesh + ".msh";
 //    std::string msh_file = source_dir + "/gmsh/wellbore.msh";
     TPZGeoMesh *gmesh = ReadGeometry(msh_file);
@@ -125,14 +125,19 @@ int pOrder;
     
     TPZAnalysis *analysis;
     {
-        timer.Start();
+        
 #ifdef COMPUTE_WITH_PZ
-       analysis = Analysis(cmesh,n_threads);
+        timer.Start();
+        analysis = Analysis(cmesh,n_threads);
+        timer.Stop();
+        std::cout << "Calling Analysis: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
 #else
+        timer.Start();
         analysis = Analysis_IPFEM(cmesh,n_threads);
-#endif
         timer.Stop();
         std::cout << "Calling Analysis_IPFEM: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+#endif
+
     }
     
 // Calculates the solution using Newton method
@@ -265,11 +270,13 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance, bool modi
 TPZAnalysis *Analysis(TPZCompMesh *cmesh, int n_threads) {
     bool optimizeBandwidth = true;
     TPZAnalysis *analysis = new TPZAnalysis(cmesh, optimizeBandwidth);
-    TPZSymetricSpStructMatrix strskyl(cmesh);
+//    TPZSymetricSpStructMatrix strskyl(cmesh);
+    TPZSpStructMatrix strskyl(cmesh);
     strskyl.SetNumThreads(n_threads);
     analysis->SetStructuralMatrix(strskyl);
     TPZStepSolver<STATE> step;
-    step.SetDirect(ELDLt);
+//    step.SetDirect(ELDLt);
+    step.SetDirect(ELU);
     analysis->SetSolver(step);
     return analysis;
 }

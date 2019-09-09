@@ -117,12 +117,17 @@ void TPBrNumericalIntegrator<T, MEM>::ResidualIntegration(TPZFMatrix<REAL> &solu
 }
 
 template<class T, class MEM>
-void TPBrNumericalIntegrator<T, MEM>::KAssembly(TPZVec<STATE> &Kg, TPZVec<int64_t> &IAToSequence,
-                                                TPZVec<int64_t> &JAToSequence) {
+void TPBrNumericalIntegrator<T, MEM>::KAssembly(TPZFMatrix<REAL> &solution, TPZFMatrix<REAL> &rhs, TPZVec<STATE> &Kg, TPZVec<int64_t> &IAToSequence, TPZVec<int64_t> &JAToSequence) {
 
     TPZVec<int> &dof_id = DoFIndexes();
     TPZVec<int> &el_n_dofs = IrregularBlocksMatrix().Blocks().fColSizes;
     TPZVec<int> &col_pos = IrregularBlocksMatrix().Blocks().fColFirstIndex;
+    
+    // Computing rhs contribution
+    TPZFMatrix<REAL> delta_strain, sigma, glob_dep;
+    Multiply(solution,delta_strain);
+    fConstitutiveLawProcessor.ComputeSigma(delta_strain, sigma, glob_dep);
+    MultiplyTranspose(sigma, rhs); // Perform Residual integration using a global linear application B
 
     for (int ic = 0; ic < fNColor; ic++) { //Serial by color
 
@@ -135,7 +140,7 @@ void TPBrNumericalIntegrator<T, MEM>::KAssembly(TPZVec<STATE> &Kg, TPZVec<int64_
             int iel = fMaterialRegionElColorIndexes[i];
 
             TPZFMatrix<STATE> Kel;
-            ComputeTangentMatrix(iel, Kel);
+            ComputeTangentMatrix(glob_dep, iel, Kel);
 
             int el_dof = el_n_dofs[iel];
             int pos = col_pos[iel];
@@ -183,18 +188,20 @@ void TPBrNumericalIntegrator<T, MEM>::ComputeConstitutiveMatrix(TPZFMatrix<REAL>
 }
 
 template<class T, class MEM>
-void TPBrNumericalIntegrator<T, MEM>::ComputeTangentMatrix(int64_t iel, TPZFMatrix<REAL> &K) {
+void TPBrNumericalIntegrator<T, MEM>::ComputeTangentMatrix(TPZFMatrix<REAL> &glob_dep, int64_t iel, TPZFMatrix<REAL> &K) {
     TPZFMatrix<REAL> De(3, 3);
     ComputeConstitutiveMatrix(De);
-
+    
+//    De.Print("De = ",std::cout,EMathematicaInput);
+    
     int n_sigma_comps = 3;
     int el_npts = fBlockMatrix.Blocks().fRowSizes[iel] / n_sigma_comps;
     int el_dofs = fBlockMatrix.Blocks().fColSizes[iel];
     int first_el_ip = fBlockMatrix.Blocks().fRowFirstIndex[iel] / n_sigma_comps;
-
+    
     K.Resize(el_dofs, el_dofs);
     K.Zero();
-
+    
     int pos = fBlockMatrix.Blocks().fMatrixPosition[iel];
     TPZFMatrix<STATE> Bip(n_sigma_comps, el_dofs, 0.0);
     TPZFMatrix<STATE> DeBip;
@@ -206,7 +213,22 @@ void TPBrNumericalIntegrator<T, MEM>::ComputeTangentMatrix(int64_t iel, TPZFMatr
                 c++;
             }
         }
+        
+        int64_t ipts = first_el_ip + ip;
+        De(0, 0) = glob_dep(3 * 3 * ipts + 0, 0);
+        De(0, 1) = glob_dep(3 * 3 * ipts + 1, 0);
+        De(0, 2) = glob_dep(3 * 3 * ipts + 2, 0);
 
+        De(1, 0) = glob_dep(3 * 3 * ipts + 3, 0);
+        De(1, 1) = glob_dep(3 * 3 * ipts + 4, 0);
+        De(1, 2) = glob_dep(3 * 3 * ipts + 5, 0);
+
+        De(2, 0) = glob_dep(3 * 3 * ipts + 6, 0);
+        De(2, 1) = glob_dep(3 * 3 * ipts + 7, 0);
+        De(2, 2) = glob_dep(3 * 3 * ipts + 8, 0);
+        
+//        De.Print("Dep = ",std::cout,EMathematicaInput);
+        
         REAL omega = fConstitutiveLawProcessor.WeightVector()[first_el_ip + ip];
         De.Multiply(Bip, DeBip);
         Bip.MultAdd(DeBip, K, K, omega, 1.0, 1);

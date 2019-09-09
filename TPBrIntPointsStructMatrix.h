@@ -34,7 +34,10 @@ public:
 
     void Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface);
 
+    void Assemble(TPZFMatrix<STATE> & sigma, TPZFMatrix<STATE> & rhs);
+    
     void Assemble(TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface);
+    
 
 private:
     // Methods necessary to use IntPoints

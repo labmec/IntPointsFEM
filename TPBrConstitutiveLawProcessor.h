@@ -32,6 +32,8 @@ public:
     void SetUpDataByIntPoints(int npts);
 
     void ComputeSigma(TPZFMatrix<REAL> & glob_delta_strain, TPZFMatrix<REAL> & glob_sigma);
+    
+    void ComputeSigma(TPZFMatrix<REAL> & glob_delta_strain, TPZFMatrix<REAL> & glob_sigma, TPZFMatrix<REAL> & glob_Dep);
 
     void SetWeightVector(TPZVec<REAL> &weight) {
         fWeight = weight;

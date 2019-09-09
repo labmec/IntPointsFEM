@@ -61,11 +61,14 @@ TPZMatrix<STATE> *TPBrIntPointsStructMatrix<T, MEM>::CreateAssemble(TPZFMatrix<S
 template<class T, class MEM>
 void TPBrIntPointsStructMatrix<T, MEM>::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
 
-    TPZFYsmpMatrix<STATE> & stiff = dynamic_cast<TPZFYsmpMatrix<STATE> &> (mat);
 
+    TPZFYsmpMatrix<STATE> & stiff = dynamic_cast<TPZFYsmpMatrix<STATE> &> (mat);
     for (auto & numerical_integrator : fIntegrator) {
-        numerical_integrator.KAssembly(stiff.A(),fIAToSequence,fJAToSequence);
+        TPZFMatrix<REAL> rhs_mat(fMesh->NEquations(), 1);
+        numerical_integrator.KAssembly(fMesh->Solution(),rhs_mat,stiff.A(),fIAToSequence,fJAToSequence);
+        rhs += rhs_mat;
     }
+    rhs += fRhsLinear;
 
     // Add boundary contribution
     auto it_end = fSparseMatrixLinear.MapEnd();
@@ -77,7 +80,12 @@ void TPBrIntPointsStructMatrix<T, MEM>::Assemble(TPZMatrix<STATE> & mat, TPZFMat
     }
 
     // Residual assemble
-    Assemble(rhs,guiInterface);
+//    Assemble(rhs,guiInterface);
+}
+
+template<class T, class MEM>
+void TPBrIntPointsStructMatrix<T, MEM>::Assemble(TPZFMatrix<STATE> & sigma, TPZFMatrix<STATE> & rhs){
+    
 }
 
 template<class T, class MEM>
