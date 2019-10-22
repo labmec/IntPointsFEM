@@ -45,11 +45,14 @@ public:
     void SetMaterial(TPZMaterial *material);
 
     void ComputeSigma(TPZFMatrix<REAL> & glob_delta_strain, TPZFMatrix<REAL> & glob_sigma);
-   
+
+    void ComputeSigmaDep(TPZFMatrix<REAL> & glob_delta_strain, TPZFMatrix<REAL> & glob_sigma, TPZFMatrix<REAL> & glob_dep);
+
     void De(TPZFMatrix<REAL> & De);
 
 #ifdef USING_CUDA
     void ComputeSigma(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &sigma);
+    void ComputeSigmaDep(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL> &glob_dep);
 
     void De();    
 

@@ -176,6 +176,20 @@ void TPZCudaCalls::ComputeSigma(bool update_mem, int npts, REAL *glob_delta_stra
 	}
 }
 
+void TPZCudaCalls::ComputeSigmaDep(bool update_mem, int npts, REAL *glob_delta_strain, REAL *glob_sigma, REAL *glob_dep, REAL lambda, REAL mu, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL *dPlasticStrain,
+	REAL *dMType, REAL *dAlpha, REAL *dSigma, REAL *dStrain, REAL *weight) {
+
+	int numBlocks = (npts + NT - 1) / NT;
+	ComputeSigmaDepKernel<<<numBlocks,NT>>> (update_mem, npts, glob_delta_strain, glob_sigma, glob_dep, lambda, mu, mc_phi, mc_psi, mc_cohesion, dPlasticStrain, dMType, dAlpha, dSigma, dStrain, weight);
+	cudaDeviceSynchronize();
+	cudaError_t error = cudaGetLastError();
+	if (error != cudaSuccess) {
+		std::string error_string = cudaGetErrorString(error);
+		std::string error_message = "failed to perform ComputeSigmaDepKernel: " + error_string;
+		throw std::runtime_error(error_message);
+	}
+}
+
 void TPZCudaCalls::MatrixAssembleGS(REAL *Kc, int first_el, int last_el, int64_t *el_color_index, REAL *weight, int *dof_indexes,
 	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition) {
 	int nel = last_el - first_el;
