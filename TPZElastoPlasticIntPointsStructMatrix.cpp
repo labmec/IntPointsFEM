@@ -50,17 +50,11 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
     // Filling local std::map
     TPZSYsmpMatrix<STATE> *stiff = dynamic_cast<TPZSYsmpMatrix<STATE> *> (mat);
 
-    m_IA_to_sequence.resize(stiff->IA().size());
-    for (int i = 0; i < stiff->IA().size(); ++i) {
-        m_IA_to_sequence[i] = stiff->IA()[i];
-    }
+    m_IA_to_sequence = stiff->IA();
+    m_JA_to_sequence = stiff->JA();
 
-    m_JA_to_sequence.resize(stiff->JA().size());
-    for (int i = 0; i < stiff->JA().size(); ++i) {
-        m_JA_to_sequence[i] = stiff->JA()[i];
-    }
 
-    FillLIndexes();
+    fIntegrator.FillLIndexes(m_IA_to_sequence, m_JA_to_sequence);
     
 #ifdef USING_CUDA
     Timer timer;   
@@ -75,55 +69,6 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
 #endif
 
     return mat;
-}
-
-void TPZElastoPlasticIntPointsStructMatrix::FillLIndexes(){
-
-    TPZVec<int> & indexes = fIntegrator.DoFIndexes();
-    TPZVec<int> & el_n_dofs = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes;
-    TPZVec<int> & cols_first_index = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex;
-
-    int n_colors = fIntegrator.FirstColorIndex().size()-1;
-    m_first_color_l_index.resize(n_colors+1);
-    m_first_color_l_index[0]=0;
-    for (int ic = 0; ic < n_colors; ic++) {
-        
-        int first = fIntegrator.FirstColorIndex()[ic];
-        int last = fIntegrator.FirstColorIndex()[ic + 1];
-        int nel_per_color = last - first;
-        int64_t c = 0;
-        for (int i = 0; i < nel_per_color; i++) {
-            int iel = fIntegrator.ElColorIndexes()[first + i];
-            int el_dof = el_n_dofs[iel];
-            int n_entries = (el_dof*el_dof + el_dof)/2;
-            c += n_entries;
-        }
-        m_first_color_l_index[ic+1] = c + m_first_color_l_index[ic];
-    }
-    m_color_l_sequence.resize(m_first_color_l_index[n_colors]);
-    
-    for (int ic = 0; ic < n_colors; ic++) {
-        int first = fIntegrator.FirstColorIndex()[ic];
-        int last = fIntegrator.FirstColorIndex()[ic + 1];
-        int nel_per_color = last - first;
-        int64_t c = m_first_color_l_index[ic];
-        for (int i = 0; i < nel_per_color; i++) {
-            int iel = fIntegrator.ElColorIndexes()[first + i];
-            int el_dof = el_n_dofs[iel];
-            int pos = cols_first_index[iel];
-            for (int i_dof = 0; i_dof < el_dof; i_dof++) {
-                int64_t i_dest = indexes[pos + i_dof];
-                for (int j_dof = i_dof; j_dof < el_dof; j_dof++) {
-                    int64_t j_dest = indexes[pos + j_dof];
-                    int64_t l_index = me(m_IA_to_sequence, m_JA_to_sequence, i_dest, j_dest);
-                    m_color_l_sequence[c] = l_index;
-                    c++;
-                }
-            }
-        }
-    }
-    
-    
 }
 
 #ifdef USING_CUDA
@@ -146,21 +91,7 @@ void TPZElastoPlasticIntPointsStructMatrix::TransferDataToGPU() {
 }
 #endif
 
-int64_t TPZElastoPlasticIntPointsStructMatrix::me(TPZVec<int> &IA, TPZVec<int> &JA, int64_t & i_dest, int64_t & j_dest) {
-    int64_t row(i_dest),col(j_dest);
-    if (i_dest > j_dest) {
-        int64_t temp = i_dest;
-        row = col;
-        col = temp;
-    }
-    for(int ic=IA[row] ; ic < IA[row+1]; ic++ ) {
-        if ( JA[ic] == col )
-        {
-            return ic;
-        }
-    }
-    return 0;
-}
+
 
 TPZMatrix<STATE> *TPZElastoPlasticIntPointsStructMatrix::CreateAssemble(TPZFMatrix<STATE> &rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
 
@@ -242,7 +173,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     int last = fIntegrator.FirstColorIndex()[n_colors];
     int el_dofs = el_n_dofs[0];
     int nel_per_color = last - first;
-    TPZVec<REAL> Kc(m_color_l_sequence.size(),0.0);
+    TPZVec<REAL> Kc(fIntegrator.ColorLSequence().size(),0.0);
      
 #ifdef USING_TBB
     tbb::parallel_for(size_t(0),size_t(nel_per_color),size_t(1),[&](size_t i)
@@ -270,18 +201,18 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 #endif
          
     for (int ic = 0; ic < n_colors; ic++) {
-        int first_l = m_first_color_l_index[ic];
-        int last_l = m_first_color_l_index[ic + 1];
+        int first_l = fIntegrator.FirstColorLIndex()[ic];
+        int last_l = fIntegrator.FirstColorLIndex()[ic + 1];
         int n_l_indexes = last_l - first_l;
         // Gather from Kg
         TPZVec<REAL> aux(n_l_indexes);
-        cblas_dgthr(n_l_indexes, &Kg[0], &aux[0], &m_color_l_sequence[first_l]);
+        cblas_dgthr(n_l_indexes, &Kg[0], &aux[0], &fIntegrator.ColorLSequence()[first_l]);
 
         // Contributing
         cblas_daxpy(n_l_indexes, 1., &Kc[first_l], 1., &aux[0],1);
 
         // Scatter to Kg
-        cblas_dsctr(n_l_indexes, &aux[0], &m_color_l_sequence[first_l], &Kg[0]);
+        cblas_dsctr(n_l_indexes, &aux[0], &fIntegrator.ColorLSequence()[first_l], &Kg[0]);
     }
      
     auto it_end = fSparseMatrixLinear.MapEnd();
@@ -290,30 +221,6 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
         int64_t col = it->first.second;
         STATE val = it->second + stiff.GetVal(row, col);
         stiff.PutVal(row, col, val);
-    }
-}
-
-int TPZElastoPlasticIntPointsStructMatrix::StressRateVectorSize(){
-
-    switch (fDimension) {
-        case 1:{
-            return 1;
-        }
-        break;
-        case 2:{
-            return 3;
-        }
-        break;
-        case 3:{
-            return 6;
-        }
-        break;
-        default:
-        {
-            DebugStop();
-            return 0;
-        }
-        break;
     }
 }
 

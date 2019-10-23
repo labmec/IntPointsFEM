@@ -49,6 +49,10 @@ public:
 
     void SetUpColoredIndexes(TPZCompMesh * cmesh);
 
+    void FillLIndexes(TPZVec<int64_t> & IA, TPZVec<int64_t> & JA);
+
+    int64_t me(TPZVec<int64_t> &IA, TPZVec<int64_t> &JA, int64_t & i_dest, int64_t & j_dest);
+
 #ifdef USING_CUDA
     void Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &delta_strain);
     
@@ -121,6 +125,22 @@ public:
         return m_first_color_index;
     }
 
+    void SetColorLSequence(TPZVec<int> &color_l_sequence){
+        m_color_l_sequence = color_l_sequence;
+    }
+
+    TPZVec<int> &ColorLSequence() {
+        return m_color_l_sequence;
+    }
+
+    void SetFirstColorLIndex(TPZVec<int> &first_color_l_index){
+        m_first_color_l_index = first_color_l_index;
+    }
+
+    TPZVec<int> &FirstColorLIndex() {
+        return m_first_color_l_index;
+    }
+
 #ifdef USING_CUDA
     TPZVecGPU<int> & DoFIndexesDev() {
         return dDoFIndexes;
@@ -155,6 +175,10 @@ private:
     TPZVec<int64_t> m_el_color_indexes;
 
     TPZVec<int64_t> m_first_color_index;
+
+    TPZVec<int> m_color_l_sequence;
+
+    TPZVec<int> m_first_color_l_index;
     
 #ifdef USING_CUDA
     TPZVecGPU<int> dDoFIndexes;
