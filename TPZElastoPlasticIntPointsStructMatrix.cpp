@@ -73,21 +73,8 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
 
 #ifdef USING_CUDA
 void TPZElastoPlasticIntPointsStructMatrix::TransferDataToGPU() {
-    d_IA_to_sequence.resize(m_IA_to_sequence.size());
-    d_IA_to_sequence.set(&m_IA_to_sequence[0], m_IA_to_sequence.size());
-
-    d_JA_to_sequence.resize(m_JA_to_sequence.size());
-    d_JA_to_sequence.set(&m_JA_to_sequence[0], m_JA_to_sequence.size());
-
-    d_el_color_indexes.resize(m_el_color_indexes.size());
-    d_el_color_indexes.set(&m_el_color_indexes[0], m_el_color_indexes.size());
-
     d_RhsLinear.resize(fRhsLinear.Rows());
     d_RhsLinear.set(&fRhsLinear(0,0), fRhsLinear.Rows());
-
-    d_color_l_sequence.resize(m_color_l_sequence.size());
-    d_color_l_sequence.set(&m_color_l_sequence[0], m_color_l_sequence.size());
-
 }
 #endif
 
