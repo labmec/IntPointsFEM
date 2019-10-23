@@ -40,6 +40,10 @@ void TangentOperator(REAL *gradient, REAL *stress_eigenvalues, REAL *strain_eige
     unsigned int kival[] = {0, 0, 0, 1, 1, 2};
     unsigned int kjval[] = {0, 1, 2, 1, 2, 2};
 
+    for (int l = 0; l < 36; ++l) {
+        Tangent[l] = 0;
+    }
+
     // Coluna da matriz tangente
     for (unsigned int k = 0; k < 6; ++k) {
         const unsigned int ki = kival[k];
@@ -110,7 +114,8 @@ void TangentOperator(REAL *gradient, REAL *stress_eigenvalues, REAL *strain_eige
                 }
                 FromMatToVoight(temp_mat, ColCorrV);
                 for (int l = 0; l < 6; l++) {
-                    Tangent[l * 6 + k] += ColCorrV[l];
+                    REAL aux = Tangent[l * 6 + k];
+                    Tangent[l * 6 + k] = aux + ColCorrV[l];
                 }
             }
         } // j

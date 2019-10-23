@@ -73,7 +73,7 @@ int pOrder;
 #endif
 
     bool render_vtk_Q = false;
-    bool modified_thomas_accel_Q = true;
+    bool modified_thomas_accel_Q = false;
     bool compute_h_Q = false;
     USING_CUDA_Q = false;
     
@@ -231,7 +231,7 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance, bool modi
 
 
         timer.Start();
-        analysis->AssembleResidual();
+        analysis->Assemble();
         timer.Stop();
         std::cout << "Calling AssembleResidual: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
 

@@ -227,7 +227,6 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 
     fIntegrator.Multiply(d_solution, d_delta_strain);
     fIntegrator.ConstitutiveLawProcessor().ComputeSigmaDep(d_delta_strain, d_sigma, d_dep);
-    // fIntegrator.ConstitutiveLawProcessor().ComputeSigma(d_delta_strain, d_sigma);
     fIntegrator.MultiplyTranspose(d_sigma, d_rhs);
     fCudaCalls.DaxpyOperation(neq, 1., d_RhsLinear.getData(), d_rhs.getData());
     d_rhs.get(&rhs(0,0), neq); //back to CPU
@@ -242,10 +241,9 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 
     fIntegrator.Multiply(fMesh->Solution(), delta_strain);
     fIntegrator.ConstitutiveLawProcessor().ComputeSigmaDep(delta_strain, sigma, dep);
-    // fIntegrator.ConstitutiveLawProcessor().ComputeSigma(delta_strain, sigma);
     fIntegrator.MultiplyTranspose(sigma, rhs); // Perform Residual integration using a global linear application B
-    rhs += fRhsLinear;
 #endif
+    rhs += fRhsLinear;
 
     TPZSYsmpMatrix<STATE> &stiff = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
     TPZVec<STATE> &Kg = stiff.A();
@@ -273,7 +271,8 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 
             // Compute Elementary Matrix.
             TPZFMatrix<STATE> K;
-            fIntegrator.ComputeTangentMatrix(iel,K);
+            // fIntegrator.ComputeTangentMatrix(iel,K);
+            fIntegrator.ComputeTangentMatrix(iel,dep, K);
             int stride = i*(el_dofs * el_dofs + el_dofs)/2;
             int c = stride;
             for(int i_dof = 0 ; i_dof < el_dofs; i_dof++){
