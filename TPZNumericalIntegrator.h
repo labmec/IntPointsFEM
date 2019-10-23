@@ -39,6 +39,8 @@ public:
 
     void ComputeTangentMatrix(int64_t iel, TPZFMatrix<REAL> &Dep, TPZFMatrix<REAL> &K);
 
+    void ComputeTangentMatrix(int64_t iel, TPZFMatrix<REAL> &K);
+
 #ifdef USING_CUDA
     void Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &delta_strain);
     
