@@ -82,18 +82,18 @@ void TPZElastoPlasticIntPointsStructMatrix::FillLIndexes(){
     TPZVec<int> & indexes = fIntegrator.DoFIndexes();
     TPZVec<int> & el_n_dofs = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes;
     TPZVec<int> & cols_first_index = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex;
-    
-    int n_colors = m_first_color_index.size()-1;
+
+    int n_colors = fIntegrator.FirstColorIndex().size()-1;
     m_first_color_l_index.resize(n_colors+1);
     m_first_color_l_index[0]=0;
     for (int ic = 0; ic < n_colors; ic++) {
         
-        int first = m_first_color_index[ic];
-        int last = m_first_color_index[ic + 1];
+        int first = fIntegrator.FirstColorIndex()[ic];
+        int last = fIntegrator.FirstColorIndex()[ic + 1];
         int nel_per_color = last - first;
         int64_t c = 0;
         for (int i = 0; i < nel_per_color; i++) {
-            int iel = m_el_color_indexes[first + i];
+            int iel = fIntegrator.ElColorIndexes()[first + i];
             int el_dof = el_n_dofs[iel];
             int n_entries = (el_dof*el_dof + el_dof)/2;
             c += n_entries;
@@ -103,12 +103,12 @@ void TPZElastoPlasticIntPointsStructMatrix::FillLIndexes(){
     m_color_l_sequence.resize(m_first_color_l_index[n_colors]);
     
     for (int ic = 0; ic < n_colors; ic++) {
-        int first = m_first_color_index[ic];
-        int last = m_first_color_index[ic + 1];
+        int first = fIntegrator.FirstColorIndex()[ic];
+        int last = fIntegrator.FirstColorIndex()[ic + 1];
         int nel_per_color = last - first;
         int64_t c = m_first_color_l_index[ic];
         for (int i = 0; i < nel_per_color; i++) {
-            int iel = m_el_color_indexes[first + i];
+            int iel = fIntegrator.ElColorIndexes()[first + i];
             int el_dof = el_n_dofs[iel];
             int pos = cols_first_index[iel];
             for (int i_dof = 0; i_dof < el_dof; i_dof++) {
@@ -183,20 +183,9 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     TPZVec<int> element_indexes;
     ComputeDomainElementIndexes(element_indexes);
     fIntegrator.SetElementIndexes(element_indexes);
-
-
     fIntegrator.SetUpIrregularBlocksData(fMesh);
-
-    TPZVec<int> dof_indexes;
     fIntegrator.SetUpIndexes(fMesh);
-
-    TPZVec<int> colored_element_indexes;
-    int ncolor;
-    
-    this->ColoredIndexes(element_indexes, fIntegrator.DoFIndexes(), colored_element_indexes, ncolor);
-    
-    fIntegrator.SetColorIndexes(colored_element_indexes);
-    fIntegrator.SetNColors(ncolor);
+    fIntegrator.SetUpColoredIndexes(fMesh);
 
     AssembleBoundaryData();
 }
@@ -247,10 +236,10 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     TPZVec<int> & el_n_dofs = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes;
     TPZVec<int> & cols_first_index = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex;
 
-    int n_colors = m_first_color_index.size()-1;
+    int n_colors = fIntegrator.FirstColorIndex().size()-1;
      
-    int first = m_first_color_index[0];
-    int last = m_first_color_index[n_colors];
+    int first = fIntegrator.FirstColorIndex()[0];
+    int last = fIntegrator.FirstColorIndex()[n_colors];
     int el_dofs = el_n_dofs[0];
     int nel_per_color = last - first;
     TPZVec<REAL> Kc(m_color_l_sequence.size(),0.0);
@@ -261,7 +250,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     for (int i = 0; i < nel_per_color; i++)
 #endif
         {
-            int iel = m_el_color_indexes[first + i];
+            int iel = fIntegrator.ElColorIndexes()[first + i];
 
             // Compute Elementary Matrix.
             TPZFMatrix<STATE> K;
@@ -385,89 +374,4 @@ void TPZElastoPlasticIntPointsStructMatrix::ClassifyMaterialsByDimension() {
             fBCMaterialIds.insert(material.first);
         }
     }
-}
-
-void TPZElastoPlasticIntPointsStructMatrix::ColoredIndexes(TPZVec<int> &element_indexes, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor) {
-
-    int64_t nblocks = fIntegrator.IrregularBlocksMatrix().Blocks().fNumBlocks;
-    int64_t cols = fIntegrator.IrregularBlocksMatrix().Cols();
-
-    TPZVec<int64_t> connects_vec(fMesh->NConnects(),0);
-    TPZVec<int64_t> elemcolor(nblocks,-1);
-
-    int64_t contcolor = 0;
-    bool needstocontinue = true;
-
-    while (needstocontinue)
-    {
-        int it = 0;
-        needstocontinue = false;
-        for (auto iel : element_indexes) {
-            TPZCompEl *cel = fMesh->Element(iel);
-            if (!cel || cel->Dimension() != fMesh->Dimension()) continue;
-
-            it++;
-            if (elemcolor[it-1] != -1) continue;
-
-            TPZStack<int64_t> connectlist;
-            fMesh->Element(iel)->BuildConnectList(connectlist);
-            int64_t ncon = connectlist.size();
-
-            int64_t icon;
-            for (icon = 0; icon < ncon; icon++) {
-                if (connects_vec[connectlist[icon]] != 0) break;
-            }
-            if (icon != ncon) {
-                needstocontinue = true;
-                continue;
-            }
-            elemcolor[it-1] = contcolor;
-            for (icon = 0; icon < ncon; icon++) {
-                connects_vec[connectlist[icon]] = 1;
-            }
-        }
-        contcolor++;
-        connects_vec.Fill(0);
-    }
-
-    ncolor = contcolor;
-    coloredindexes.resize(cols);
-    int64_t neq = fMesh->NEquations();
-    for (int64_t iel = 0; iel < nblocks; iel++) {
-        int64_t elem_col = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes[iel];
-        int64_t cont_cols = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex[iel];
-
-        for (int64_t icols = 0; icols < elem_col; icols++) {
-            coloredindexes[cont_cols + icols] = indexes[cont_cols + icols] + elemcolor[iel]*neq;
-        }
-    }
-    
-    std::map<int64_t, std::vector<int64_t> > color_map;
-    for (int64_t iel = 0; iel < nblocks; iel++) {
-        color_map[elemcolor[iel]].push_back(iel);
-    }
-    
-    if (contcolor != color_map.size()) {
-        DebugStop();
-    }
-    
-    m_el_color_indexes.resize(nblocks);
-    m_first_color_index.resize(color_map.size()+1);
-
-    int c_color = 0;
-
-    m_first_color_index[c_color] = 0;
-    for (auto color_data : color_map) {
-        int n_el_per_color = color_data.second.size();
-        int iel = m_first_color_index[c_color];
-        for (int i = 0; i < n_el_per_color ; i++) {
-            int el_index = color_data.second[i];
-            m_el_color_indexes[iel] = el_index;
-            iel++;
-        }
-        c_color++;
-        m_first_color_index[c_color] = n_el_per_color + m_first_color_index[c_color-1];
-    }
-    
-    std::cout << "Number of colors = " << color_map.size() << std::endl;
 }

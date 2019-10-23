@@ -401,6 +401,91 @@ void TPZNumericalIntegrator::SetUpIndexes(TPZCompMesh * cmesh) {
     fConstitutiveLawProcessor.SetWeightVector(weight);
 }
 
+void TPZNumericalIntegrator::SetUpColoredIndexes(TPZCompMesh * cmesh) {
+
+    int64_t nblocks = fBlockMatrix.Blocks().fNumBlocks;
+    int64_t cols = fBlockMatrix.Cols();
+
+    TPZVec<int64_t> connects_vec(cmesh->NConnects(),0);
+    TPZVec<int64_t> elemcolor(nblocks,-1);
+
+    int64_t contcolor = 0;
+    bool needstocontinue = true;
+
+    while (needstocontinue)
+    {
+        int it = 0;
+        needstocontinue = false;
+        for (auto iel : fElementIndex) {
+            TPZCompEl *cel = cmesh->Element(iel);
+            if (!cel || cel->Dimension() != cmesh->Dimension()) continue;
+
+            it++;
+            if (elemcolor[it-1] != -1) continue;
+
+            TPZStack<int64_t> connectlist;
+            cmesh->Element(iel)->BuildConnectList(connectlist);
+            int64_t ncon = connectlist.size();
+
+            int64_t icon;
+            for (icon = 0; icon < ncon; icon++) {
+                if (connects_vec[connectlist[icon]] != 0) break;
+            }
+            if (icon != ncon) {
+                needstocontinue = true;
+                continue;
+            }
+            elemcolor[it-1] = contcolor;
+            for (icon = 0; icon < ncon; icon++) {
+                connects_vec[connectlist[icon]] = 1;
+            }
+        }
+        contcolor++;
+        connects_vec.Fill(0);
+    }
+
+    fNColor = contcolor;
+    fColorIndexes.resize(cols);
+    int64_t neq = cmesh->NEquations();
+    for (int64_t iel = 0; iel < nblocks; iel++) {
+        int64_t elem_col = fBlockMatrix.Blocks().fColSizes[iel];
+        int64_t cont_cols = fBlockMatrix.Blocks().fColFirstIndex[iel];
+
+        for (int64_t icols = 0; icols < elem_col; icols++) {
+            fColorIndexes[cont_cols + icols] = fDoFIndexes[cont_cols + icols] + elemcolor[iel]*neq;
+        }
+    }
+
+    std::map<int64_t, std::vector<int64_t> > color_map;
+    for (int64_t iel = 0; iel < nblocks; iel++) {
+        color_map[elemcolor[iel]].push_back(iel);
+    }
+
+    if (contcolor != color_map.size()) {
+        DebugStop();
+    }
+
+    m_el_color_indexes.resize(nblocks);
+    m_first_color_index.resize(color_map.size()+1);
+
+    int c_color = 0;
+
+    m_first_color_index[c_color] = 0;
+    for (auto color_data : color_map) {
+        int n_el_per_color = color_data.second.size();
+        int iel = m_first_color_index[c_color];
+        for (int i = 0; i < n_el_per_color ; i++) {
+            int el_index = color_data.second[i];
+            m_el_color_indexes[iel] = el_index;
+            iel++;
+        }
+        c_color++;
+        m_first_color_index[c_color] = n_el_per_color + m_first_color_index[c_color-1];
+    }
+
+    std::cout << "Number of colors = " << color_map.size() << std::endl;
+}
+
 int TPZNumericalIntegrator::StressRateVectorSize(int dim){
 
     switch (dim) {

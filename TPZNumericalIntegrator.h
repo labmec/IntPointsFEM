@@ -47,6 +47,8 @@ public:
 
     void SetUpIndexes(TPZCompMesh * cmesh);
 
+    void SetUpColoredIndexes(TPZCompMesh * cmesh);
+
 #ifdef USING_CUDA
     void Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &delta_strain);
     
@@ -103,6 +105,22 @@ public:
         return fNColor;
     }
 
+    void SetElColorIndexes(TPZVec<int64_t> &el_color_indexes){
+        m_el_color_indexes = el_color_indexes;
+    }
+
+    TPZVec<int64_t> &ElColorIndexes() {
+        return m_el_color_indexes;
+    }
+
+    void SetFirstColorIndex(TPZVec<int64_t> &first_color_index){
+        m_first_color_index = first_color_index;
+    }
+
+    TPZVec<int64_t> &FirstColorIndex() {
+        return m_first_color_index;
+    }
+
 #ifdef USING_CUDA
     TPZVecGPU<int> & DoFIndexesDev() {
         return dDoFIndexes;
@@ -133,6 +151,10 @@ private:
     TPZVec<int> fColorIndexes; //nedeed to scatter operation
 
     TPZConstitutiveLawProcessor fConstitutiveLawProcessor;
+
+    TPZVec<int64_t> m_el_color_indexes;
+
+    TPZVec<int64_t> m_first_color_index;
     
 #ifdef USING_CUDA
     TPZVecGPU<int> dDoFIndexes;

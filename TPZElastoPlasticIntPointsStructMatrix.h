@@ -66,7 +66,7 @@ private:
 
 //    void SetUpIndexes(TPZVec<int> &element_indexes, TPZVec<int> & dof_indexes);
 
-    void ColoredIndexes(TPZVec<int> &element_indexes, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor);
+//    void ColoredIndexes(TPZVec<int> &element_indexes, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor);
     
     void FillLIndexes();
     
@@ -90,9 +90,9 @@ private:
     
     TPZVec<int> m_first_color_l_index;
     
-    std::vector<int64_t> m_el_color_indexes;
-    
-    std::vector<int64_t> m_first_color_index;
+//    std::vector<int64_t> m_el_color_indexes;
+//
+//    std::vector<int64_t> m_first_color_index;
 
     #ifdef USING_CUDA
     TPZCudaCalls fCudaCalls;
