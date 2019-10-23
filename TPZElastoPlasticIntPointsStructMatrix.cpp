@@ -177,31 +177,23 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
         std::cout << __PRETTY_FUNCTION__ << " Data structure has been setup." << std::endl;
         return;
     }
-    
+
+    ClassifyMaterialsByDimension();
+
     TPZVec<int> element_indexes;
     ComputeDomainElementIndexes(element_indexes);
     fIntegrator.SetElementIndexes(element_indexes);
-    
-    ClassifyMaterialsByDimension();
 
-//    TPZIrregularBlocksMatrix::IrregularBlocks blocksData;
-//    this->SetUpIrregularBlocksData(element_indexes, blocksData);
+
     fIntegrator.SetUpIrregularBlocksData(fMesh);
 
-//    int64_t rows = fIntegrator.IrregularBlocksMatrix().Blocks().fRowFirstIndex[fIntegrator.IrregularBlocksMatrix().Blocks().fNumBlocks];
-//    int64_t cols = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex[fIntegrator.IrregularBlocksMatrix().Blocks().fNumBlocks];
-//    TPZIrregularBlocksMatrix blocksMatrix(rows, cols);
-//    blocksMatrix.SetBlocks(blocksData);
-//    fIntegrator.SetIrregularBlocksMatrix(blocksMatrix);
-
     TPZVec<int> dof_indexes;
-    this->SetUpIndexes(element_indexes, dof_indexes);
-    fIntegrator.SetDoFIndexes(dof_indexes);
+    fIntegrator.SetUpIndexes(fMesh);
 
     TPZVec<int> colored_element_indexes;
     int ncolor;
     
-    this->ColoredIndexes(element_indexes, dof_indexes, colored_element_indexes, ncolor);
+    this->ColoredIndexes(element_indexes, fIntegrator.DoFIndexes(), colored_element_indexes, ncolor);
     
     fIntegrator.SetColorIndexes(colored_element_indexes);
     fIntegrator.SetNColors(ncolor);
@@ -393,68 +385,6 @@ void TPZElastoPlasticIntPointsStructMatrix::ClassifyMaterialsByDimension() {
             fBCMaterialIds.insert(material.first);
         }
     }
-}
-
-void TPZElastoPlasticIntPointsStructMatrix::SetUpIndexes(TPZVec<int> &element_indexes, TPZVec<int> & dof_indexes) {
-
-    int64_t nblocks = fIntegrator.IrregularBlocksMatrix().Blocks().fNumBlocks;
-    int64_t rows = fIntegrator.IrregularBlocksMatrix().Rows();
-    int64_t cols = fIntegrator.IrregularBlocksMatrix().Cols();
-    TPZVec<int> & dof_positions = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex;
-
-    dof_indexes.resize(cols);
-    int64_t npts = rows / StressRateVectorSize();
-    TPZVec<REAL> weight(npts);
-
-    int64_t wit = 0;
-    for (int iel = 0; iel < nblocks; ++iel) {
-
-        int dof_pos = dof_positions[iel];
-        TPZCompEl *cel = fMesh->Element(element_indexes[iel]);
-        
-        
-        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement *>(cel);
-        if (!cel_inter) DebugStop();
-        TPZGeoEl * gel = cel->Reference();
-        if (!gel) DebugStop();
-        
-        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
-
-        int64_t el_npts = int_rule->NPoints(); // number of integration points of the element
-        int64_t dim = cel_inter->Dimension(); //dimension of the element
-
-        TPZFMatrix<REAL> jac,axes, jacinv;
-        REAL detjac;
-        for (int64_t ipts = 0; ipts < el_npts; ipts++) {
-            TPZVec<REAL> qsi(dim);
-            REAL w;
-            int_rule->Point(ipts, qsi, w);
-            gel->Jacobian(qsi, jac, axes, detjac, jacinv);
-            weight[wit] = w * std::abs(detjac);
-            wit++;
-        }
-
-        int64_t ncon = cel->NConnects();
-        int i_dof = 0;
-        for (int64_t icon = 0; icon < ncon; icon++) {
-            int64_t id = cel->ConnectIndex(icon);
-            TPZConnect &df = fMesh->ConnectVec()[id];
-            int64_t conid = df.SequenceNumber();
-            if (df.NElConnected() == 0 || conid < 0 || fMesh->Block().Size(conid) == 0) continue;
-            int64_t pos = fMesh->Block().Position(conid);
-            int64_t nsize = fMesh->Block().Size(conid);
-            for (int64_t isize = 0; isize < nsize; isize++) {
-                dof_indexes[dof_pos+i_dof] = pos + isize;
-                i_dof++;
-            }
-            
-        }
-    }
-
-    TPZMaterial *material = fMesh->FindMaterial(1);
-    fIntegrator.ConstitutiveLawProcessor().SetMaterial(material);
-    fIntegrator.ConstitutiveLawProcessor().SetUpDataByIntPoints(npts);
-    fIntegrator.ConstitutiveLawProcessor().SetWeightVector(weight);
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::ColoredIndexes(TPZVec<int> &element_indexes, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor) {

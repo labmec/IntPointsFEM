@@ -45,6 +45,8 @@ public:
 
     int StressRateVectorSize(int dim);
 
+    void SetUpIndexes(TPZCompMesh * cmesh);
+
 #ifdef USING_CUDA
     void Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &delta_strain);
     

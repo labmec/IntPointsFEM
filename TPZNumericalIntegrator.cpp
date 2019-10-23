@@ -339,6 +339,68 @@ void TPZNumericalIntegrator::SetUpIrregularBlocksData(TPZCompMesh * cmesh) {
     }
 }
 
+void TPZNumericalIntegrator::SetUpIndexes(TPZCompMesh * cmesh) {
+
+    int64_t nblocks = fBlockMatrix.Blocks().fNumBlocks;
+    int64_t rows = fBlockMatrix.Rows();
+    int64_t cols = fBlockMatrix.Cols();
+    TPZVec<int> & dof_positions = fBlockMatrix.Blocks().fColFirstIndex;
+
+    fDoFIndexes.resize(cols);
+    int64_t npts = rows / StressRateVectorSize(cmesh->Dimension());
+    TPZVec<REAL> weight(npts);
+
+    int64_t wit = 0;
+    for (int iel = 0; iel < nblocks; ++iel) {
+
+        int dof_pos = dof_positions[iel];
+        TPZCompEl *cel = cmesh->Element(fElementIndex[iel]);
+
+
+        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement *>(cel);
+        if (!cel_inter) DebugStop();
+        TPZGeoEl * gel = cel->Reference();
+        if (!gel) DebugStop();
+
+        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
+
+        int64_t el_npts = int_rule->NPoints(); // number of integration points of the element
+        int64_t dim = cel_inter->Dimension(); //dimension of the element
+
+        TPZFMatrix<REAL> jac,axes, jacinv;
+        REAL detjac;
+        for (int64_t ipts = 0; ipts < el_npts; ipts++) {
+            TPZVec<REAL> qsi(dim);
+            REAL w;
+            int_rule->Point(ipts, qsi, w);
+            gel->Jacobian(qsi, jac, axes, detjac, jacinv);
+            weight[wit] = w * std::abs(detjac);
+            wit++;
+        }
+
+        int64_t ncon = cel->NConnects();
+        int i_dof = 0;
+        for (int64_t icon = 0; icon < ncon; icon++) {
+            int64_t id = cel->ConnectIndex(icon);
+            TPZConnect &df = cmesh->ConnectVec()[id];
+            int64_t conid = df.SequenceNumber();
+            if (df.NElConnected() == 0 || conid < 0 || cmesh->Block().Size(conid) == 0) continue;
+            int64_t pos = cmesh->Block().Position(conid);
+            int64_t nsize = cmesh->Block().Size(conid);
+            for (int64_t isize = 0; isize < nsize; isize++) {
+                fDoFIndexes[dof_pos+i_dof] = pos + isize;
+                i_dof++;
+            }
+
+        }
+    }
+
+    TPZMaterial *material = cmesh->FindMaterial(1);
+    fConstitutiveLawProcessor.SetMaterial(material);
+    fConstitutiveLawProcessor.SetUpDataByIntPoints(npts);
+    fConstitutiveLawProcessor.SetWeightVector(weight);
+}
+
 int TPZNumericalIntegrator::StressRateVectorSize(int dim){
 
     switch (dim) {

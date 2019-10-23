@@ -64,7 +64,7 @@ private:
 
 //    void SetUpIrregularBlocksData(TPZVec<int> &element_indexes, TPZIrregularBlocksMatrix::IrregularBlocks &blocksData);
 
-    void SetUpIndexes(TPZVec<int> &element_indexes, TPZVec<int> & dof_indexes);
+//    void SetUpIndexes(TPZVec<int> &element_indexes, TPZVec<int> & dof_indexes);
 
     void ColoredIndexes(TPZVec<int> &element_indexes, TPZVec<int> &indexes, TPZVec<int> &coloredindexes, int &ncolor);
     
