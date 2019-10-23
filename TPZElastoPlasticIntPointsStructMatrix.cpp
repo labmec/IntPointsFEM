@@ -180,17 +180,19 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     
     TPZVec<int> element_indexes;
     ComputeDomainElementIndexes(element_indexes);
+    fIntegrator.SetElementIndexes(element_indexes);
     
     ClassifyMaterialsByDimension();
 
-    TPZIrregularBlocksMatrix::IrregularBlocks blocksData;
-    this->SetUpIrregularBlocksData(element_indexes, blocksData);
+//    TPZIrregularBlocksMatrix::IrregularBlocks blocksData;
+//    this->SetUpIrregularBlocksData(element_indexes, blocksData);
+    fIntegrator.SetUpIrregularBlocksData(fMesh);
 
-    int64_t rows = blocksData.fRowFirstIndex[blocksData.fNumBlocks];
-    int64_t cols = blocksData.fColFirstIndex[blocksData.fNumBlocks];
-    TPZIrregularBlocksMatrix blocksMatrix(rows, cols);
-    blocksMatrix.SetBlocks(blocksData);
-    fIntegrator.SetIrregularBlocksMatrix(blocksMatrix);
+//    int64_t rows = fIntegrator.IrregularBlocksMatrix().Blocks().fRowFirstIndex[fIntegrator.IrregularBlocksMatrix().Blocks().fNumBlocks];
+//    int64_t cols = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex[fIntegrator.IrregularBlocksMatrix().Blocks().fNumBlocks];
+//    TPZIrregularBlocksMatrix blocksMatrix(rows, cols);
+//    blocksMatrix.SetBlocks(blocksData);
+//    fIntegrator.SetIrregularBlocksMatrix(blocksMatrix);
 
     TPZVec<int> dof_indexes;
     this->SetUpIndexes(element_indexes, dof_indexes);
@@ -390,118 +392,6 @@ void TPZElastoPlasticIntPointsStructMatrix::ClassifyMaterialsByDimension() {
         }else{
             fBCMaterialIds.insert(material.first);
         }
-    }
-}
-
-void TPZElastoPlasticIntPointsStructMatrix::SetUpIrregularBlocksData(TPZVec<int> &element_indexes, TPZIrregularBlocksMatrix::IrregularBlocks &blocksData) {
-
-    /// Number of elements
-    int nblocks = element_indexes.size();
-
-    blocksData.fNumBlocks = nblocks;
-    blocksData.fRowSizes.resize(nblocks);
-    blocksData.fColSizes.resize(nblocks);
-    blocksData.fMatrixPosition.resize(nblocks + 1);
-    blocksData.fRowFirstIndex.resize(nblocks + 1);
-    blocksData.fColFirstIndex.resize(nblocks + 1);
-
-    blocksData.fMatrixPosition[0] = 0;
-    blocksData.fRowFirstIndex[0] = 0;
-    blocksData.fColFirstIndex[0] = 0;
-
-    // @TODO Candidate for TBB ParallelScan
-    // Example with lambda expression https://www.threadingbuildingblocks.org/docs/help/reference/algorithms/parallel_scan_func.html
-    for(int iel = 0; iel < nblocks; iel++) {
-
-        TPZCompEl *cel = fMesh->Element(element_indexes[iel]);
-        
-        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement *>(cel);
-        if (!cel_inter) DebugStop();
-#ifdef PZDEBUG
-        int dim = cel->Reference()->Dimension();
-        if (dim !=fDimension) {
-            DebugStop();
-        }
-#endif
-        
-        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
-        int64_t npts = int_rule->NPoints(); // number of integration points of the element
-        int64_t n_el_dof = cel_inter->NShapeF(); // number of shape functions of the element (Element DoF)
-
-        blocksData.fRowSizes[iel] = StressRateVectorSize() * npts;
-        blocksData.fColSizes[iel] = n_el_dof * fDimension;
-        
-        blocksData.fMatrixPosition[iel + 1] = blocksData.fMatrixPosition[iel] + blocksData.fRowSizes[iel] * blocksData.fColSizes[iel];
-        blocksData.fRowFirstIndex[iel + 1] =  blocksData.fRowFirstIndex[iel] + blocksData.fRowSizes[iel];
-        blocksData.fColFirstIndex[iel + 1] = blocksData.fColFirstIndex[iel] + blocksData.fColSizes[iel];
-    }
-
-    blocksData.fStorage.resize(blocksData.fMatrixPosition[nblocks]);
-    
-    
-    
-    TPZFNMatrix<8,REAL> dphiXY;
-    TPZMaterialData data;
-    TPZVec<REAL> qsi(fDimension);
-    
-    // @TODO Candidate for TBB ParallelFor
-    for (int iel = 0; iel < nblocks; ++iel) {
-
-        TPZCompEl *cel = fMesh->Element(element_indexes[iel]);
-        
-        int sigma_entries_times_npts      = blocksData.fRowSizes[iel];
-        int n_el_dof            = blocksData.fColSizes[iel]/fDimension;
-        int pos_el              = blocksData.fMatrixPosition[iel];
-        
-        
-        TPZInterpolatedElement *cel_inter = dynamic_cast<TPZInterpolatedElement *>(cel);
-        if (!cel_inter) DebugStop();
-        
-#ifdef PZDEBUG
-        int dim = cel->Reference()->Dimension();
-        if (dim !=fDimension) {
-            DebugStop();
-        }
-#endif
-        
-        TPZIntPoints *int_rule = &(cel_inter->GetIntegrationRule());
-        
-        int npts = int_rule->NPoints();
-        int n_sigma_entries = StressRateVectorSize();
-        
-#ifdef PZDEBUG
-        if (npts != sigma_entries_times_npts / n_sigma_entries) {
-            DebugStop();
-        }
-#endif
-
-        cel_inter->InitMaterialData(data);
-        TPZFMatrix<REAL> B_el(npts*n_sigma_entries,n_el_dof * fDimension,0.0);
-        for (int64_t i_pts = 0; i_pts < npts; i_pts++) {
-
-            REAL w;
-            int_rule->Point(i_pts, qsi, w);
-            cel_inter->ComputeRequiredData(data, qsi);
-
-            data.axes.Transpose();
-            data.axes.Multiply(data.dphix, dphiXY);
-
-            for (int j_dim = 0; j_dim < 2; j_dim++){
-
-                for (int i_dof = 0; i_dof < n_el_dof; i_dof++) {
-
-                    REAL val = dphiXY(j_dim, i_dof);
-                    for (int i_sigma_comp = 0; i_sigma_comp < fDimension; i_sigma_comp++){
-
-                        B_el(i_pts * n_sigma_entries + i_sigma_comp + j_dim, i_dof*2 + i_sigma_comp) = val;
-                    }
-                }
-            }
-
-        }
-        B_el.Transpose();
-        TPZFMatrix<REAL> B_el_loc(npts * n_sigma_entries, n_el_dof * fDimension, &blocksData.fStorage[pos_el], npts * n_sigma_entries * n_el_dof * fDimension);
-        B_el_loc = B_el;
     }
 }
 

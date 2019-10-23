@@ -41,6 +41,10 @@ public:
 
     void ComputeTangentMatrix(int64_t iel, TPZFMatrix<REAL> &K);
 
+    void SetUpIrregularBlocksData(TPZCompMesh * cmesh);
+
+    int StressRateVectorSize(int dim);
+
 #ifdef USING_CUDA
     void Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &delta_strain);
     
@@ -48,6 +52,14 @@ public:
 
     void ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZVecGPU<REAL> &rhs);
 #endif
+
+    void SetElementIndexes(TPZVec<int> & elemindex) {
+        fElementIndex = elemindex;
+    }
+
+    TPZVec<int> & ElementIndexes() {
+        return fElementIndex;
+    }
 
     void SetIrregularBlocksMatrix(TPZIrregularBlocksMatrix & irregularBlocksMatrix) {
         fBlockMatrix = irregularBlocksMatrix;
@@ -103,6 +115,8 @@ public:
 #endif
 
 private:
+
+    TPZVec<int> fElementIndex;
 
     /// Irregular block matrix containing spatial gradients for scalar basis functions of order k
     TPZIrregularBlocksMatrix fBlockMatrix;

@@ -62,7 +62,7 @@ private:
     
     void AssembleBoundaryData();
 
-    void SetUpIrregularBlocksData(TPZVec<int> &element_indexes, TPZIrregularBlocksMatrix::IrregularBlocks &blocksData);
+//    void SetUpIrregularBlocksData(TPZVec<int> &element_indexes, TPZIrregularBlocksMatrix::IrregularBlocks &blocksData);
 
     void SetUpIndexes(TPZVec<int> &element_indexes, TPZVec<int> & dof_indexes);
 
