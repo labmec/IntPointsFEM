@@ -34,7 +34,6 @@ public:
     
     TPZMatrix<STATE> * Create();
 
-    // need help
     TPZMatrix<STATE> *CreateAssemble(TPZFMatrix<STATE> &rhs, TPZAutoPointer<TPZGuiInterface> guiInterface);
 
     void SetUpDataStructure();
@@ -42,11 +41,6 @@ public:
     void Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface);
     
     void Assemble(TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface);
-    
-    bool isBuilt() {
-        if(fIntegrator.IrregularBlocksMatrix().Rows() != 0) return true;
-        else return false;
-    }
 
 #ifdef USING_CUDA
     void TransferDataToGPU();
@@ -60,8 +54,6 @@ private:
     
     void AssembleBoundaryData();
 
-//    void FillLIndexes();
-    
     int fDimension;
 
     TPZNumericalIntegrator fIntegrator;
@@ -72,22 +64,14 @@ private:
     
     std::set<int> fBCMaterialIds;
     
-    TPZVec<int64_t> m_IA_to_sequence;
+    TPZVec<int64_t> fIAToSequence;
     
-    TPZVec<int64_t> m_JA_to_sequence;
+    TPZVec<int64_t> fJAToSequence;
 
     #ifdef USING_CUDA
     TPZCudaCalls fCudaCalls;
 
-    TPZVecGPU<int> d_color_l_sequence;
-
-    TPZVecGPU<int> d_IA_to_sequence;
-    
-    TPZVecGPU<int> d_JA_to_sequence;
-    
-    TPZVecGPU<int64_t> d_el_color_indexes;
-
-    TPZVecGPU<REAL> d_RhsLinear;
+    TPZVecGPU<REAL> dRhsLinear;
     #endif
     
 };

@@ -53,6 +53,11 @@ public:
 
     int64_t me(TPZVec<int64_t> &IA, TPZVec<int64_t> &JA, int64_t & i_dest, int64_t & j_dest);
 
+    bool isBuilt() {
+        if(fBlockMatrix.Rows() != 0) return true;
+        else return false;
+    }
+
 #ifdef USING_CUDA
     void Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &delta_strain);
     
