@@ -465,22 +465,22 @@ void TPZNumericalIntegrator::SetUpColoredIndexes(TPZCompMesh * cmesh) {
         DebugStop();
     }
 
-    m_el_color_indexes.resize(nblocks);
-    m_first_color_index.resize(color_map.size()+1);
+    fElColorIndex.resize(nblocks);
+    fFirstColorIndex.resize(color_map.size() + 1);
 
     int c_color = 0;
 
-    m_first_color_index[c_color] = 0;
+    fFirstColorIndex[c_color] = 0;
     for (auto color_data : color_map) {
         int n_el_per_color = color_data.second.size();
-        int iel = m_first_color_index[c_color];
+        int iel = fFirstColorIndex[c_color];
         for (int i = 0; i < n_el_per_color ; i++) {
             int el_index = color_data.second[i];
-            m_el_color_indexes[iel] = el_index;
+            fElColorIndex[iel] = el_index;
             iel++;
         }
         c_color++;
-        m_first_color_index[c_color] = n_el_per_color + m_first_color_index[c_color-1];
+        fFirstColorIndex[c_color] = n_el_per_color + fFirstColorIndex[c_color - 1];
     }
 
     std::cout << "Number of colors = " << color_map.size() << std::endl;
@@ -492,32 +492,32 @@ void TPZNumericalIntegrator::FillLIndexes(TPZVec<int64_t> & IA, TPZVec<int64_t> 
     TPZVec<int> & el_n_dofs = fBlockMatrix.Blocks().fColSizes;
     TPZVec<int> & cols_first_index = fBlockMatrix.Blocks().fColFirstIndex;
 
-    int n_colors = m_first_color_index.size()-1;
-    m_first_color_l_index.resize(n_colors+1);
-    m_first_color_l_index[0]=0;
+    int n_colors = fFirstColorIndex.size() - 1;
+    fFirstColorLIndex.resize(n_colors + 1);
+    fFirstColorLIndex[0]=0;
     for (int ic = 0; ic < n_colors; ic++) {
 
-        int first = m_first_color_index[ic];
-        int last = m_first_color_index[ic + 1];
+        int first = fFirstColorIndex[ic];
+        int last = fFirstColorIndex[ic + 1];
         int nel_per_color = last - first;
         int64_t c = 0;
         for (int i = 0; i < nel_per_color; i++) {
-            int iel = m_el_color_indexes[first + i];
+            int iel = fElColorIndex[first + i];
             int el_dof = el_n_dofs[iel];
             int n_entries = (el_dof*el_dof + el_dof)/2;
             c += n_entries;
         }
-        m_first_color_l_index[ic+1] = c + m_first_color_l_index[ic];
+        fFirstColorLIndex[ic + 1] = c + fFirstColorLIndex[ic];
     }
-    m_color_l_sequence.resize(m_first_color_l_index[n_colors]);
+    fColorLSequence.resize(fFirstColorLIndex[n_colors]);
 
     for (int ic = 0; ic < n_colors; ic++) {
-        int first = m_first_color_index[ic];
-        int last = m_first_color_index[ic + 1];
+        int first = fFirstColorIndex[ic];
+        int last = fFirstColorIndex[ic + 1];
         int nel_per_color = last - first;
-        int64_t c = m_first_color_l_index[ic];
+        int64_t c = fFirstColorLIndex[ic];
         for (int i = 0; i < nel_per_color; i++) {
-            int iel = m_el_color_indexes[first + i];
+            int iel = fElColorIndex[first + i];
             int el_dof = el_n_dofs[iel];
             int pos = cols_first_index[iel];
             for (int i_dof = 0; i_dof < el_dof; i_dof++) {
@@ -525,7 +525,7 @@ void TPZNumericalIntegrator::FillLIndexes(TPZVec<int64_t> & IA, TPZVec<int64_t> 
                 for (int j_dof = i_dof; j_dof < el_dof; j_dof++) {
                     int64_t j_dest = fDoFIndexes[pos + j_dof];
                     int64_t l_index = me(IA, JA, i_dest, j_dest);
-                    m_color_l_sequence[c] = l_index;
+                    fColorLSequence[c] = l_index;
                     c++;
                 }
             }

@@ -115,35 +115,35 @@ public:
     }
 
     void SetElColorIndexes(TPZVec<int64_t> &el_color_indexes){
-        m_el_color_indexes = el_color_indexes;
+        fElColorIndex = el_color_indexes;
     }
 
     TPZVec<int64_t> &ElColorIndexes() {
-        return m_el_color_indexes;
+        return fElColorIndex;
     }
 
     void SetFirstColorIndex(TPZVec<int64_t> &first_color_index){
-        m_first_color_index = first_color_index;
+        fFirstColorIndex = first_color_index;
     }
 
     TPZVec<int64_t> &FirstColorIndex() {
-        return m_first_color_index;
+        return fFirstColorIndex;
     }
 
     void SetColorLSequence(TPZVec<int> &color_l_sequence){
-        m_color_l_sequence = color_l_sequence;
+        fColorLSequence = color_l_sequence;
     }
 
     TPZVec<int> &ColorLSequence() {
-        return m_color_l_sequence;
+        return fColorLSequence;
     }
 
     void SetFirstColorLIndex(TPZVec<int> &first_color_l_index){
-        m_first_color_l_index = first_color_l_index;
+        fFirstColorLIndex = first_color_l_index;
     }
 
     TPZVec<int> &FirstColorLIndex() {
-        return m_first_color_l_index;
+        return fFirstColorLIndex;
     }
 
 #ifdef USING_CUDA
@@ -177,13 +177,13 @@ private:
 
     TPZConstitutiveLawProcessor fConstitutiveLawProcessor;
 
-    TPZVec<int64_t> m_el_color_indexes;
+    TPZVec<int64_t> fElColorIndex;
 
-    TPZVec<int64_t> m_first_color_index;
+    TPZVec<int64_t> fFirstColorIndex;
 
-    TPZVec<int> m_color_l_sequence;
+    TPZVec<int> fColorLSequence;
 
-    TPZVec<int> m_first_color_l_index;
+    TPZVec<int> fFirstColorLIndex;
     
 #ifdef USING_CUDA
     TPZVecGPU<int> dDoFIndexes;
