@@ -32,11 +32,11 @@ public:
 	void ComputeSigma(bool update_mem, int npts, REAL *glob_delta_strain, REAL *glob_sigma, REAL lambda, REAL mu, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL *dPlasticStrain,  
 		REAL *dMType, REAL *dAlpha, REAL *dSigma, REAL *dStrain, REAL *weight);
 
-	void MatrixAssembleGS(REAL *Kc, int first_el, int last_el, int64_t *el_color_index, REAL *weight, int *dof_indexes,
-	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition);
+    void ComputeSigmaDep(bool update_mem, int npts, REAL *glob_delta_strain, REAL *glob_sigma, REAL *glob_dep, REAL lambda, REAL mu, REAL mc_phi, REAL mc_psi, REAL mc_cohesion, REAL *dPlasticStrain,
+                      REAL *dMType, REAL *dAlpha, REAL *dSigma, REAL *dStrain, REAL *weight);
 
-	void MatrixAssemble(REAL *Kg, int first_el, int last_el, int64_t *el_color_index,  REAL *weight, int *dof_indexes,
-	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *ia_to_sequence, int *ja_to_sequence);
+	void MatrixAssemble(REAL *Kc, REAL *dep, int nel, int *el_color_index,
+	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition);
 
 	void SolveCG(int n, int nnzA, REAL *csrValA, int *csrRowPtrA, int *csrColIndA, REAL *b, REAL *x);
 

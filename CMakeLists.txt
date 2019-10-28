@@ -128,12 +128,12 @@ if(USING_CUDA)
     enable_language(CXX CUDA)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSING_CUDA")
     #--ptxas-options=-v for verbose (check number of registers and shared mem for each kernel)
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --default-stream per-thread -ftz=true -Xcompiler -O3 --ptxas-options=-O3 -w -Wno-deprecated-gpu-targets -arch=compute_35 -rdc=true -lcudadevrt --use_fast_math")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --default-stream per-thread -ftz=true -Xcompiler -O3 --ptxas-options=-O3 -w -Wno-deprecated-gpu-targets -arch=compute_35 -rdc=false -lcudadevrt --use_fast_math")
 
     set(CMAKE_CUDA_STANDARD 11)
     set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} --default-stream per-thread  -ftz=true -Xcompiler -O3 --ptxas-options=-O3 -w -Wno-deprecated-gpu-targets -arch=compute_35 -rdc=true -lcudadevrt --use_fast_math")
 
-    set(CUDA_SEPARABLE_COMPILATION ON)
+    set(CUDA_SEPARABLE_COMPILATION OFF)
     
     include_directories(${CUDA_TOOLKIT_ROOT_DIR}/include/)
     link_directories(${CUDA_TOOLKIT_ROOT_DIR}/lib64/)

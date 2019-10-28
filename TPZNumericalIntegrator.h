@@ -25,8 +25,6 @@ public:
 
     TPZNumericalIntegrator();
 
-    TPZNumericalIntegrator(TPZIrregularBlocksMatrix &irregularBlocksMatrix);
-
     ~TPZNumericalIntegrator();
 
     void Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &delta_strain);
@@ -35,9 +33,30 @@ public:
 
     void ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZFMatrix<REAL> &rhs);
 
-    void ComputeConstitutiveMatrix(TPZFMatrix<STATE> &De);
+    void ComputeTangentMatrix(int64_t iel, TPZFMatrix<REAL> &Dep, TPZFMatrix<REAL> &K);
 
-    void ComputeTangentMatrix(int64_t iel, TPZFMatrix<REAL> &K);
+    void SetUpIrregularBlocksData(TPZCompMesh * cmesh);
+
+    int StressRateVectorSize(int dim);
+
+    void SetUpIndexes(TPZCompMesh * cmesh);
+
+    void SetUpColoredIndexes(TPZCompMesh * cmesh);
+
+    void FillLIndexes(TPZVec<int64_t> & IA, TPZVec<int64_t> & JA);
+
+    int64_t me(TPZVec<int64_t> &IA, TPZVec<int64_t> &JA, int64_t & i_dest, int64_t & j_dest);
+
+    bool isBuilt() {
+        if(fBlockMatrix.Rows() != 0) return true;
+        else return false;
+    }
+
+    void KAssembly(TPZFMatrix<REAL> & solution, TPZVec<STATE> & Kg, TPZFMatrix<STATE> & rhs);
+
+    void SetElementIndexes(TPZVec<int> element_indexes) {
+        fElementIndex = element_indexes;
+    }
 
 #ifdef USING_CUDA
     void Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &delta_strain);
@@ -45,84 +64,49 @@ public:
     void MultiplyTranspose(TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL> &res); 
 
     void ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZVecGPU<REAL> &rhs);
-#endif
 
-    void SetIrregularBlocksMatrix(TPZIrregularBlocksMatrix & irregularBlocksMatrix) {
-        fBlockMatrix = irregularBlocksMatrix;
-    }
-
-    TPZIrregularBlocksMatrix & IrregularBlocksMatrix() {
-        return fBlockMatrix;
-    }
-
-    void SetConstitutiveLawProcessor(TPZConstitutiveLawProcessor & processor){
-        fConstitutiveLawProcessor = processor;
-    }
-
-    TPZConstitutiveLawProcessor & ConstitutiveLawProcessor(){
-        return fConstitutiveLawProcessor;
-    }
-
-    void SetDoFIndexes(TPZVec<int> dof_indexes) {
-        fDoFIndexes = dof_indexes;
-    }
-
-    TPZVec<int> & DoFIndexes() {
-        return fDoFIndexes;
-    }
-
-    void SetColorIndexes(TPZVec<int> color_indexes) {
-        fColorIndexes = color_indexes;
-    }
-    
-    TPZVec<int> & ColorIndexes() {
-     return fColorIndexes;
-    }
-
-    void SetNColors(int ncolor) {
-        fNColor = ncolor;
-    }
-
-    int NColors() {
-        return fNColor;
-    }
-
-#ifdef USING_CUDA
-    TPZVecGPU<int> & DoFIndexesDev() {
-        return dDoFIndexes;
-    }
-
-    TPZVecGPU<int> & ColorIndexesDev() {
-        return dColorIndexes;
-    }
+    void KAssembly(TPZFMatrix<REAL> & solution, TPZVecGPU<STATE> & Kg, TPZVecGPU<STATE> & rhs);
 
     void TransferDataToGPU();
-
 #endif
 
 private:
+
+    TPZVec<int> fElementIndex;
 
     /// Irregular block matrix containing spatial gradients for scalar basis functions of order k
     TPZIrregularBlocksMatrix fBlockMatrix;
 
     /// Number of colors grouping no adjacent elements
-    int64_t fNColor; //needed to do the assembly
+    int64_t fNColor;
 
     /// Degree of Freedom indexes organized element by element with stride ndof
-    TPZVec<int> fDoFIndexes; // needed to do the gather operation
+    TPZVec<int> fDoFIndexes;
 
     /// Color indexes organized element by element with stride ndof
-    TPZVec<int> fColorIndexes; //nedeed to scatter operation
+    TPZVec<int> fColorIndexes;
 
     TPZConstitutiveLawProcessor fConstitutiveLawProcessor;
+
+    TPZVec<int> fElColorIndex;
+
+    TPZVec<int64_t> fFirstColorIndex;
+
+    TPZVec<int> fColorLSequence;
+
+    TPZVec<int> fFirstColorLIndex;
     
 #ifdef USING_CUDA
-    TPZVecGPU<int> dDoFIndexes;
-    TPZVecGPU<int> dColorIndexes;
     TPZCudaCalls fCudaCalls;
+
+    TPZVecGPU<int> dDoFIndexes;
+
+    TPZVecGPU<int> dColorIndexes;
+
+    TPZVecGPU<int> dElColorIndex;
+
+    TPZVecGPU<int> dColorLSequence;
 #endif
-
-
 };
 
 
