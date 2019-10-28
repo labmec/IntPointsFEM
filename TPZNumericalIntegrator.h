@@ -155,6 +155,14 @@ public:
         return dColorIndexes;
     }
 
+    TPZVecGPU<int64_t> & ElColorIndexDev() {
+        return dElColorIndex;
+    }
+
+    TPZVecGPU<int> &ColorLSequenceDev() {
+        return dColorLSequence;
+    }
+
     void TransferDataToGPU();
 
 #endif
@@ -189,6 +197,9 @@ private:
     TPZVecGPU<int> dDoFIndexes;
     TPZVecGPU<int> dColorIndexes;
     TPZCudaCalls fCudaCalls;
+
+    TPZVecGPU<int64_t> dElColorIndex;
+    TPZVecGPU<int> dColorLSequence;
 #endif
 
 

@@ -19,7 +19,7 @@ __device__ void ComputeTangentMatrixDevice(REAL *dep, int el_npts, int el_dofs, 
     for(int i = 0; i < 3 * el_dofs; i++) DeBip[i] = 0.0;
     REAL omega = weight;
     MultAddDevice(false, 3, el_dofs, 3, dep, storage, DeBip, 1., 0.);
-    MultAddDevice(true, el_dofs, el_dofs, 3, storage, DeBip, K, omega, 1.);
+    MultAddDevice(true, el_dofs, el_dofs, 3, storage, DeBip, K, 1, 1.);
 }
 
 __global__

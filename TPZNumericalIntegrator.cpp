@@ -11,6 +11,7 @@ TPZNumericalIntegrator::TPZNumericalIntegrator() : fBlockMatrix(0,0), fNColor(-1
 #ifdef USING_CUDA
     dDoFIndexes.resize(0);
     dColorIndexes.resize(0);
+    dElColorIndex.resize(0);
 #endif
 }
 
@@ -139,6 +140,12 @@ void TPZNumericalIntegrator::TransferDataToGPU() {
 
     dColorIndexes.resize(fColorIndexes.size());
     dColorIndexes.set(&fColorIndexes[0], fColorIndexes.size());
+
+    dElColorIndex.resize(fElColorIndex.size());
+    dElColorIndex.set(&fElColorIndex[0], fElColorIndex.size());    
+
+    dColorLSequence.resize(fColorLSequence.size());
+    dColorLSequence.set(&fColorLSequence[0], fColorLSequence.size());    
 }
 #endif
 

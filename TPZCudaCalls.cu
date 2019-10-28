@@ -190,9 +190,8 @@ void TPZCudaCalls::ComputeSigmaDep(bool update_mem, int npts, REAL *glob_delta_s
 	}
 }
 
-void TPZCudaCalls::MatrixAssemble(REAL *Kc, REAL *dep, int first_el, int last_el, int64_t *el_color_index, REAL *weight, int *dof_indexes,
+void TPZCudaCalls::MatrixAssemble(REAL *Kc, REAL *dep, int nel, int64_t *el_color_index, REAL *weight, int *dof_indexes,
 	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition) {
-	int nel = last_el - first_el;
 	int numBlocks = (nel + NT_sm - 1) / NT_sm;
 
 	MatrixAssembleKernel<<<numBlocks,NT_sm>>>(nel, Kc, dep, el_color_index, weight, dof_indexes, storage, rowsizes, colsizes, rowfirstindex, colfirstindex, matrixposition);

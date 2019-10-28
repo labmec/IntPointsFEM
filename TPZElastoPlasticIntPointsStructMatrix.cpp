@@ -106,105 +106,69 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     rhs.Resize(neq, 1);
     rhs.Zero();  
 
+    TPZSYsmpMatrix<STATE> &stiff = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
+    TPZVec<STATE> &Kg = stiff.A();
+
+
 #ifdef USING_CUDA
     TPZVecGPU<REAL> d_solution(fMesh->Solution().Rows());
     d_solution.set(&fMesh->Solution()(0,0), fMesh->Solution().Rows());
 
+    TPZVecGPU<REAL> d_delta_strain, d_sigma, d_dep;
+
+    //Compute rhs
     TPZVecGPU<REAL> d_rhs(rhs.Rows());
     d_rhs.Zero();
-
-    TPZVecGPU<REAL> d_delta_strain;
-    TPZVecGPU<REAL> d_sigma;
-    TPZVecGPU<REAL> d_dep;
-
     fIntegrator.Multiply(d_solution, d_delta_strain);
     fIntegrator.ConstitutiveLawProcessor().ComputeSigmaDep(d_delta_strain, d_sigma, d_dep);
     fIntegrator.MultiplyTranspose(d_sigma, d_rhs);
-    fCudaCalls.DaxpyOperation(neq, 1., dRhsLinear.getData(), d_rhs.getData());
-    d_rhs.get(&rhs(0,0), neq); //back to CPU
 
-//    TPZFMatrix<REAL> dep(d_dep.getSize(), 1);
-//    d_dep.get(&dep(0,0), d_dep.getSize()); //back to CPU
+    // Compute Kc
+    TPZVecGPU<REAL> d_Kc(fIntegrator.ColorLSequence().size());
+    d_Kc.Zero();
+    fCudaCalls.MatrixAssemble(d_Kc.getData(), d_dep.getData(), fIntegrator.IrregularBlocksMatrix().Blocks().fNumBlocks, fIntegrator.ElColorIndexDev().getData(), fIntegrator.ConstitutiveLawProcessor().WeightVectorDev().getData(),
+    fIntegrator.DoFIndexesDev().getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dStorage.getData(),
+    fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowSizes.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColSizes.getData(),
+    fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowFirstIndex.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColFirstIndex.getData(),
+    fIntegrator.IrregularBlocksMatrix().BlocksDev().dMatrixPosition.getData());
 
+    // Assemble K
+    TPZVecGPU<REAL> d_Kg(Kg.size());
+    d_Kg.Zero();
+    for (int ic = 0; ic < fIntegrator.NColors(); ic++) {
+        int first_l = fIntegrator.FirstColorLIndex()[ic];
+        int last_l = fIntegrator.FirstColorLIndex()[ic + 1];
+        int n_l_indexes = last_l - first_l;
+        TPZVecGPU<REAL> aux(n_l_indexes);
+        fCudaCalls.GatherOperation(n_l_indexes, d_Kg.getData(), aux.getData(), &fIntegrator.ColorLSequenceDev().getData()[first_l]);
+        fCudaCalls.DaxpyOperation(n_l_indexes, 1., &d_Kc.getData()[first_l], aux.getData());
+        fCudaCalls.ScatterOperation(n_l_indexes, aux.getData(), d_Kg.getData(), &fIntegrator.ColorLSequenceDev().getData()[first_l]);
+    }
+
+    // back to CPU
+    d_rhs.get(&rhs(0,0), neq);
+    d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU
 #else
-    TPZFMatrix<REAL> delta_strain;
-    TPZFMatrix<REAL> sigma;
-    TPZFMatrix<REAL> dep;
+    TPZFMatrix<REAL> delta_strain, sigma, dep;
 
     fIntegrator.Multiply(fMesh->Solution(), delta_strain);
     fIntegrator.ConstitutiveLawProcessor().ComputeSigmaDep(delta_strain, sigma, dep);
-    fIntegrator.MultiplyTranspose(sigma, rhs); // Perform Residual integration using a global linear application B
-#endif
-    rhs += fRhsLinear;
+    fIntegrator.MultiplyTranspose(sigma, rhs);
 
-#ifdef USING_CUDA
-     TPZSYsmpMatrix<STATE> &stiff = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
-     TPZVec<STATE> &Kg = stiff.A();
-     int64_t nnz = Kg.size();
-
-     TPZVec<int> & indexes = fIntegrator.DoFIndexes();
-     TPZVec<int> & el_n_dofs = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes;
-     TPZVec<int> & cols_first_index = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex;
-
-     int n_colors = fIntegrator.FirstColorIndex().size()-1;
-
-     TPZVecGPU<REAL> d_Kg(nnz);
-     d_Kg.Zero();
-
-     int first = fIntegrator.FirstColorIndex()[0];
-     int last = fIntegrator.FirstColorIndex()[n_colors];
-     int el_dofs = el_n_dofs[0];
-     int nel_per_color = last - first;
-     TPZVec<REAL> Kc(fIntegrator.ColorLSequence().size(),0.0);
+    int el_dofs = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes[0];
 
      // Compute Kc
-     TPZVecGPU<REAL> d_Kc(m_color_l_sequence.size());
-     d_Kc.Zero();
-     fCudaCalls.MatrixAssemble(d_Kc.getData(), d_dep.getData(), first, last, d_el_color_indexes.getData(), fIntegrator.ConstitutiveLawProcessor().WeightVectorDev().getData(),
-            fIntegrator.DoFIndexesDev().getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dStorage.getData(),
-            fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowSizes.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColSizes.getData(),
-            fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowFirstIndex.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColFirstIndex.getData(),
-            fIntegrator.IrregularBlocksMatrix().BlocksDev().dMatrixPosition.getData());
-     // Assemble K
-    for (int ic = 0; ic < n_colors; ic++) {
-        int first_l = m_first_color_l_index[ic];
-        int last_l = m_first_color_l_index[ic + 1];
-        int n_l_indexes = last_l - first_l;
-        TPZVecGPU<REAL> aux(n_l_indexes);
-        fCudaCalls.GatherOperation(n_l_indexes, d_Kg.getData(), aux.getData(), &d_color_l_sequence.getData()[first_l]);
-        fCudaCalls.DaxpyOperation(n_l_indexes, 1., &d_Kc.getData()[first_l], aux.getData());
-        fCudaCalls.ScatterOperation(n_l_indexes, aux.getData(), d_Kg.getData(), &d_color_l_sequence.getData()[first_l]);
-    }
-    d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU
-#else
-     TPZSYsmpMatrix<STATE> &stiff = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
-     TPZVec<STATE> &Kg = stiff.A();
-     int64_t nnz = Kg.size();
-
-     TPZVec<int> & indexes = fIntegrator.DoFIndexes();
-     TPZVec<int> & el_n_dofs = fIntegrator.IrregularBlocksMatrix().Blocks().fColSizes;
-     TPZVec<int> & cols_first_index = fIntegrator.IrregularBlocksMatrix().Blocks().fColFirstIndex;
-
-     int n_colors = fIntegrator.FirstColorIndex().size()-1;
-
-     int first = fIntegrator.FirstColorIndex()[0];
-     int last = fIntegrator.FirstColorIndex()[n_colors];
-     int el_dofs = el_n_dofs[0];
-     int nel_per_color = last - first;
-     TPZVec<REAL> Kc(fIntegrator.ColorLSequence().size(),0.0);
-
-     // Compute Kc
+    TPZVec<REAL> Kc(fIntegrator.ColorLSequence().size(),0.0);
 #ifdef USING_TBB
-     tbb::parallel_for(size_t(0),size_t(nel_per_color),size_t(1),[&](size_t i)
+     tbb::parallel_for(size_t(0),size_t(fIntegrator.IrregularBlocksMatrix().Blocks().fNumBlocks),size_t(1),[&](size_t i)
 #else
-     for (int i = 0; i < nel_per_color; i++)
+     for (int i = 0; i < fIntegrator.IrregularBlocksMatrix().Blocks().fNumBlocks; i++)
 #endif
      {
-         int iel = fIntegrator.ElColorIndexes()[first + i];
+         int iel = fIntegrator.ElColorIndexes()[i];
 
          // Compute Elementary Matrix.
          TPZFMatrix<STATE> K;
-         // fIntegrator.ComputeTangentMatrix(iel,K);
          fIntegrator.ComputeTangentMatrix(iel,dep, K);
          int stride = i*(el_dofs * el_dofs + el_dofs)/2;
          int c = stride;
@@ -219,7 +183,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
      );
 #endif
      // Assemble K
-     for (int ic = 0; ic < n_colors; ic++) {
+     for (int ic = 0; ic < fIntegrator.NColors(); ic++) {
          int first_l = fIntegrator.FirstColorLIndex()[ic];
          int last_l = fIntegrator.FirstColorLIndex()[ic + 1];
          int n_l_indexes = last_l - first_l;
@@ -234,13 +198,15 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
          cblas_dsctr(n_l_indexes, &aux[0], &fIntegrator.ColorLSequence()[first_l], &Kg[0]);
      }
 #endif
-     auto it_end = fSparseMatrixLinear.MapEnd();
-     for (auto it = fSparseMatrixLinear.MapBegin(); it!=it_end; it++) {
-         int64_t row = it->first.first;
-         int64_t col = it->first.second;
-         STATE val = it->second + stiff.GetVal(row, col);
-         stiff.PutVal(row, col, val);
-     }
+    rhs += fRhsLinear;
+
+    auto it_end = fSparseMatrixLinear.MapEnd();
+    for (auto it = fSparseMatrixLinear.MapBegin(); it!=it_end; it++) {
+        int64_t row = it->first.first;
+        int64_t col = it->first.second;
+        STATE val = it->second + stiff.GetVal(row, col);
+        stiff.PutVal(row, col, val);
+    }
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface){
