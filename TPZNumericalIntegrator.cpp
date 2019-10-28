@@ -130,6 +130,89 @@ void TPZNumericalIntegrator::ResidualIntegration(TPZFMatrix<REAL> & solution ,TP
 }
 #endif
 
+void TPZNumericalIntegrator::KAssembly(TPZFMatrix<REAL> & solution, TPZVec<STATE> & Kg, TPZFMatrix<STATE> & rhs) {
+    TPZFMatrix<REAL> delta_strain, sigma, dep;
+
+    Multiply(solution, delta_strain);
+    fConstitutiveLawProcessor.ComputeSigmaDep(delta_strain, sigma, dep);
+    MultiplyTranspose(sigma, rhs);
+
+    int el_dofs = fBlockMatrix.Blocks().fColSizes[0];
+
+     // Compute Kc
+    TPZVec<REAL> Kc(fColorLSequence.size(),0.0);
+#ifdef USING_TBB
+     tbb::parallel_for(size_t(0),size_t(fBlockMatrix.Blocks().fNumBlocks),size_t(1),[&](size_t i)
+#else
+     for (int i = 0; i < fBlockMatrix.Blocks().fNumBlocks; i++)
+#endif
+     {
+         int iel = fElColorIndex[i];
+
+         // Compute Elementary Matrix.
+         TPZFMatrix<STATE> K;
+         ComputeTangentMatrix(iel,dep, K);
+         int stride = i*(el_dofs * el_dofs + el_dofs)/2;
+         int c = stride;
+         for(int i_dof = 0 ; i_dof < el_dofs; i_dof++){
+             for(int j_dof = i_dof; j_dof < el_dofs; j_dof++){
+                 Kc[c] += K(i_dof,j_dof);
+                 c++;
+             }
+         }
+     }
+#ifdef USING_TBB
+     );
+#endif
+     // Assemble K
+     for (int ic = 0; ic < fNColor; ic++) {
+         int first_l = fFirstColorLIndex[ic];
+         int last_l = fFirstColorLIndex[ic + 1];
+         int n_l_indexes = last_l - first_l;
+         // Gather from Kg
+         TPZVec<REAL> aux(n_l_indexes);
+         cblas_dgthr(n_l_indexes, &Kg[0], &aux[0], &fColorLSequence[first_l]);
+
+         // Contributing
+         cblas_daxpy(n_l_indexes, 1., &Kc[first_l], 1., &aux[0],1);
+
+         // Scatter to Kg
+         cblas_dsctr(n_l_indexes, &aux[0], &fColorLSequence[first_l], &Kg[0]);
+     }
+}
+
+#ifdef USING_CUDA
+void TPZNumericalIntegrator::KAssembly(TPZFMatrix<REAL> & solution, TPZVecGPU<STATE> & Kg, TPZVecGPU<STATE> & rhs) {
+    TPZVecGPU<REAL> d_solution(solution.Rows());
+    d_solution.set(&solution(0,0), solution.Rows());
+
+    TPZVecGPU<REAL> d_delta_strain, d_sigma, d_dep;
+
+    //Compute rhs
+    Multiply(d_solution, d_delta_strain);
+    fConstitutiveLawProcessor.ComputeSigmaDep(d_delta_strain, d_sigma, d_dep);
+    MultiplyTranspose(d_sigma, rhs);
+
+    // // Compute Kc
+    TPZVecGPU<REAL> d_Kc(fColorLSequence.size());
+    d_Kc.Zero();
+    fCudaCalls.MatrixAssemble(d_Kc.getData(), d_dep.getData(), fBlockMatrix.Blocks().fNumBlocks, dElColorIndex.getData(), dDoFIndexes.getData(), 
+    fBlockMatrix.BlocksDev().dStorage.getData(), fBlockMatrix.BlocksDev().dRowSizes.getData(), fBlockMatrix.BlocksDev().dColSizes.getData(), 
+    fBlockMatrix.BlocksDev().dRowFirstIndex.getData(), fBlockMatrix.BlocksDev().dColFirstIndex.getData(), fBlockMatrix.BlocksDev().dMatrixPosition.getData());
+
+    // Assemble K
+    for (int ic = 0; ic < fNColor; ic++) {
+        int first_l = fFirstColorLIndex[ic];
+        int last_l = fFirstColorLIndex[ic + 1];
+        int n_l_indexes = last_l - first_l;
+        TPZVecGPU<REAL> aux(n_l_indexes);
+        fCudaCalls.GatherOperation(n_l_indexes, Kg.getData(), aux.getData(), &dColorLSequence.getData()[first_l]);
+        fCudaCalls.DaxpyOperation(n_l_indexes, 1., &d_Kc.getData()[first_l], aux.getData());
+        fCudaCalls.ScatterOperation(n_l_indexes, aux.getData(), Kg.getData(), &dColorLSequence.getData()[first_l]);
+    }
+}
+#endif
+
 #ifdef USING_CUDA
 void TPZNumericalIntegrator::TransferDataToGPU() {
     fBlockMatrix.TransferDataToGPU();

@@ -13,17 +13,16 @@
 
 __constant__ REAL De[3 * 3];
 
-__device__ void ComputeTangentMatrixDevice(REAL *dep, int el_npts, int el_dofs, REAL *storage, REAL weight, REAL *K){
+__device__ void ComputeTangentMatrixDevice(REAL *dep, int el_npts, int el_dofs, REAL *storage, REAL *K){
 
     REAL DeBip[3 * ndof];
     for(int i = 0; i < 3 * el_dofs; i++) DeBip[i] = 0.0;
-    REAL omega = weight;
     MultAddDevice(false, 3, el_dofs, 3, dep, storage, DeBip, 1., 0.);
     MultAddDevice(true, el_dofs, el_dofs, 3, storage, DeBip, K, 1, 1.);
 }
 
 __global__
-void MatrixAssembleKernel(int nel, REAL *Kc, REAL *dep, int64_t *el_color_index, REAL *weight, int *dof_indexes,
+void MatrixAssembleKernel(int nel, REAL *Kc, REAL *dep, int64_t *el_color_index, int *dof_indexes,
 	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition) {
 
 	// int tid = blockIdx.x;
@@ -46,7 +45,7 @@ void MatrixAssembleKernel(int nel, REAL *Kc, REAL *dep, int64_t *el_color_index,
                s_storage[i + threadIdx.x * ndof * 3] = storage[matpos + i + ip * ndof * 3];
             }
             __syncthreads(); 
-            ComputeTangentMatrixDevice(&dep[first_el_ip * 3 * 3 + ip * 3 * 3], el_npts, el_dofs, &s_storage[threadIdx.x * ndof * 3], weight[first_el_ip + ip], K);
+            ComputeTangentMatrixDevice(&dep[first_el_ip * 3 * 3 + ip * 3 * 3], el_npts, el_dofs, &s_storage[threadIdx.x * ndof * 3], K);
         }
 
         int stride = tid*(el_dofs * el_dofs + el_dofs)/2;

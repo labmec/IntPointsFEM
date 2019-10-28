@@ -58,12 +58,16 @@ public:
         else return false;
     }
 
+    void KAssembly(TPZFMatrix<REAL> & solution, TPZVec<STATE> & Kg, TPZFMatrix<STATE> & rhs);
+
 #ifdef USING_CUDA
     void Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &delta_strain);
     
     void MultiplyTranspose(TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL> &res); 
 
     void ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZVecGPU<REAL> &rhs);
+
+    void KAssembly(TPZFMatrix<REAL> & solution, TPZVecGPU<STATE> & Kg, TPZVecGPU<STATE> & rhs);
 #endif
 
     void SetElementIndexes(TPZVec<int> & elemindex) {
@@ -114,11 +118,11 @@ public:
         return fNColor;
     }
 
-    void SetElColorIndexes(TPZVec<int64_t> &el_color_indexes){
+    void SetElColorIndex(TPZVec<int64_t> &el_color_indexes){
         fElColorIndex = el_color_indexes;
     }
 
-    TPZVec<int64_t> &ElColorIndexes() {
+    TPZVec<int64_t> &ElColorIndex() {
         return fElColorIndex;
     }
 
