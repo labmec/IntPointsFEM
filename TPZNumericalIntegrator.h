@@ -25,8 +25,6 @@ public:
 
     TPZNumericalIntegrator();
 
-    TPZNumericalIntegrator(TPZIrregularBlocksMatrix &irregularBlocksMatrix);
-
     ~TPZNumericalIntegrator();
 
     void Multiply(TPZFMatrix<REAL> &coef, TPZFMatrix<REAL> &delta_strain);
@@ -35,11 +33,7 @@ public:
 
     void ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZFMatrix<REAL> &rhs);
 
-    void ComputeConstitutiveMatrix(int64_t point_index, TPZFMatrix<STATE> &De);
-
     void ComputeTangentMatrix(int64_t iel, TPZFMatrix<REAL> &Dep, TPZFMatrix<REAL> &K);
-
-    void ComputeTangentMatrix(int64_t iel, TPZFMatrix<REAL> &K);
 
     void SetUpIrregularBlocksData(TPZCompMesh * cmesh);
 
@@ -60,6 +54,10 @@ public:
 
     void KAssembly(TPZFMatrix<REAL> & solution, TPZVec<STATE> & Kg, TPZFMatrix<STATE> & rhs);
 
+    void SetElementIndexes(TPZVec<int> element_indexes) {
+        fElementIndex = element_indexes;
+    }
+
 #ifdef USING_CUDA
     void Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &delta_strain);
     
@@ -68,107 +66,8 @@ public:
     void ResidualIntegration(TPZFMatrix<REAL> & solution ,TPZVecGPU<REAL> &rhs);
 
     void KAssembly(TPZFMatrix<REAL> & solution, TPZVecGPU<STATE> & Kg, TPZVecGPU<STATE> & rhs);
-#endif
-
-    void SetElementIndexes(TPZVec<int> & elemindex) {
-        fElementIndex = elemindex;
-    }
-
-    TPZVec<int> & ElementIndexes() {
-        return fElementIndex;
-    }
-
-    void SetIrregularBlocksMatrix(TPZIrregularBlocksMatrix & irregularBlocksMatrix) {
-        fBlockMatrix = irregularBlocksMatrix;
-    }
-
-    TPZIrregularBlocksMatrix & IrregularBlocksMatrix() {
-        return fBlockMatrix;
-    }
-
-    void SetConstitutiveLawProcessor(TPZConstitutiveLawProcessor & processor){
-        fConstitutiveLawProcessor = processor;
-    }
-
-    TPZConstitutiveLawProcessor & ConstitutiveLawProcessor(){
-        return fConstitutiveLawProcessor;
-    }
-
-    void SetDoFIndexes(TPZVec<int> dof_indexes) {
-        fDoFIndexes = dof_indexes;
-    }
-
-    TPZVec<int> & DoFIndexes() {
-        return fDoFIndexes;
-    }
-
-    void SetColorIndexes(TPZVec<int> color_indexes) {
-        fColorIndexes = color_indexes;
-    }
-    
-    TPZVec<int> & ColorIndexes() {
-     return fColorIndexes;
-    }
-
-    void SetNColors(int ncolor) {
-        fNColor = ncolor;
-    }
-
-    int NColors() {
-        return fNColor;
-    }
-
-    void SetElColorIndex(TPZVec<int64_t> &el_color_indexes){
-        fElColorIndex = el_color_indexes;
-    }
-
-    TPZVec<int64_t> &ElColorIndex() {
-        return fElColorIndex;
-    }
-
-    void SetFirstColorIndex(TPZVec<int64_t> &first_color_index){
-        fFirstColorIndex = first_color_index;
-    }
-
-    TPZVec<int64_t> &FirstColorIndex() {
-        return fFirstColorIndex;
-    }
-
-    void SetColorLSequence(TPZVec<int> &color_l_sequence){
-        fColorLSequence = color_l_sequence;
-    }
-
-    TPZVec<int> &ColorLSequence() {
-        return fColorLSequence;
-    }
-
-    void SetFirstColorLIndex(TPZVec<int> &first_color_l_index){
-        fFirstColorLIndex = first_color_l_index;
-    }
-
-    TPZVec<int> &FirstColorLIndex() {
-        return fFirstColorLIndex;
-    }
-
-#ifdef USING_CUDA
-    TPZVecGPU<int> & DoFIndexesDev() {
-        return dDoFIndexes;
-    }
-
-    TPZVecGPU<int> & ColorIndexesDev() {
-        return dColorIndexes;
-    }
-
-    TPZVecGPU<int64_t> & ElColorIndexDev() {
-        return dElColorIndex;
-    }
-
-    TPZVecGPU<int> &ColorLSequenceDev() {
-        return dColorLSequence;
-    }
 
     void TransferDataToGPU();
-
 #endif
 
 private:
@@ -198,15 +97,16 @@ private:
     TPZVec<int> fFirstColorLIndex;
     
 #ifdef USING_CUDA
-    TPZVecGPU<int> dDoFIndexes;
-    TPZVecGPU<int> dColorIndexes;
     TPZCudaCalls fCudaCalls;
 
+    TPZVecGPU<int> dDoFIndexes;
+
+    TPZVecGPU<int> dColorIndexes;
+
     TPZVecGPU<int64_t> dElColorIndex;
+
     TPZVecGPU<int> dColorLSequence;
 #endif
-
-
 };
 
 

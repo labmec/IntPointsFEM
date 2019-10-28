@@ -53,7 +53,6 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
     timer.TimerOption(Timer::ECudaEvent);
     timer.Start();
     std::cout << "Transfering data to GPU..." << std::endl;
-    fIntegrator.TransferDataToGPU();
     this->TransferDataToGPU();
     timer.Stop();
     std::cout << "Done! It took " <<  timer.ElapsedTime() << timer.Unit() << std::endl;
@@ -64,17 +63,17 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
 
 #ifdef USING_CUDA
 void TPZElastoPlasticIntPointsStructMatrix::TransferDataToGPU() {
+    fIntegrator.TransferDataToGPU();
+
     dRhsLinear.resize(fRhsLinear.Rows());
     dRhsLinear.set(&fRhsLinear(0,0), fRhsLinear.Rows());
 }
 #endif
 
-
-
 TPZMatrix<STATE> *TPZElastoPlasticIntPointsStructMatrix::CreateAssemble(TPZFMatrix<STATE> &rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
 
     int64_t neq = fMesh->NEquations();
-    TPZMatrix<STATE> *stiff = Create(); // @TODO:: Requires optimization.
+    TPZMatrix<STATE> *stiff = Create();
     rhs.Redim(neq,1);
     Assemble(*stiff,rhs,guiInterface);
     return stiff;
@@ -100,7 +99,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 }
 
  void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface) {
-
+    
     int neq = fMesh->NEquations();
 
     rhs.Resize(neq, 1);
@@ -127,6 +126,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     rhs += fRhsLinear;
 #endif
 
+    // Add Klinear contribution
     auto it_end = fSparseMatrixLinear.MapEnd();
     for (auto it = fSparseMatrixLinear.MapBegin(); it!=it_end; it++) {
         int64_t row = it->first.first;
@@ -137,6 +137,7 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 }
 
 void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface){
+
     int neq = fMesh->NEquations();
 
     rhs.Resize(neq, 1);

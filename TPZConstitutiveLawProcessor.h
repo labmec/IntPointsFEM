@@ -20,8 +20,6 @@ public:
     
     TPZConstitutiveLawProcessor();
 
-    TPZConstitutiveLawProcessor(int npts, TPZVec<REAL> weight, TPZMaterial *material);
-
     ~TPZConstitutiveLawProcessor();
 
     TPZConstitutiveLawProcessor(const TPZConstitutiveLawProcessor &copy);
@@ -32,40 +30,27 @@ public:
 
     void SetWeightVector(TPZVec<REAL> &weight);
 
-    TPZVec<REAL> &WeightVector() {
-        return fWeight;
-    }
-
-#ifdef USING_CUDA
-    TPZVecGPU<REAL> &WeightVectorDev() {
-        return dWeight;
-    }
-#endif
-
     void SetMaterial(TPZMaterial *material);
 
     void ComputeSigma(TPZFMatrix<REAL> & glob_delta_strain, TPZFMatrix<REAL> & glob_sigma);
 
     void ComputeSigmaDep(TPZFMatrix<REAL> & glob_delta_strain, TPZFMatrix<REAL> & glob_sigma, TPZFMatrix<REAL> & glob_dep);
 
-    void De(TPZFMatrix<REAL> & De);
-
 #ifdef USING_CUDA
     void ComputeSigma(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &sigma);
-    void ComputeSigmaDep(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL> &glob_dep);
 
-    void De();    
+    void ComputeSigmaDep(TPZVecGPU<REAL> &delta_strain, TPZVecGPU<REAL> &sigma, TPZVecGPU<REAL> &glob_dep);
 
     void TransferDataToGPU();
 #endif
 
-    TPZVec<REAL> fWeight;
-    
 private:
     
     int64_t fNpts;
 
     TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV,TPZElasticResponse>, TPZElastoPlasticMem> *fMaterial;
+
+    TPZVec<REAL> fWeight;
 
     TPZFMatrix<REAL> fSigma;
     

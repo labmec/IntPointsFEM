@@ -37,13 +37,6 @@ TPZConstitutiveLawProcessor::TPZConstitutiveLawProcessor() : fNpts(-1), fWeight(
 #endif
 }
 
-TPZConstitutiveLawProcessor::TPZConstitutiveLawProcessor(int npts, TPZVec<REAL> weight, TPZMaterial *material) : fNpts(
-        -1), fWeight(0), fMaterial(), fPlasticStrain(0, 0), fMType(0, 0), fAlpha(0, 0) {
-    SetUpDataByIntPoints(npts);
-    SetWeightVector(weight);
-    SetMaterial(material);
-}
-
 TPZConstitutiveLawProcessor::~TPZConstitutiveLawProcessor() {
 
 }
@@ -133,31 +126,6 @@ void TPZConstitutiveLawProcessor::SetWeightVector(TPZVec<REAL> &weight) {
 
 void TPZConstitutiveLawProcessor::SetMaterial(TPZMaterial *material) {
     fMaterial = dynamic_cast<TPZMatElastoPlastic2D<TPZPlasticStepPV<TPZYCMohrCoulombPV, TPZElasticResponse>, TPZElastoPlasticMem> *>(material);
-}
-
-void TPZConstitutiveLawProcessor::De(TPZFMatrix<REAL> &De) {
-
-    REAL lambda = fMaterial->GetPlasticModel().fER.Lambda();
-    REAL mu = fMaterial->GetPlasticModel().fER.G();
-
-    De.Zero();
-
-    De(_XX_, _XX_) += lambda;
-    De(_XX_, _YY_) += lambda;
-    De(_XX_, _ZZ_) += lambda;
-    De(_YY_, _XX_) += lambda;
-    De(_YY_, _YY_) += lambda;
-    De(_YY_, _ZZ_) += lambda;
-    De(_ZZ_, _XX_) += lambda;
-    De(_ZZ_, _YY_) += lambda;
-    De(_ZZ_, _ZZ_) += lambda;
-
-    int i;
-    for (i = 0; i < 6; i++) De(i, i) += mu;
-
-    De(_XX_, _XX_) += mu;
-    De(_YY_, _YY_) += mu;
-    De(_ZZ_, _ZZ_) += mu;
 }
 
 void TPZConstitutiveLawProcessor::ComputeSigma(TPZFMatrix<REAL> &glob_delta_strain, TPZFMatrix<REAL> &glob_sigma) {
@@ -774,10 +742,3 @@ void TPZConstitutiveLawProcessor::TransferDataToGPU() {
 }
 #endif
 
-#ifdef USING_CUDA
-void TPZConstitutiveLawProcessor::De() {
-    REAL lambda = fMaterial->GetPlasticModel().fER.Lambda();
-    REAL mu = fMaterial->GetPlasticModel().fER.G();
-    fCudaCalls->DeToDevice(lambda, mu); 
-}
-#endif
