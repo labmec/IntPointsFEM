@@ -78,17 +78,17 @@ private:
     TPZIrregularBlocksMatrix fBlockMatrix;
 
     /// Number of colors grouping no adjacent elements
-    int64_t fNColor; //needed to do the assembly
+    int64_t fNColor;
 
     /// Degree of Freedom indexes organized element by element with stride ndof
-    TPZVec<int> fDoFIndexes; // needed to do the gather operation
+    TPZVec<int> fDoFIndexes;
 
     /// Color indexes organized element by element with stride ndof
-    TPZVec<int> fColorIndexes; //nedeed to scatter operation
+    TPZVec<int> fColorIndexes;
 
     TPZConstitutiveLawProcessor fConstitutiveLawProcessor;
 
-    TPZVec<int64_t> fElColorIndex;
+    TPZVec<int> fElColorIndex;
 
     TPZVec<int64_t> fFirstColorIndex;
 
@@ -103,7 +103,7 @@ private:
 
     TPZVecGPU<int> dColorIndexes;
 
-    TPZVecGPU<int64_t> dElColorIndex;
+    TPZVecGPU<int> dElColorIndex;
 
     TPZVecGPU<int> dColorLSequence;
 #endif

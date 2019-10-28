@@ -34,16 +34,14 @@ TPZStructMatrix * TPZElastoPlasticIntPointsStructMatrix::Clone(){
 TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
 
     if(!fIntegrator.isBuilt()) {
-        this->SetUpDataStructure(); // When basis functions are computed and storaged
+        this->SetUpDataStructure(); // When basis functions are computed and stored
     }
     
     TPZStack<int64_t> elgraph;
     TPZVec<int64_t> elgraphindex;
-    fMesh->ComputeElGraph(elgraph,elgraphindex,fMaterialIds); // This method seems to be efficient.
+    fMesh->ComputeElGraph(elgraph,elgraphindex,fMaterialIds);
     TPZMatrix<STATE> * mat = SetupMatrixData(elgraph, elgraphindex);
-    
-    /// Sparsify global indexes
-    // Filling local std::map
+
     TPZSYsmpMatrix<STATE> *stiff = dynamic_cast<TPZSYsmpMatrix<STATE> *> (mat);
     fIntegrator.FillLIndexes(stiff->IA(), stiff->JA());
     

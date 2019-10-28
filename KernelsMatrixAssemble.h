@@ -22,8 +22,7 @@ __device__ void ComputeTangentMatrixDevice(REAL *dep, int el_npts, int el_dofs, 
 }
 
 __global__
-void MatrixAssembleKernel(int nel, REAL *Kc, REAL *dep, int64_t *el_color_index, int *dof_indexes,
-	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition) {
+void MatrixAssembleKernel(int nel, REAL *Kc, REAL *dep, int *el_color_index, REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition) {
 
 	// int tid = blockIdx.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;

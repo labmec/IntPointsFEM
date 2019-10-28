@@ -36,17 +36,18 @@ public:
 
     TPZMatrix<STATE> *CreateAssemble(TPZFMatrix<STATE> &rhs, TPZAutoPointer<TPZGuiInterface> guiInterface);
 
-    void SetUpDataStructure();
 
     void Assemble(TPZMatrix<STATE> & mat, TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface);
     
     void Assemble(TPZFMatrix<STATE> & rhs, TPZAutoPointer<TPZGuiInterface> guiInterface);
 
+private:
+    
 #ifdef USING_CUDA
     void TransferDataToGPU();
 #endif
 
-private:
+    void SetUpDataStructure();
 
     void ComputeDomainElementIndexes(TPZVec<int> &element_indexes);
     

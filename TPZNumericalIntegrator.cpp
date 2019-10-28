@@ -194,7 +194,7 @@ void TPZNumericalIntegrator::KAssembly(TPZFMatrix<REAL> & solution, TPZVecGPU<ST
     // // Compute Kc
     TPZVecGPU<REAL> d_Kc(fColorLSequence.size());
     d_Kc.Zero();
-    fCudaCalls.MatrixAssemble(d_Kc.getData(), d_dep.getData(), fBlockMatrix.Blocks().fNumBlocks, dElColorIndex.getData(), dDoFIndexes.getData(), 
+    fCudaCalls.MatrixAssemble(d_Kc.getData(), d_dep.getData(), fBlockMatrix.Blocks().fNumBlocks, dElColorIndex.getData(), 
     fBlockMatrix.BlocksDev().dStorage.getData(), fBlockMatrix.BlocksDev().dRowSizes.getData(), fBlockMatrix.BlocksDev().dColSizes.getData(), 
     fBlockMatrix.BlocksDev().dRowFirstIndex.getData(), fBlockMatrix.BlocksDev().dColFirstIndex.getData(), fBlockMatrix.BlocksDev().dMatrixPosition.getData());
 
@@ -261,7 +261,6 @@ void TPZNumericalIntegrator::ComputeTangentMatrix(int64_t iel, TPZFMatrix<REAL> 
             }
         }
 
-//        dep.Print(std::cout);
         dep.Multiply(Bip, DeBip);
         Bip.MultAdd(DeBip, K, K, 1., 1.0, 1);
     }
@@ -532,7 +531,6 @@ void TPZNumericalIntegrator::SetUpColoredIndexes(TPZCompMesh * cmesh) {
 
 void TPZNumericalIntegrator::FillLIndexes(TPZVec<int64_t> & IA, TPZVec<int64_t> & JA){
 
-//    TPZVec<int> & indexes = fIntegrator.DoFIndexes();
     TPZVec<int> & el_n_dofs = fBlockMatrix.Blocks().fColSizes;
     TPZVec<int> & cols_first_index = fBlockMatrix.Blocks().fColFirstIndex;
 
