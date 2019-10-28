@@ -123,8 +123,8 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     fCudaCalls.DaxpyOperation(neq, 1., dRhsLinear.getData(), d_rhs.getData());
     d_rhs.get(&rhs(0,0), neq); //back to CPU
 
-    TPZFMatrix<REAL> dep(d_dep.getSize(), 1);   
-    d_dep.get(&dep(0,0), d_dep.getSize()); //back to CPU
+//    TPZFMatrix<REAL> dep(d_dep.getSize(), 1);
+//    d_dep.get(&dep(0,0), d_dep.getSize()); //back to CPU
 
 #else
     TPZFMatrix<REAL> delta_strain;
@@ -148,6 +148,9 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
 
      int n_colors = fIntegrator.FirstColorIndex().size()-1;
 
+     TPZVecGPU<REAL> d_Kg(nnz);
+     d_Kg.Zero();
+
      int first = fIntegrator.FirstColorIndex()[0];
      int last = fIntegrator.FirstColorIndex()[n_colors];
      int el_dofs = el_n_dofs[0];
@@ -155,45 +158,24 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
      TPZVec<REAL> Kc(fIntegrator.ColorLSequence().size(),0.0);
 
      // Compute Kc
-#ifdef USING_TBB
-     tbb::parallel_for(size_t(0),size_t(nel_per_color),size_t(1),[&](size_t i)
-#else
-     for (int i = 0; i < nel_per_color; i++)
-#endif
-     {
-         int iel = fIntegrator.ElColorIndexes()[first + i];
-
-         // Compute Elementary Matrix.
-         TPZFMatrix<STATE> K;
-         // fIntegrator.ComputeTangentMatrix(iel,K);
-         fIntegrator.ComputeTangentMatrix(iel,dep, K);
-         int stride = i*(el_dofs * el_dofs + el_dofs)/2;
-         int c = stride;
-         for(int i_dof = 0 ; i_dof < el_dofs; i_dof++){
-             for(int j_dof = i_dof; j_dof < el_dofs; j_dof++){
-                 Kc[c] += K(i_dof,j_dof);
-                 c++;
-             }
-         }
-     }
-#ifdef USING_TBB
-     );
-#endif
+     TPZVecGPU<REAL> d_Kc(m_color_l_sequence.size());
+     d_Kc.Zero();
+     fCudaCalls.MatrixAssemble(d_Kc.getData(), d_dep.getData(), first, last, d_el_color_indexes.getData(), fIntegrator.ConstitutiveLawProcessor().WeightVectorDev().getData(),
+            fIntegrator.DoFIndexesDev().getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dStorage.getData(),
+            fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowSizes.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColSizes.getData(),
+            fIntegrator.IrregularBlocksMatrix().BlocksDev().dRowFirstIndex.getData(), fIntegrator.IrregularBlocksMatrix().BlocksDev().dColFirstIndex.getData(),
+            fIntegrator.IrregularBlocksMatrix().BlocksDev().dMatrixPosition.getData());
      // Assemble K
-     for (int ic = 0; ic < n_colors; ic++) {
-         int first_l = fIntegrator.FirstColorLIndex()[ic];
-         int last_l = fIntegrator.FirstColorLIndex()[ic + 1];
-         int n_l_indexes = last_l - first_l;
-         // Gather from Kg
-         TPZVec<REAL> aux(n_l_indexes);
-         cblas_dgthr(n_l_indexes, &Kg[0], &aux[0], &fIntegrator.ColorLSequence()[first_l]);
-
-         // Contributing
-         cblas_daxpy(n_l_indexes, 1., &Kc[first_l], 1., &aux[0],1);
-
-         // Scatter to Kg
-         cblas_dsctr(n_l_indexes, &aux[0], &fIntegrator.ColorLSequence()[first_l], &Kg[0]);
-     }
+    for (int ic = 0; ic < n_colors; ic++) {
+        int first_l = m_first_color_l_index[ic];
+        int last_l = m_first_color_l_index[ic + 1];
+        int n_l_indexes = last_l - first_l;
+        TPZVecGPU<REAL> aux(n_l_indexes);
+        fCudaCalls.GatherOperation(n_l_indexes, d_Kg.getData(), aux.getData(), &d_color_l_sequence.getData()[first_l]);
+        fCudaCalls.DaxpyOperation(n_l_indexes, 1., &d_Kc.getData()[first_l], aux.getData());
+        fCudaCalls.ScatterOperation(n_l_indexes, aux.getData(), d_Kg.getData(), &d_color_l_sequence.getData()[first_l]);
+    }
+    d_Kg.get(&Kg[0], d_Kg.getSize()); // back to CPU
 #else
      TPZSYsmpMatrix<STATE> &stiff = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
      TPZVec<STATE> &Kg = stiff.A();
