@@ -63,10 +63,6 @@ private:
     TPZFMatrix<STATE> fRhsLinear; //-> BC data
     
     std::set<int> fBCMaterialIds;
-    
-    TPZVec<int64_t> fIAToSequence;
-    
-    TPZVec<int64_t> fJAToSequence;
 
     #ifdef USING_CUDA
     TPZCudaCalls fCudaCalls;

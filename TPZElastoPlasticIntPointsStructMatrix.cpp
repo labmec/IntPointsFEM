@@ -18,8 +18,6 @@ TPZElastoPlasticIntPointsStructMatrix::TPZElastoPlasticIntPointsStructMatrix(TPZ
         DebugStop();
     }
     fDimension = cmesh->Reference()->Dimension();
-    fIAToSequence.resize(0);
-    fJAToSequence.resize(0);
 
     #ifdef USING_CUDA
     dRhsLinear.resize(0);
@@ -47,12 +45,7 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
     /// Sparsify global indexes
     // Filling local std::map
     TPZSYsmpMatrix<STATE> *stiff = dynamic_cast<TPZSYsmpMatrix<STATE> *> (mat);
-
-    fIAToSequence = stiff->IA();
-    fJAToSequence = stiff->JA();
-
-
-    fIntegrator.FillLIndexes(fIAToSequence, fJAToSequence);
+    fIntegrator.FillLIndexes(stiff->IA(), stiff->JA());
     
 #ifdef USING_CUDA
     Timer timer;   
