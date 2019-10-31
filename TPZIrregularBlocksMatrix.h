@@ -23,6 +23,7 @@ public:
         TPZVec<int> fMatrixPosition; // blocks start position in fStorage vector
         TPZVec<int> fRowFirstIndex; // blocks first row index
         TPZVec<int> fColFirstIndex; // blocks first column index
+        TPZVec<int> fMatrixStride; // blocks first column index
 
         TPZVec<int> fRowPtr; // vector of the start of every row and the end of the last row plus one (this is for CSR format)
         TPZVec<int> fColInd; // vector of column indices for each non-zero element of the matrix (this is for CSR format)
@@ -37,6 +38,7 @@ public:
     TPZVecGPU<int> dMatrixPosition; // blocks start position in fStorage vector
     TPZVecGPU<int> dRowFirstIndex; // blocks first row index
     TPZVecGPU<int> dColFirstIndex; // blocks first column index
+    TPZVecGPU<int> dMatrixStride; // blocks first column index
 
     TPZVecGPU<int> dRowPtr; // vector of the start of every row and the end of the last row plus one (this is for CSR format)
     TPZVecGPU<int> dColInd; // vector of column indices for each non-zero element of the matrix (this is for CSR format)

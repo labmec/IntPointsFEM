@@ -16,8 +16,8 @@ fr = 4.0;
 LargeCBurdenQ = 1;
 
 If(LargeCBurdenQ)
-	nt = 32;
-	nr = 32;
+	nt = 4;
+	nr = 4;
 	radial_progression = 1.175; // 32
 	//radial_progression = 1.075; // 64
 	//radial_progression = 1.04; // 128
@@ -93,7 +93,7 @@ Point{fixed_y_points[],fixed_x_points[]} In Surface{s4};
 
 Transfinite Surface"*";
  If(IsquadQ)
-  Recombine Surface"*";
+  Recombine Surface{s1,s3};
  EndIf
 
 Physical Surface("Omega") = {the_circle[]};

@@ -135,10 +135,10 @@ void TPZNumericalIntegrator::KAssembly(TPZFMatrix<REAL> & solution, TPZVec<STATE
     fConstitutiveLawProcessor.ComputeSigmaDep(delta_strain, sigma, dep);
     MultiplyTranspose(sigma, rhs);
 
-    int el_dofs = fBlockMatrix.Blocks().fColSizes[0];
 
-     // Compute Kc
-    TPZVec<REAL> Kc(fColorLSequence.size(),0.0);
+    // Compute Kc
+    int size = fBlockMatrix.Blocks().fMatrixStride[fBlockMatrix.Blocks().fNumBlocks];
+    TPZVec<REAL> Kc(size,0.0);
 #ifdef USING_TBB
      tbb::parallel_for(size_t(0),size_t(fBlockMatrix.Blocks().fNumBlocks),size_t(1),[&](size_t i)
 #else
@@ -146,19 +146,21 @@ void TPZNumericalIntegrator::KAssembly(TPZFMatrix<REAL> & solution, TPZVec<STATE
 #endif
      {
          int iel = fElColorIndex[i];
+         int el_dofs = fBlockMatrix.Blocks().fColSizes[iel];
 
          // Compute Elementary Matrix.
          TPZFMatrix<STATE> K;
          ComputeTangentMatrix(iel,dep, K);
-         int stride = i*(el_dofs * el_dofs + el_dofs)/2;
+//         K.Print(std::cout);
+         int stride = fBlockMatrix.Blocks().fMatrixStride[i];
          int c = stride;
-         for(int i_dof = 0 ; i_dof < el_dofs; i_dof++){
-             for(int j_dof = i_dof; j_dof < el_dofs; j_dof++){
-                 Kc[c] += K(i_dof,j_dof);
-                 c++;
-             }
-         }
-     }
+        for(int i_dof = 0 ; i_dof < el_dofs; i_dof++){
+            for(int j_dof = i_dof; j_dof < el_dofs; j_dof++){
+                Kc[c] += K(i_dof,j_dof);
+                c++;
+            }
+        }
+    }
 #ifdef USING_TBB
      );
 #endif
@@ -279,10 +281,12 @@ void TPZNumericalIntegrator::SetUpIrregularBlocksData(TPZCompMesh * cmesh) {
     fBlockMatrix.Blocks().fMatrixPosition.resize(nblocks + 1);
     fBlockMatrix.Blocks().fRowFirstIndex.resize(nblocks + 1);
     fBlockMatrix.Blocks().fColFirstIndex.resize(nblocks + 1);
+    fBlockMatrix.Blocks().fMatrixStride.resize(nblocks + 1);
 
     fBlockMatrix.Blocks().fMatrixPosition[0] = 0;
     fBlockMatrix.Blocks().fRowFirstIndex[0] = 0;
     fBlockMatrix.Blocks().fColFirstIndex[0] = 0;
+    fBlockMatrix.Blocks().fMatrixStride[0] = 0;
 
     // @TODO Candidate for TBB ParallelScan
     // Example with lambda expression https://www.threadingbuildingblocks.org/docs/help/reference/algorithms/parallel_scan_func.html
@@ -508,7 +512,8 @@ void TPZNumericalIntegrator::SetUpColoredIndexes(TPZCompMesh * cmesh) {
         DebugStop();
     }
 
-    fElColorIndex.resize(nblocks);
+    fElColorIndex.resize(nblocks+1);
+    fElColorIndex[nblocks] = 0;
     fFirstColorIndex.resize(color_map.size() + 1);
 
     int c_color = 0;
@@ -537,6 +542,7 @@ void TPZNumericalIntegrator::FillLIndexes(TPZVec<int64_t> & IA, TPZVec<int64_t> 
     int n_colors = fFirstColorIndex.size() - 1;
     fFirstColorLIndex.resize(n_colors + 1);
     fFirstColorLIndex[0]=0;
+    int cont = 1;
     for (int ic = 0; ic < n_colors; ic++) {
 
         int first = fFirstColorIndex[ic];
@@ -548,6 +554,13 @@ void TPZNumericalIntegrator::FillLIndexes(TPZVec<int64_t> & IA, TPZVec<int64_t> 
             int el_dof = el_n_dofs[iel];
             int n_entries = (el_dof*el_dof + el_dof)/2;
             c += n_entries;
+
+            int val = fBlockMatrix.Blocks().fMatrixStride[cont-1];
+            int value = val + (el_dof*el_dof + el_dof)/2;
+            fBlockMatrix.Blocks().fMatrixStride[cont] = value;
+            cont++;
+
+
         }
         fFirstColorLIndex[ic + 1] = c + fFirstColorLIndex[ic];
     }

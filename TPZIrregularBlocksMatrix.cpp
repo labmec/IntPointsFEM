@@ -17,6 +17,7 @@ TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix() : TPZMatrix<REAL>(), fBlock
     dBlocksInfo.dRowFirstIndex.resize(0);
     dBlocksInfo.dColFirstIndex.resize(0);
     dBlocksInfo.dMatrixPosition.resize(0);
+    dBlocksInfo.dMatrixStride.resize(0);
 
     dBlocksInfo.dRowPtr.resize(0);
     dBlocksInfo.dColInd.resize(0);
@@ -31,6 +32,7 @@ TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix() : TPZMatrix<REAL>(), fBlock
     fBlocksInfo.fMatrixPosition.resize(0);
     fBlocksInfo.fRowFirstIndex.resize(0);
     fBlocksInfo.fColFirstIndex.resize(0);
+    fBlocksInfo.fMatrixStride.resize(0);
 
     fBlocksInfo.fRowPtr.resize(0);
     fBlocksInfo.fColInd.resize(0);
@@ -44,6 +46,7 @@ TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix(const int64_t rows,const int6
     dBlocksInfo.dRowFirstIndex.resize(0);
     dBlocksInfo.dColFirstIndex.resize(0);
     dBlocksInfo.dMatrixPosition.resize(0);
+    dBlocksInfo.dMatrixStride.resize(0);
 
     dBlocksInfo.dRowPtr.resize(0);
     dBlocksInfo.dColInd.resize(0);
@@ -57,6 +60,7 @@ TPZIrregularBlocksMatrix::TPZIrregularBlocksMatrix(const int64_t rows,const int6
     fBlocksInfo.fMatrixPosition.resize(0);
     fBlocksInfo.fRowFirstIndex.resize(0);
     fBlocksInfo.fColFirstIndex.resize(0);
+    fBlocksInfo.fMatrixStride.resize(0);
 
     fBlocksInfo.fRowPtr.resize(0);
     fBlocksInfo.fColInd.resize(0);
@@ -155,6 +159,9 @@ void TPZIrregularBlocksMatrix::TransferDataToGPU() {
 
     dBlocksInfo.dColFirstIndex.resize(fBlocksInfo.fColFirstIndex.size());
     dBlocksInfo.dColFirstIndex.set(&fBlocksInfo.fColFirstIndex[0], fBlocksInfo.fColFirstIndex.size());
+
+    dBlocksInfo.dMatrixStride.resize(fBlocksInfo.fMatrixStride.size());
+    dBlocksInfo.dMatrixStride.set(&fBlocksInfo.fMatrixStride[0], fBlocksInfo.fMatrixStride.size());
 
     #ifdef USING_SPARSE
     dBlocksInfo.dRowPtr.resize(fBlocksInfo.fRowPtr.size());
