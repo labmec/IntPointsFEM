@@ -72,7 +72,7 @@ int pOrder;
     pOrder = 3; // Computational mesh order
 #endif
 
-    bool render_vtk_Q = false;
+    bool render_vtk_Q = true;
     bool modified_thomas_accel_Q = false;
     bool compute_h_Q = false;
     USING_CUDA_Q = false;
@@ -80,7 +80,7 @@ int pOrder;
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
 //    std::string mesh = argv[1];
-     std::string mesh = "2";
+    std::string mesh = "mix";
     std::string msh_file = source_dir + "/gmsh/wellbore_" + mesh + ".msh";
 //    std::string msh_file = source_dir + "/gmsh/wellbore.msh";
     TPZGeoMesh *gmesh = ReadGeometry(msh_file);
