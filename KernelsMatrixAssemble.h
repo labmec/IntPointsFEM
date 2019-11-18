@@ -23,8 +23,6 @@ __device__ void ComputeTangentMatrixDevice(REAL *dep, int el_npts, int el_dofs, 
 
 __global__
 void MatrixAssembleKernel(int nel, REAL *Kc, REAL *dep, int *el_color_index, REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *matrixstride) {
-
-	// int tid = blockIdx.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
     if(tid < nel) {
@@ -40,13 +38,11 @@ void MatrixAssembleKernel(int nel, REAL *Kc, REAL *dep, int *el_color_index, REA
         for(int i = 0; i < el_dofs * el_dofs; i++) K[i] = 0;
         __shared__ REAL s_storage[NT_sm * ndof * 3]; // max allowed word is 48k
         for (int ip = 0; ip < el_npts; ip++) {
-            // for(int i = 0; i < ndof * 3; i++) {
-            //    s_storage[i + threadIdx.x * ndof * 3] = storage[matpos + i + ip * el_dofs * 3];
-            // }
-            // __syncthreads(); 
-            ComputeTangentMatrixDevice(&dep[first_el_ip * 3 * 3 + ip * 3 * 3], el_npts, el_dofs, &storage[matpos + ip * el_dofs * 3], K);
-            // printf("%d\n", first_el_ip * 3 * 3 + ip * 3 * 3);
-            // ComputeTangentMatrixDevice(&dep[first_el_ip * 3 * 3 + ip * 3 * 3], el_npts, el_dofs, &s_storage[threadIdx.x * ndof * 3], K);
+            for(int i = 0; i < ndof * 3; i++) {
+               s_storage[i + threadIdx.x * ndof * 3] = storage[matpos + i + ip * el_dofs * 3];
+            }
+            __syncthreads(); 
+            ComputeTangentMatrixDevice(&dep[first_el_ip * 3 * 3 + ip * 3 * 3], el_npts, el_dofs, &s_storage[threadIdx.x * ndof * 3], K);
         }
 
         int stride = matrixstride[tid];
