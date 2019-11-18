@@ -73,20 +73,45 @@ int pOrder;
 #endif
 
     bool render_vtk_Q = false;
-    bool modified_thomas_accel_Q = false;
     bool compute_h_Q = false;
-    USING_CUDA_Q = false;
+    bool modified_thomas_accel_Q = false;
     
 // Generates the geometry
     std::string source_dir = SOURCE_DIR;
-//    std::string mesh = argv[1];
-    std::string mesh = "mix";
+    std::string mesh = argv[1];
     std::string msh_file = source_dir + "/gmsh/wellbore_" + mesh + ".msh";
-//    std::string msh_file = source_dir + "/gmsh/wellbore.msh";
     TPZGeoMesh *gmesh = ReadGeometry(msh_file);
 #ifdef PZDEBUG
     PrintGeometry(gmesh);
 #endif
+
+#ifdef COMPUTE_WITH_MODIFIED
+    modified_thomas_accel_Q = true;
+#endif
+
+    std::cout << "MESH: " << mesh << std::endl;
+
+    std::cout << "PORDER: " << pOrder << std::endl;
+
+    std::string mod = "false";
+    if(modified_thomas_accel_Q) mod = "true";
+    std::cout << "COMPUTE_WITH_MODIFIED: " << mod << std::endl;
+
+    std::string type;
+    #ifdef USING_CUDA
+    type = "GPU";
+    #elif COMPUTE_WITH_PZ
+    type = "PZ";
+    #else
+    type = "CPU";
+    #endif
+    std::cout << "TEST TYPE: "<< type << std::endl;
+    std::string shared = "false";
+    #ifdef USE_SHARED
+    shared = "true";
+    #endif
+    std::cout << "USE SHARED: "<< shared << std::endl;
+    std::cout << std::endl;
 
 
     if (compute_h_Q) {
@@ -126,12 +151,15 @@ int pOrder;
     {
         timer.Start();
 #ifdef COMPUTE_WITH_PZ
-       analysis = Analysis(cmesh,n_threads);
+        analysis = Analysis(cmesh,n_threads);
+        timer.Stop();
+        std::cout << "Calling Analysis: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
 #else
         analysis = Analysis_IPFEM(cmesh,n_threads);
-#endif
         timer.Stop();
         std::cout << "Calling Analysis_IPFEM: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+#endif
+
     }
     
 // Calculates the solution using Newton method
@@ -226,14 +254,19 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance, bool modi
             du += delta_du;
             norm_delta_du = Norm(delta_du);
             analysis->LoadSolution(du);
-        }
-        
-
+        }      
 
         timer.Start();
-        analysis->Assemble();
-        timer.Stop();
-        std::cout << "Calling AssembleResidual: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+        if (modified_thomas_accel_Q) {
+            analysis->AssembleResidual();
+            timer.Stop();
+            std::cout << "Calling AssembleResidual: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+        } else {
+            analysis->Assemble();
+            timer.Stop();
+            std::cout << "Calling Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+        }
+
 
         norm_res = Norm(analysis->Rhs());
         stop_criterion_Q = norm_res < tolerance & norm_delta_du < tolerance;
@@ -246,13 +279,6 @@ void Solution(TPZAnalysis *analysis, int n_iterations, REAL tolerance, bool modi
             std::cout << "Number of iterations = " << i + 1 << std::endl;
             break;
         }
-        // {
-        //    timer.Start();
-        //    analysis->Assemble();
-        //    timer.Stop();
-        //    std::cout << "Calling Assemble: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
-        // }
-
     }
 
      if (stop_criterion_Q == false) {

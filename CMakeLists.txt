@@ -90,36 +90,50 @@ if(USING_SPARSE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSING_SPARSE")
 endif(USING_SPARSE)
 
-# Assembly options
-option(COMPUTE_K_GS off)
-if(COMPUTE_K_GS)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMPUTE_K_GS")
-endif(COMPUTE_K_GS)
-
 # Polinomial order
 option(O_LINEAR on)
 if(O_LINEAR)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DO_LINEAR")
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DO_LINEAR") 
-    set(O_QUADRATIC off)
-    set(O_CUBIC off)
+    set(O_QUADRATIC false)
+    set(O_CUBIC false)
 endif(O_LINEAR)
 
 option(O_QUADRATIC off)
 if(O_QUADRATIC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DO_QUADRATIC")
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DO_QUADRATIC")
-    set(O_LINEAR off)
-    set(O_CUBIC off)
+    set(O_LINEAR false)
+    set(O_CUBIC false)
 endif(O_QUADRATIC)
 
 option(O_CUBIC off)
 if(O_CUBIC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DO_CUBIC")
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DO_CUBIC")
-    set(O_LINEAR off)
-    set(O_QUADRATIC off)
+    set(O_LINEAR false)
+    set(O_QUADRATIC false)
 endif(O_CUBIC)
+
+# K and R assembly using PZ
+option(COMPUTE_WITH_PZ off)
+if(COMPUTE_WITH_PZ)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMPUTE_WITH_PZ")
+    set(USING_SPARSE off)
+    set(COMPUTE_K_GS off)
+    set(USING_CUDA off)
+endif(COMPUTE_WITH_PZ)
+
+option(COMPUTE_WITH_MODIFIED off)
+if(COMPUTE_WITH_MODIFIED)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMPUTE_WITH_MODIFIED")
+endif(COMPUTE_WITH_MODIFIED)
+
+option(USE_SHARED off)
+if(USE_SHARED)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_SHARED")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DUSE_SHARED")
+endif(USE_SHARED)
 
 # Enabling CUDA
 option(USING_CUDA off)
@@ -147,15 +161,6 @@ else()
     file(GLOB headers *.h)
     set(main_SRCS ${sources} ${headers})
 endif(USING_CUDA)
-
-# K and R assembly using PZ
-option(COMPUTE_WITH_PZ off)
-if(COMPUTE_WITH_PZ)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMPUTE_WITH_PZ")
-    set(USING_SPARSE off)
-    set(COMPUTE_K_GS off)
-    set(USING_CUDA off)
-endif(COMPUTE_WITH_PZ)
 
 # Configure the path.h.in file.
 # This file can only use the @VARIABLE@ syntax in the file

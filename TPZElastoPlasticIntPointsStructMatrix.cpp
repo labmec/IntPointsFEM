@@ -51,6 +51,9 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
     timer.TimerOption(Timer::ECudaEvent);
     timer.Start();
     std::cout << "Transfering data to GPU..." << std::endl;
+    #ifdef USING_SPARSE
+        fIntegrator.IrregularBlockMatrix().CSRVectors();
+    #endif
     this->TransferDataToGPU();
     timer.Stop();
     std::cout << "Done! It took " <<  timer.ElapsedTime() << timer.Unit() << std::endl;
@@ -106,6 +109,11 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     TPZSYsmpMatrix<STATE> &stiff = dynamic_cast<TPZSYsmpMatrix<STATE> &> (mat);
     TPZVec<STATE> &Kg = stiff.A();
 
+    // Timer timer;   
+    // timer.TimeUnit(Timer::ESeconds);
+    // timer.TimerOption(Timer::EChrono);
+    // timer.Start();
+
 #ifdef USING_CUDA
     TPZVecGPU<REAL> d_Kg(Kg.size());
     d_Kg.Zero();
@@ -124,6 +132,9 @@ void TPZElastoPlasticIntPointsStructMatrix::SetUpDataStructure() {
     rhs += fRhsLinear;
 #endif
 
+    // timer.Stop();
+    // std::cout << "K + R: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
+
     // Add Klinear contribution
     auto it_end = fSparseMatrixLinear.MapEnd();
     for (auto it = fSparseMatrixLinear.MapBegin(); it!=it_end; it++) {
@@ -138,6 +149,11 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TP
 
     int neq = fMesh->NEquations();
 
+    Timer timer;   
+    timer.TimeUnit(Timer::ESeconds);
+    timer.TimerOption(Timer::EChrono);
+    timer.Start();
+
     rhs.Resize(neq, 1);
     rhs.Zero();  
 #ifdef USING_CUDA
@@ -150,6 +166,9 @@ void TPZElastoPlasticIntPointsStructMatrix::Assemble(TPZFMatrix<STATE> & rhs, TP
     fIntegrator.ResidualIntegration(fMesh->Solution(),rhs);
     rhs += fRhsLinear;
 #endif
+
+    timer.Stop();
+    std::cout << "R: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
 
 }
 

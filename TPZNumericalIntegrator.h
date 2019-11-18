@@ -58,6 +58,10 @@ public:
         fElementIndex = element_indexes;
     }
 
+    TPZIrregularBlocksMatrix &IrregularBlockMatrix() {
+        return fBlockMatrix;
+    }
+
 #ifdef USING_CUDA
     void Multiply(TPZVecGPU<REAL> &coef, TPZVecGPU<REAL> &delta_strain);
     

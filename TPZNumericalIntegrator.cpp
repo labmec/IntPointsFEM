@@ -135,6 +135,10 @@ void TPZNumericalIntegrator::KAssembly(TPZFMatrix<REAL> & solution, TPZVec<STATE
     fConstitutiveLawProcessor.ComputeSigmaDep(delta_strain, sigma, dep);
     MultiplyTranspose(sigma, rhs);
 
+    Timer timer;   
+    timer.TimeUnit(Timer::ESeconds);
+    timer.TimerOption(Timer::EChrono);
+    timer.Start();
 
     // Compute Kc
     int size = fBlockMatrix.Blocks().fMatrixStride[fBlockMatrix.Blocks().fNumBlocks];
@@ -179,6 +183,9 @@ void TPZNumericalIntegrator::KAssembly(TPZFMatrix<REAL> & solution, TPZVec<STATE
          // Scatter to Kg
          cblas_dsctr(n_l_indexes, &aux[0], &fColorLSequence[first_l], &Kg[0]);
      }
+
+         timer.Stop();
+    std::cout << "K: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
 }
 
 #ifdef USING_CUDA
@@ -187,6 +194,11 @@ void TPZNumericalIntegrator::KAssembly(TPZFMatrix<REAL> & solution, TPZVecGPU<ST
     d_solution.set(&solution(0,0), solution.Rows());
 
     TPZVecGPU<REAL> d_delta_strain, d_sigma, d_dep;
+
+        Timer timer;   
+    timer.TimeUnit(Timer::ESeconds);
+    timer.TimerOption(Timer::EChrono);
+    timer.Start();
 
     //Compute rhs
     Multiply(d_solution, d_delta_strain);
@@ -211,6 +223,8 @@ void TPZNumericalIntegrator::KAssembly(TPZFMatrix<REAL> & solution, TPZVecGPU<ST
         fCudaCalls.DaxpyOperation(n_l_indexes, 1., &d_Kc.getData()[first_l], aux.getData());
         fCudaCalls.ScatterOperation(n_l_indexes, aux.getData(), Kg.getData(), &dColorLSequence.getData()[first_l]);
     }
+             timer.Stop();
+    std::cout << "K: Elasped time [sec] = " << timer.ElapsedTime() << std::endl;
 }
 #endif
 
