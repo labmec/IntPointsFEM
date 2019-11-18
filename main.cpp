@@ -72,7 +72,7 @@ int pOrder;
     pOrder = 3; // Computational mesh order
 #endif
 
-    bool render_vtk_Q = true;
+    bool render_vtk_Q = false;
     bool modified_thomas_accel_Q = false;
     bool compute_h_Q = false;
     USING_CUDA_Q = false;

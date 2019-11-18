@@ -198,7 +198,8 @@ void TPZNumericalIntegrator::KAssembly(TPZFMatrix<REAL> & solution, TPZVecGPU<ST
     d_Kc.Zero();
     fCudaCalls.MatrixAssemble(d_Kc.getData(), d_dep.getData(), fBlockMatrix.Blocks().fNumBlocks, dElColorIndex.getData(), 
     fBlockMatrix.BlocksDev().dStorage.getData(), fBlockMatrix.BlocksDev().dRowSizes.getData(), fBlockMatrix.BlocksDev().dColSizes.getData(), 
-    fBlockMatrix.BlocksDev().dRowFirstIndex.getData(), fBlockMatrix.BlocksDev().dColFirstIndex.getData(), fBlockMatrix.BlocksDev().dMatrixPosition.getData());
+    fBlockMatrix.BlocksDev().dRowFirstIndex.getData(), fBlockMatrix.BlocksDev().dColFirstIndex.getData(), fBlockMatrix.BlocksDev().dMatrixPosition.getData(),
+    fBlockMatrix.BlocksDev().dMatrixStride.getData());
 
     // Assemble K
     for (int ic = 0; ic < fNColor; ic++) {

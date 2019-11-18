@@ -36,7 +36,7 @@ public:
                       REAL *dMType, REAL *dAlpha, REAL *dSigma, REAL *dStrain, REAL *weight);
 
 	void MatrixAssemble(REAL *Kc, REAL *dep, int nel, int *el_color_index,
-	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition);
+	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *matrixstride);
 
 	void SolveCG(int n, int nnzA, REAL *csrValA, int *csrRowPtrA, int *csrColIndA, REAL *b, REAL *x);
 

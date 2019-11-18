@@ -191,10 +191,10 @@ void TPZCudaCalls::ComputeSigmaDep(bool update_mem, int npts, REAL *glob_delta_s
 }
 
 void TPZCudaCalls::MatrixAssemble(REAL *Kc, REAL *dep, int nel, int *el_color_index,
-	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition) {
+	REAL *storage, int *rowsizes, int *colsizes, int *rowfirstindex, int *colfirstindex, int *matrixposition, int *matrixstride) {
 	int numBlocks = (nel + NT_sm - 1) / NT_sm;
 
-	MatrixAssembleKernel<<<numBlocks,NT_sm>>>(nel, Kc, dep, el_color_index, storage, rowsizes, colsizes, rowfirstindex, colfirstindex, matrixposition);
+	MatrixAssembleKernel<<<numBlocks,NT_sm>>>(nel, Kc, dep, el_color_index, storage, rowsizes, colsizes, rowfirstindex, colfirstindex, matrixposition, matrixstride);
 	cudaDeviceSynchronize();
 	cudaError_t error = cudaGetLastError();
 	if (error != cudaSuccess) {
