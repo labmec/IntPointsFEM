@@ -10,9 +10,9 @@ p_order="1"
 echo ""
 echo Test type:     ${test_type}
 echo Polynomial order:  ${p_order}  
-cmake -DCMAKE_BUILD_TYPE=Release -DUSING_CUDA=off -DUSING_TBB=on -DUSING_SPARSE=on -DO_LINEAR=on -DO_QUADRATIC=off -DO_CUBIC=off -DCOMPUTE_WITH_MODIFIED=on -DCOMPUTE_WITH_PZ=off -DUSE_SHARED=off ../IntPointsFEM 
+cmake -DCMAKE_BUILD_TYPE=Release -DUSING_CUDA=off -DUSING_TBB=on -DUSING_SPARSE=on -DO_LINEAR=on -DO_QUADRATIC=off -DO_CUBIC=off -DCOMPUTE_WITH_MODIFIED=on -DCOMPUTE_WITH_PZ=off -DUSE_SHARED=off ../IntPointsFEM > any.txt 
 
-make -j32 
+make -j32 > any.txt
 
 for mesh_id in 1 2 3 4 5
 do
