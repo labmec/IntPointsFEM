@@ -1,4 +1,3 @@
-sh tests-cpu.sh
 sh cpu-mod-blocks.sh
 sh cpu-mod-sparse.sh
 sh gpu-mod-blocks.sh

@@ -35,6 +35,9 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
 
     if(!fIntegrator.isBuilt()) {
         this->SetUpDataStructure(); // When basis functions are computed and stored
+#ifdef USING_SPARSE
+        fIntegrator.IrregularBlockMatrix().CSRVectors();
+#endif
     }
     
     TPZStack<int64_t> elgraph;
@@ -44,16 +47,13 @@ TPZMatrix<STATE> * TPZElastoPlasticIntPointsStructMatrix::Create(){
 
     TPZSYsmpMatrix<STATE> *stiff = dynamic_cast<TPZSYsmpMatrix<STATE> *> (mat);
     fIntegrator.FillLIndexes(stiff->IA(), stiff->JA());
-    
+
 #ifdef USING_CUDA
     Timer timer;   
     timer.TimeUnit(Timer::ESeconds);
     timer.TimerOption(Timer::ECudaEvent);
     timer.Start();
     std::cout << "Transfering data to GPU..." << std::endl;
-    #ifdef USING_SPARSE
-        fIntegrator.IrregularBlockMatrix().CSRVectors();
-    #endif
     this->TransferDataToGPU();
     timer.Stop();
     std::cout << "Done! It took " <<  timer.ElapsedTime() << timer.Unit() << std::endl;
