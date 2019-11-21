@@ -34,7 +34,7 @@ cmake -DCMAKE_BUILD_TYPE=Release -DUSING_CUDA=on -DUSING_TBB=on -DUSING_SPARSE=o
 
 make -j32 > any.txt
 
-for mesh_id in 1 2 3 4 5
+for mesh_id in 1 2 3 4
 do
     echo ""
     echo "Mesh id:      $mesh_id"

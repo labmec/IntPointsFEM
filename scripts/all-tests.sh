@@ -4,5 +4,6 @@
 # sh gpu-mod-sparse.sh
 sh gpu-no-shared.sh
 sh gpu-shared.sh
+sh cpu.sh
 # sh pz-mod.sh
 # sh pz.sh
