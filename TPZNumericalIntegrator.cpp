@@ -131,14 +131,14 @@ void TPZNumericalIntegrator::ResidualIntegration(TPZFMatrix<REAL> & solution ,TP
 void TPZNumericalIntegrator::KAssembly(TPZFMatrix<REAL> & solution, TPZVec<STATE> & Kg, TPZFMatrix<STATE> & rhs) {
     TPZFMatrix<REAL> delta_strain, sigma, dep;
 
-    Multiply(solution, delta_strain);
-    fConstitutiveLawProcessor.ComputeSigmaDep(delta_strain, sigma, dep);
-    MultiplyTranspose(sigma, rhs);
-
     Timer timer;   
     timer.TimeUnit(Timer::ESeconds);
     timer.TimerOption(Timer::EChrono);
     timer.Start();
+
+    Multiply(solution, delta_strain);
+    fConstitutiveLawProcessor.ComputeSigmaDep(delta_strain, sigma, dep);
+    MultiplyTranspose(sigma, rhs);
 
     // Compute Kc
     int size = fBlockMatrix.Blocks().fMatrixStride[fBlockMatrix.Blocks().fNumBlocks];
